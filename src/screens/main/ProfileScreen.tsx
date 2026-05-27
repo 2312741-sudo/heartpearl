@@ -32,7 +32,7 @@ import { auth, storage, db } from '../../services/firebase.config';
 import { signOutUser, updateUserDocument, isUsernameAvailable } from '../../services/auth.service';
 import { useAuthStore } from '../../store/auth.store';
 import { Colors, Typography, Spacing, BorderRadius } from '../../constants/theme';
-import { Settings, Edit2, Bell, Lock, Palette, HelpCircle, FileText, LogOut, Camera, X, ChevronRight } from 'lucide-react-native';
+import { Settings, Edit2, Bell, Lock, Palette, HelpCircle, FileText, LogOut, Camera, X, ChevronRight, Users } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
 
