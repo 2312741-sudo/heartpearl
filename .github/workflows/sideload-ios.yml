@@ -2,6 +2,9 @@ name: Build iOS IPA for Sideloading
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   build:
@@ -33,8 +36,8 @@ jobs:
           cd ios
           WORKSPACE=$(ls | grep .xcworkspace | head -n 1)
           SCHEME=$(basename "$WORKSPACE" .xcworkspace)
-          # Fix Node path for Xcode
-          ln -s $(which node) /usr/local/bin/node || true
+          # Fix Node path for Xcode (Requires sudo)
+          sudo ln -s $(which node) /usr/local/bin/node || true
           
           # Tắt yêu cầu code signing để build được không cần chứng chỉ
           xcodebuild -workspace "$WORKSPACE" \
@@ -45,6 +48,7 @@ jobs:
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_ENTITLEMENTS="" \
             CODE_SIGN_IDENTITY="" \
             PROVISIONING_PROFILE_SPECIFIER="" \
             COMPILER_INDEX_STORE_ENABLE=NO
