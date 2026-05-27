@@ -1,0 +1,32 @@
+# Firebase Storage Rules — Cập nhật
+# Vào: https://console.firebase.google.com → Storage → Rules
+
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ── Photos ──────────────────────────────
+    match /photos/{userId}/{fileName} {
+      // Cho phép upload: chỉ chính user đó
+      allow write: if request.auth != null && request.auth.uid == userId;
+      // Cho phép đọc: đã đăng nhập
+      allow read: if request.auth != null;
+    }
+
+    // ── Videos (mới thêm) ───────────────────
+    match /videos/{userId}/{fileName} {
+      // Cho phép upload: chỉ chính user đó, max 50MB
+      allow write: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.resource.size < 50 * 1024 * 1024;
+      // Cho phép đọc: đã đăng nhập
+      allow read: if request.auth != null;
+    }
+
+    // ── Avatars ─────────────────────────────
+    match /avatars/{userId}/{fileName} {
+      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null;
+    }
+  }
+}

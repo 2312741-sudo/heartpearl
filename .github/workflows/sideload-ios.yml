@@ -1,0 +1,57 @@
+name: Build iOS IPA for Sideloading
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build iOS IPA
+    runs-on: macos-latest
+    steps:
+      - name: 🏗 Setup repo
+        uses: actions/checkout@v4
+
+      - name: 🏗 Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18.x
+          cache: npm
+
+      - name: 📦 Install dependencies
+        run: npm install
+
+      - name: 🚀 Prebuild
+        run: npx expo prebuild --platform ios --clean
+
+      - name: 🍎 Build iOS App (Unsigned)
+        run: |
+          cd ios
+          WORKSPACE=$(ls | grep .xcworkspace | head -n 1)
+          SCHEME=$(basename "$WORKSPACE" .xcworkspace)
+          # Tắt yêu cầu code signing để build được không cần chứng chỉ
+          xcodebuild -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            PROVISIONING_PROFILE_SPECIFIER=""
+
+      - name: 📦 Package IPA
+        run: |
+          cd ios/build/Build/Products/Release-iphoneos
+          mkdir Payload
+          # Tìm file .app và di chuyển vào Payload
+          APP_NAME=$(ls -d *.app | head -n 1)
+          mv "$APP_NAME" Payload/
+          # Nén thành file ipa
+          zip -r app-sideload.ipa Payload
+
+      - name: 💾 Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-sideload-ipa
+          path: ios/build/Build/Products/Release-iphoneos/app-sideload.ipa
+          retention-days: 7

@@ -1,0 +1,67 @@
+{
+  "expo": {
+    "name": "Tâm Châu",
+    "slug": "tam-chau",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A0A0F"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.tamchau.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Tâm Châu cần camera để bạn chụp và chia sẻ khoảnh khắc với bạn bè.",
+        "NSMicrophoneUsageDescription": "Tâm Châu cần microphone để quay video chia sẻ khoảnh khắc.",
+        "NSPhotoLibraryUsageDescription": "Tâm Châu cần quyền truy cập ảnh để chọn ảnh từ thư viện.",
+        "NSPhotoLibraryAddUsageDescription": "Tâm Châu muốn lưu ảnh vào thư viện của bạn."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0A0A0F",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO"
+      ],
+      "predictiveBackGestureEnabled": false,
+      "package": "com.example.tamchau"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Tâm Châu cần camera để chụp và chia sẻ khoảnh khắc.",
+          "microphonePermission": "Tâm Châu cần microphone để quay video chia sẻ khoảnh khắc.",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Tâm Châu cần truy cập ảnh để chọn ảnh từ thư viện."
+        }
+      ],
+      "@bacons/apple-targets"
+    ]
+  }
+}
