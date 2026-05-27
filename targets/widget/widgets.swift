@@ -1,39 +1,43 @@
 import WidgetKit
 import SwiftUI
 
-struct Provider: AppIntentTimelineProvider {
+struct Provider: TimelineProvider {
     func placeholder(in context: Context) -> SimpleEntry {
-        SimpleEntry(date: Date(), configuration: ConfigurationAppIntent(), image: nil)
+        SimpleEntry(date: Date(), image: nil)
     }
 
-    func snapshot(for configuration: ConfigurationAppIntent, in context: Context) async -> SimpleEntry {
-        SimpleEntry(date: Date(), configuration: configuration, image: nil)
+    func getSnapshot(in context: Context, completion: @escaping (SimpleEntry) -> ()) {
+        let entry = SimpleEntry(date: Date(), image: nil)
+        completion(entry)
     }
-    
-    func timeline(for configuration: ConfigurationAppIntent, in context: Context) async -> Timeline<SimpleEntry> {
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<SimpleEntry>) -> ()) {
         // Đọc link ảnh từ UserDefaults chia sẻ qua App Group
         let sharedDefaults = UserDefaults(suiteName: "group.com.tamchau.app")
         let photoUrlString = sharedDefaults?.string(forKey: "latestPhotoUrl") ?? ""
         
-        var image: UIImage? = nil
-        if !photoUrlString.isEmpty,
-           let url = URL(string: photoUrlString) {
-            do {
-                let (data, _) = try await URLSession.shared.data(from: url)
-                image = UIImage(data: data)
-            } catch {
-                print("Failed to download widget image: \(error)")
+        // Tải ảnh bất đồng bộ từ URL
+        Task {
+            var image: UIImage? = nil
+            if !photoUrlString.isEmpty,
+               let url = URL(string: photoUrlString) {
+                do {
+                    let (data, _) = try await URLSession.shared.data(from: url)
+                    image = UIImage(data: data)
+                } catch {
+                    print("Failed to download widget image: \(error)")
+                }
             }
+            
+            let entry = SimpleEntry(date: Date(), image: image)
+            let timeline = Timeline(entries: [entry], policy: .never)
+            completion(timeline)
         }
-
-        let entry = SimpleEntry(date: Date(), configuration: configuration, image: image)
-        return Timeline(entries: [entry], policy: .never)
     }
 }
 
 struct SimpleEntry: TimelineEntry {
     let date: Date
-    let configuration: ConfigurationAppIntent
     let image: UIImage?
 }
 
@@ -68,30 +72,18 @@ struct widget: Widget {
     let kind: String = "widget"
 
     var body: some WidgetConfiguration {
-        AppIntentConfiguration(kind: kind, intent: ConfigurationAppIntent.self, provider: Provider()) { entry in
+        StaticConfiguration(kind: kind, provider: Provider()) { entry in
             widgetEntryView(entry: entry)
                 .containerBackground(Color(red: 10/255, green: 10/255, blue: 15/255), for: .widget)
         }
-    }
-}
-
-extension ConfigurationAppIntent {
-    fileprivate static var smiley: ConfigurationAppIntent {
-        let intent = ConfigurationAppIntent()
-        intent.favoriteEmoji = "😀"
-        return intent
-    }
-    
-    fileprivate static var starEyes: ConfigurationAppIntent {
-        let intent = ConfigurationAppIntent()
-        intent.favoriteEmoji = "🤩"
-        return intent
+        .configurationDisplayName("Tâm Châu Widget")
+        .description("Hiển thị ảnh mới nhất từ bạn bè.")
+        .supportedFamilies([.systemSmall])
     }
 }
 
 #Preview(as: .systemSmall) {
     widget()
 } timeline: {
-    SimpleEntry(date: .now, configuration: .smiley, image: nil)
-    SimpleEntry(date: .now, configuration: .starEyes, image: nil)
+    SimpleEntry(date: .now, image: nil)
 }
