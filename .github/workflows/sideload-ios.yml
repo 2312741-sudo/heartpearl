@@ -38,7 +38,7 @@ jobs:
           # Fix Node path for Xcode (Requires sudo)
           sudo ln -s $(which node) /usr/local/bin/node || true
           
-          # Tắt yêu cầu code signing để build được không cần chứng chỉ
+          # Tắt yêu cầu code signing nhưng GIỮ LẠI entitlements để sideload tool (AltStore/Sideloadly) có thể re-sign với App Group
           xcodebuild -workspace "$WORKSPACE" \
             -scheme "$SCHEME" \
             -configuration Release \
@@ -47,10 +47,10 @@ jobs:
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_ENTITLEMENTS="" \
-            CODE_SIGN_IDENTITY="" \
-            PROVISIONING_PROFILE_SPECIFIER="" \
             COMPILER_INDEX_STORE_ENABLE=NO > build.log 2>&1
+            
+          echo "=== Kiểm tra Widget Extension trong thư mục Build ==="
+          ls -la build/Build/Products/Release-iphoneos/*.app/PlugIns/ || echo "Không tìm thấy PlugIns directory"
 
       - name: 📄 Print Build Log on Failure
         if: failure()
