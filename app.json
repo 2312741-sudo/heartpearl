@@ -28,17 +28,7 @@
       }
     },
     "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#120716",
-        "foregroundImage": "./assets/android-icon-foreground.png"
-      },
       "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.READ_MEDIA_VIDEO",
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -48,9 +38,6 @@
       ],
       "predictiveBackGestureEnabled": false,
       "package": "com.example.tamchau"
-    },
-    "web": {
-      "favicon": "./assets/favicon.png"
     },
     "plugins": [
       [
