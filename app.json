@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Tâm Châu",
+    "name": "HeartPearl",
     "slug": "tam-chau",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -21,10 +21,10 @@
         ]
       },
       "infoPlist": {
-        "NSCameraUsageDescription": "Tâm Châu cần camera để bạn chụp và chia sẻ khoảnh khắc với bạn bè.",
-        "NSMicrophoneUsageDescription": "Tâm Châu cần microphone để quay video chia sẻ khoảnh khắc.",
-        "NSPhotoLibraryUsageDescription": "Tâm Châu cần quyền truy cập ảnh để chọn ảnh từ thư viện.",
-        "NSPhotoLibraryAddUsageDescription": "Tâm Châu muốn lưu ảnh vào thư viện của bạn."
+        "NSCameraUsageDescription": "HeartPearl cần camera để bạn chụp và chia sẻ khoảnh khắc với bạn bè.",
+        "NSMicrophoneUsageDescription": "HeartPearl cần microphone để quay video chia sẻ khoảnh khắc.",
+        "NSPhotoLibraryUsageDescription": "HeartPearl cần quyền truy cập ảnh để chọn ảnh từ thư viện.",
+        "NSPhotoLibraryAddUsageDescription": "HeartPearl muốn lưu ảnh vào thư viện của bạn."
       }
     },
     "android": {
@@ -43,15 +43,15 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Tâm Châu cần camera để chụp và chia sẻ khoảnh khắc.",
-          "microphonePermission": "Tâm Châu cần microphone để quay video chia sẻ khoảnh khắc.",
+          "cameraPermission": "HeartPearl cần camera để chụp và chia sẻ khoảnh khắc.",
+          "microphonePermission": "HeartPearl cần microphone để quay video chia sẻ khoảnh khắc.",
           "recordAudioAndroid": true
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Tâm Châu cần truy cập ảnh để chọn ảnh từ thư viện."
+          "photosPermission": "HeartPearl cần truy cập ảnh để chọn ảnh từ thư viện."
         }
       ],
       "@bacons/apple-targets",
@@ -61,7 +61,7 @@
           "widgets": [
             {
               "name": "TamChauWidget",
-              "label": "Tâm Châu",
+              "label": "HeartPearl",
               "minWidth": "100dp",
               "minHeight": "100dp",
               "targetCellWidth": 2,

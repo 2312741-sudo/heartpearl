@@ -54,7 +54,7 @@ struct widgetEntryView : View {
                     .clipped()
             } else {
                 VStack(spacing: 8) {
-                    Text("Tâm Châu")
+                    Text("HeartPearl")
                         .font(.system(size: 18, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
                     Text("Chưa có ảnh mới")
@@ -76,7 +76,7 @@ struct widget: Widget {
             widgetEntryView(entry: entry)
                 .containerBackground(Color(red: 10/255, green: 10/255, blue: 15/255), for: .widget)
         }
-        .configurationDisplayName("Tâm Châu Widget")
+        .configurationDisplayName("HeartPearl Widget")
         .description("Hiển thị ảnh mới nhất từ bạn bè.")
         .supportedFamilies([.systemSmall])
     }

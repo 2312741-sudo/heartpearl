@@ -130,7 +130,7 @@ export default function WelcomeScreen({ navigation }: Props) {
           </LinearGradient>
         </View>
 
-        <Text style={styles.appName}>Tâm Châu</Text>
+        <Text style={styles.appName}>HeartPearl</Text>
         <Text style={styles.tagline}>
           Chia sẻ khoảnh khắc{'\n'}với những người thân yêu 💛
         </Text>

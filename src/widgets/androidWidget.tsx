@@ -34,7 +34,7 @@ export function TamChauWidget({ imageUrl }: { imageUrl?: string }) {
           }}
         >
           <TextWidget
-            text="Tâm Châu"
+            text="HeartPearl"
             style={{
               fontSize: 18,
               fontWeight: 'bold',

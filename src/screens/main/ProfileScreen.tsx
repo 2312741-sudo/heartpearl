@@ -355,7 +355,7 @@ export default function ProfileScreen() {
         </Pressable>
 
         {/* App version */}
-        <Text style={styles.versionText}>Tâm Châu v1.0.0</Text>
+        <Text style={styles.versionText}>HeartPearl v1.0.0</Text>
       </ScrollView>
 
       {/* ════════════════════════════════════════
@@ -526,7 +526,7 @@ export default function ProfileScreen() {
             </View>
             <ScrollView contentContainerStyle={styles.modalBody}>
               <Text style={styles.privacyText}>
-                Tâm Châu chỉ chia sẻ ảnh/video của bạn với những người bạn bè bạn đã chọn.
+                HeartPearl chỉ chia sẻ ảnh/video của bạn với những người bạn bè bạn đã chọn.
               </Text>
               {[
                 { icon: <Users size={24} color={Colors.primary} />, title: 'Friends Only', desc: 'Only approved friends receive your photos.' },

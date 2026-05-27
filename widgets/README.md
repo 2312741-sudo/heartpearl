@@ -1,6 +1,6 @@
 # Hướng dẫn tích hợp Widget (iOS & Android) cho Locket Clone
 
-Tâm Châu (Locket Clone) được xây dựng bằng **Expo Go** (Managed Workflow). Để có thể tạo và chạy Native Widgets trên màn hình chính của điện thoại (Home Screen), bạn sẽ cần chuyển dự án sang **Custom Dev Client (Prebuild)** vì tính năng này yêu cầu mã Swift (iOS) và Kotlin (Android).
+HeartPearl (Locket Clone) được xây dựng bằng **Expo Go** (Managed Workflow). Để có thể tạo và chạy Native Widgets trên màn hình chính của điện thoại (Home Screen), bạn sẽ cần chuyển dự án sang **Custom Dev Client (Prebuild)** vì tính năng này yêu cầu mã Swift (iOS) và Kotlin (Android).
 
 ## 1. Cài đặt các thư viện cần thiết
 
