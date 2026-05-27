@@ -62,7 +62,19 @@ function PhotoCard({ photo, userId }: { photo: Photo; userId: string }) {
         ]}
         onPress={handlePress}
       >
-        <Image source={{ uri: photo.imageUrl }} style={styles.cardImage} />
+        <Image 
+          source={{ uri: photo.imageUrl }} 
+          style={[styles.cardImage, photo.isMirrored && { transform: [{ scaleX: -1 }] }]} 
+        />
+        {photo.filter && (
+          <View 
+            style={[
+              StyleSheet.absoluteFill, 
+              { backgroundColor: 'rgba(255, 235, 225, 0.12)', borderRadius: 14 }
+            ]} 
+            pointerEvents="none" 
+          />
+        )}
 
         {/* Gradient overlay */}
         <LinearGradient

@@ -89,7 +89,9 @@ export const sendPhoto = async (
   imageUrl: string,
   caption?: string,
   mediaType: 'photo' | 'video' = 'photo',
-  videoUrl?: string
+  videoUrl?: string,
+  isMirrored: boolean = false,
+  filter: boolean = false
 ): Promise<string> => {
   const docRef = await addDoc(collection(db, 'photos'), {
     senderId,
@@ -98,6 +100,8 @@ export const sendPhoto = async (
     videoUrl: videoUrl || null,
     caption: caption || null,
     mediaType,
+    isMirrored,
+    filter,
     createdAt: serverTimestamp(),
     reactions: {},
     seen: {},

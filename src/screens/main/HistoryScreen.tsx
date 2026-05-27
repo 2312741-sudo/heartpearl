@@ -86,7 +86,19 @@ export default function HistoryScreen() {
                     ]}
                     onPress={() => navigation.navigate('PhotoViewer', { photo })}
                   >
-                    <Image source={{ uri: photo.imageUrl }} style={styles.thumbImage} />
+                    <Image 
+                      source={{ uri: photo.imageUrl }} 
+                      style={[styles.thumbImage, photo.isMirrored && { transform: [{ scaleX: -1 }] }]} 
+                    />
+                    {photo.filter && (
+                      <View 
+                        style={[
+                          StyleSheet.absoluteFill, 
+                          { backgroundColor: 'rgba(255, 235, 225, 0.12)', borderRadius: 14 }
+                        ]} 
+                        pointerEvents="none" 
+                      />
+                    )}
                     {Object.keys(photo.reactions || {}).length > 0 && (
                       <View style={styles.reactionIndicator}>
                         <Heart size={10} color={Colors.primary} fill={Colors.primary} />

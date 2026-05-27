@@ -97,6 +97,7 @@ export default function HomeScreen() {
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recordStartTime = useRef<number>(0);
   const captureRingAnim = useRef(new Animated.Value(0)).current;
+  const recordDelayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const cameraRef = useRef<CameraView>(null);
   const captureScale = useRef(new Animated.Value(1)).current;
@@ -195,35 +196,32 @@ export default function HomeScreen() {
     }
   }, [micPermission, stopRecordingInternal]);
 
-  // ── PressIn: bắt đầu record ngay, lưu thời gian ───────────────
   const handlePressIn = useCallback(() => {
     pressingRef.current = true;
     pressStartTimeRef.current = Date.now();
-    startRecordingImmediate();
+    recordDelayTimeoutRef.current = setTimeout(() => {
+      if (pressingRef.current) {
+        startRecordingImmediate();
+      }
+    }, 1000);
   }, [startRecordingImmediate]);
 
-  // ── PressOut: tap ngắn (<350ms) → hủy video, chụp ảnh ────────
+  // ── PressOut: tap ngắn (<1000ms) → hủy video, chụp ảnh ────────
   const handlePressOut = useCallback(() => {
     pressingRef.current = false;
-    const holdMs = Date.now() - pressStartTimeRef.current;
 
-    if (holdMs < 350) {
-      // Tap ngắn → hủy video (không lưu), chụp ảnh
-      isRecordingRef.current = false;
-      if (recordTimerRef.current) { clearInterval(recordTimerRef.current); recordTimerRef.current = null; }
-      captureRingAnim.stopAnimation();
-      Animated.timing(captureRingAnim, { toValue: 0, duration: 100, useNativeDriver: true }).start();
-      cameraRef.current?.stopRecording();
-      setIsRecording(false);
-      setRecordProgress(0);
-      // Chờ camera ổn định rồi chụp ảnh
-      setTimeout(() => {
-        if (!isRecordingRef.current) takePicture();
-      }, 120);
-    } else {
+    if (recordDelayTimeoutRef.current) {
+      clearTimeout(recordDelayTimeoutRef.current);
+      recordDelayTimeoutRef.current = null;
+    }
+
+    if (isRecordingRef.current) {
       // Giữ dài → dừng và lưu video
       stopRecordingInternal(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else {
+      // Tap ngắn → chụp ảnh
+      takePicture();
     }
   }, [stopRecordingInternal]);
 
@@ -293,7 +291,9 @@ export default function HomeScreen() {
         thumbUrl || mediaUrl, // imageUrl
         caption || undefined,
         capturedVideo ? 'video' : 'photo',
-        capturedVideo ? mediaUrl : undefined // videoUrl
+        capturedVideo ? mediaUrl : undefined, // videoUrl
+        facing === 'front', // isMirrored
+        true // filter applied globally in HeartPearl
       );
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setCapturedImage(null);
@@ -347,17 +347,29 @@ export default function HomeScreen() {
       <TouchableWithoutFeedback onPress={() => { Keyboard.dismiss(); setShowFriendPicker(false); }}>
         <View style={styles.container}>
           {capturedImage ? (
-            <Image source={{ uri: capturedImage }} style={styles.preview} />
+            <Image 
+              source={{ uri: capturedImage }} 
+              style={[styles.preview, { transform: [{ scaleX: facing === 'front' ? -1 : 1 }] }]} 
+            />
           ) : (
             <Video
               source={{ uri: capturedVideo! }}
-              style={styles.preview}
+              style={[styles.preview, { transform: [{ scaleX: facing === 'front' ? -1 : 1 }] }]}
               resizeMode={ResizeMode.COVER}
               shouldPlay
               isLooping
               useNativeControls={false}
             />
           )}
+
+          {/* Fake Beauty Filter Overlay */}
+          <View 
+            style={[
+              StyleSheet.absoluteFill, 
+              { backgroundColor: 'rgba(255, 235, 225, 0.12)' }
+            ]} 
+            pointerEvents="none" 
+          />
 
           {/* Gradient overlay */}
           <LinearGradient

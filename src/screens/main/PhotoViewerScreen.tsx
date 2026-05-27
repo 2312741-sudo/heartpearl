@@ -132,7 +132,7 @@ export default function PhotoViewerScreen() {
         <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setIsPlaying(p => !p)}>
           <Video
             source={{ uri: photo.videoUrl || photo.imageUrl }}
-            style={styles.image}
+            style={[styles.image, photo.isMirrored && { transform: [{ scaleX: -1 }] }]}
             posterSource={{ uri: photo.imageUrl }}
             posterStyle={{ resizeMode: 'cover' }}
             resizeMode={ResizeMode.COVER}
@@ -147,7 +147,21 @@ export default function PhotoViewerScreen() {
           )}
         </Pressable>
       ) : (
-        <Image source={{ uri: photo.imageUrl }} style={styles.image} />
+        <Image 
+          source={{ uri: photo.imageUrl }} 
+          style={[styles.image, photo.isMirrored && { transform: [{ scaleX: -1 }] }]} 
+        />
+      )}
+
+      {/* Fake Beauty Filter Overlay */}
+      {photo.filter && (
+        <View 
+          style={[
+            StyleSheet.absoluteFill, 
+            { backgroundColor: 'rgba(255, 235, 225, 0.12)' }
+          ]} 
+          pointerEvents="none" 
+        />
       )}
 
       {/* Dark gradient overlay */}

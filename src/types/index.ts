@@ -34,6 +34,7 @@ export interface Photo {
   caption?: string;
   mediaType?: 'photo' | 'video';
   filter?: boolean;
+  isMirrored?: boolean;
   createdAt: Date;
   reactions: Record<string, string>;       // userId → reactionImageUrl (selfie)
   textReactions?: Record<string, string>;  // userId → text message
