@@ -14,6 +14,12 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.tamchau.app",
+      "appleTeamId": "ABC123XYZ4",
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.tamchau.app"
+        ]
+      },
       "infoPlist": {
         "NSCameraUsageDescription": "Tâm Châu cần camera để bạn chụp và chia sẻ khoảnh khắc với bạn bè.",
         "NSMicrophoneUsageDescription": "Tâm Châu cần microphone để quay video chia sẻ khoảnh khắc.",
@@ -61,7 +67,24 @@
           "photosPermission": "Tâm Châu cần truy cập ảnh để chọn ảnh từ thư viện."
         }
       ],
-      "@bacons/apple-targets"
+      "@bacons/apple-targets",
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "TamChauWidget",
+              "label": "Tâm Châu",
+              "minWidth": "100dp",
+              "minHeight": "100dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "description": "Hiển thị ảnh mới nhất từ bạn bè"
+            }
+          ]
+        }
+      ]
     ]
   }
 }
