@@ -26,13 +26,13 @@ import * as VideoThumbnails from 'expo-video-thumbnails';
 import Slider from '@react-native-community/slider';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import { Camera as CameraIcon, Send, Sparkles, RefreshCcw, Zap, ZapOff, Check, X, Users, AlertCircle, Play } from 'lucide-react-native';
 import { useAuthStore } from '../../store/auth.store';
 import { usePhotoStore } from '../../store/photo.store';
 import { uploadPhoto, sendPhoto, uploadVideo } from '../../services/photo.service';
 import { getFriendsList } from '../../services/friend.service';
 import { Colors, Typography, Spacing, BorderRadius } from '../../constants/theme';
 import { User } from '../../types';
-import { CAMERA_FILTERS, FilterConfig } from '../../constants/filters';
 
 const { width, height } = Dimensions.get('window');
 
@@ -53,8 +53,6 @@ export default function HomeScreen() {
   const [flash, setFlash] = useState<FlashMode>('off');
   const [zoom, setZoom] = useState(0);          // 0 = 1x, 0.5 = 2x...
   const [zoomDisplay, setZoomDisplay] = useState(1.0); // label hiển thị
-  const [selectedFilter, setSelectedFilter] = useState<FilterConfig>(CAMERA_FILTERS[0]);
-  const [showFilterPicker, setShowFilterPicker] = useState(false);
   const zoomBaseRef = useRef(0);                // zoom khi bắt đầu pinch
   const lastPinchDistRef = useRef<number | null>(null);
 
@@ -328,10 +326,10 @@ export default function HomeScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.permissionContainer}>
-          <Text style={styles.permissionEmoji}>📷</Text>
-          <Text style={styles.permissionTitle}>Cần quyền Camera</Text>
+          <AlertCircle size={48} color={Colors.pearl} strokeWidth={1.5} style={{ marginBottom: 16 }} />
+          <Text style={styles.permissionTitle}>Camera Access Required</Text>
           <Text style={styles.permissionText}>
-            Tâm Châu cần quyền truy cập camera để bạn có thể chụp và chia sẻ khoảnh khắc
+            HeartPearl needs camera access to capture moments between us.
           </Text>
           <Pressable style={styles.permissionBtn} onPress={requestPermission}>
             <LinearGradient colors={Colors.gradientPrimary} style={styles.permissionBtnGradient}>
@@ -371,11 +369,12 @@ export default function HomeScreen() {
           {/* Top — Cancel + badge */}
           <SafeAreaView style={styles.previewTop}>
             <Pressable style={styles.cancelBtn} onPress={handleCancelPreview}>
-              <Text style={styles.cancelText}>✕</Text>
+              <X size={24} color={Colors.pearl} strokeWidth={1.5} />
             </Pressable>
             {capturedVideo && (
               <View style={styles.videoBadge}>
-                <Text style={styles.videoBadgeText}>🎬 VIDEO</Text>
+                <Play size={14} color={Colors.pearl} strokeWidth={2} />
+                <Text style={styles.videoBadgeText}>VIDEO</Text>
               </View>
             )}
           </SafeAreaView>
@@ -384,8 +383,8 @@ export default function HomeScreen() {
           <View style={styles.captionContainer}>
             <TextInput
               style={styles.captionInput}
-              placeholder="Thêm caption... ✏️"
-              placeholderTextColor="rgba(255,255,255,0.6)"
+              placeholder="Add a sweet note..."
+              placeholderTextColor={Colors.textMuted}
               value={caption}
               onChangeText={setCaption}
               maxLength={100}
@@ -405,8 +404,8 @@ export default function HomeScreen() {
             >
               <Text style={styles.friendPickerLabel}>
                 {selectedFriends.length === 0
-                  ? '👥 Chọn người nhận'
-                  : `✅ ${selectedFriends.length} người`}
+                  ? 'Select recipient'
+                  : `${selectedFriends.length} selected`}
               </Text>
             </Pressable>
 
@@ -414,7 +413,7 @@ export default function HomeScreen() {
               <View style={styles.friendList}>
                 {friends.length === 0 ? (
                   <Text style={styles.noFriendsText}>
-                    Chưa có bạn bè. Thêm bạn bè ở tab 👥
+                    No friends yet. Add them in the profile tab.
                   </Text>
                 ) : (
                   <>
@@ -428,8 +427,8 @@ export default function HomeScreen() {
                     >
                       <Text style={styles.selectAllText}>
                         {selectedFriends.length === friends.length
-                          ? '🚫 Bỏ chọn tất cả'
-                          : '👥 Chọn tất cả bạn bè'}
+                          ? 'Deselect all'
+                          : 'Select all'}
                       </Text>
                     </Pressable>
 
@@ -449,7 +448,7 @@ export default function HomeScreen() {
                         </View>
                         <Text style={styles.friendName}>{friend.displayName}</Text>
                         {selectedFriends.includes(friend.uid) && (
-                          <Text style={styles.friendCheck}>✓</Text>
+                          <Check size={20} color={Colors.primary} strokeWidth={2} />
                         )}
                       </Pressable>
                     ))}
@@ -477,13 +476,16 @@ export default function HomeScreen() {
               >
                 {isUploading ? (
                   <View style={styles.uploadingContainer}>
-                    <ActivityIndicator color={Colors.textInverse} />
+                    <ActivityIndicator color={Colors.pearl} />
                     <Text style={styles.uploadingText}>
                       {Math.round(uploadProgress)}%
                     </Text>
                   </View>
                 ) : (
-                  <Text style={styles.sendText}>Gửi ngay 🚀</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={styles.sendText}>Send</Text>
+                    <Send size={18} color={Colors.pearl} strokeWidth={2} />
+                  </View>
                 )}
               </LinearGradient>
             </Pressable>
@@ -506,19 +508,21 @@ export default function HomeScreen() {
         mirror={false}
         {...pinchResponder.panHandlers}
       />
-      {selectedFilter.opacity > 0 && (
-        <View 
-          style={[
-            StyleSheet.absoluteFill, 
-            { backgroundColor: selectedFilter.overlayColor, opacity: selectedFilter.opacity }
-          ]} 
-          pointerEvents="none" 
-        />
-      )}
+      {/* Fake Beauty Filter Overlay: Lớp phủ nhẹ giúp sáng da, hồng hào */}
+      <View 
+        style={[
+          StyleSheet.absoluteFill, 
+          { backgroundColor: 'rgba(255, 235, 225, 0.12)' }
+        ]} 
+        pointerEvents="none" 
+      />
 
       {/* Top Bar */}
       <SafeAreaView style={styles.topBar}>
-        <Text style={styles.appTitle}>tâm châu</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+          <Text style={[styles.appTitle, { color: Colors.primaryLight }]}>Heart</Text>
+          <Text style={[styles.appTitle, { color: Colors.pearlTint }]}>Pearl</Text>
+        </View>
 
         <View style={styles.topRightControls}>
           {/* Flash toggle */}
@@ -532,16 +536,22 @@ export default function HomeScreen() {
                 Haptics.selectionAsync();
               }}
             >
-              <Text style={styles.controlBtnText}>
-                {flash === 'off' ? '🔦⃠' : flash === 'on' ? '⚡' : '🔦A'}
-              </Text>
+              <View>
+                {flash === 'off' ? (
+                  <ZapOff size={24} color={Colors.pearl} strokeWidth={1.5} />
+                ) : flash === 'on' ? (
+                  <Zap size={24} color={Colors.primaryLight} strokeWidth={1.5} />
+                ) : (
+                  <Zap size={24} color={Colors.pearl} strokeWidth={1.5} />
+                )}
+              </View>
             </Pressable>
           )}
 
           {/* Recording badge */}
           {isRecording && (
             <View style={styles.recordingBadge}>
-              <View style={styles.recordingDot} />
+              <Animated.View style={[styles.recordingDot, { opacity: captureRingAnim }]} />
               <Text style={styles.recordingText}>
                 {Math.ceil(MAX_VIDEO_DURATION * (1 - recordProgress))}s
               </Text>
@@ -590,33 +600,7 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Filter Picker */}
-      {showFilterPicker && !isRecording && (
-        <View style={styles.filterPickerContainer}>
-          <FlatList
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            data={CAMERA_FILTERS}
-            keyExtractor={item => item.id}
-            contentContainerStyle={styles.filterListContent}
-            renderItem={({ item }) => (
-              <Pressable
-                style={[
-                  styles.filterItem,
-                  selectedFilter.id === item.id && styles.filterItemActive
-                ]}
-                onPress={() => {
-                  setSelectedFilter(item);
-                  Haptics.selectionAsync();
-                }}
-              >
-                <View style={[styles.filterPreview, { backgroundColor: item.overlayColor, opacity: item.opacity || 0.3 }]} />
-                <Text style={styles.filterText}>{item.name}</Text>
-              </Pressable>
-            )}
-          />
-        </View>
-      )}
+
 
       {/* Bottom Controls */}
       <View style={styles.bottomControls}>
@@ -626,7 +610,7 @@ export default function HomeScreen() {
           onPress={toggleFacing}
           disabled={isRecording}
         >
-          <Text style={styles.controlBtnText}>🔄</Text>
+          <RefreshCcw size={24} color={Colors.pearl} strokeWidth={1.5} />
         </Pressable>
 
         {/* Capture / Record Button */}
@@ -658,17 +642,7 @@ export default function HomeScreen() {
           </Pressable>
         </Animated.View>
 
-        {/* Filter Button */}
-        <Pressable
-          style={[styles.controlBtn, showFilterPicker && styles.controlBtnActive]}
-          onPress={() => {
-            setShowFilterPicker(!showFilterPicker);
-            Haptics.selectionAsync();
-          }}
-          disabled={isRecording}
-        >
-          <Text style={styles.controlBtnText}>🎨</Text>
-        </Pressable>
+
       </View>
 
       {/* Bottom padding */}

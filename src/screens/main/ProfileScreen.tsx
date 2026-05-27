@@ -32,6 +32,7 @@ import { auth, storage, db } from '../../services/firebase.config';
 import { signOutUser, updateUserDocument, isUsernameAvailable } from '../../services/auth.service';
 import { useAuthStore } from '../../store/auth.store';
 import { Colors, Typography, Spacing, BorderRadius } from '../../constants/theme';
+import { Settings, Edit2, Bell, Lock, Palette, HelpCircle, FileText, LogOut, Camera, X, ChevronRight } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
 
@@ -216,7 +217,7 @@ export default function ProfileScreen() {
         </View>
         {pressable && (
           <View style={styles.cameraEditBadge}>
-            <Text style={{ fontSize: 13 }}>📷</Text>
+            <Camera size={14} color={Colors.pearl} strokeWidth={2} />
           </View>
         )}
         <View style={styles.onlineDot} />
@@ -234,14 +235,13 @@ export default function ProfileScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
         keyboardShouldPersistTaps="handled"
       >
-        {/* ── Header ── */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Hồ sơ</Text>
+          <Text style={styles.headerTitle}>Profile</Text>
           <Pressable
             style={styles.settingsBtn}
             onPress={() => { setModalSection('settings'); Haptics.selectionAsync(); }}
           >
-            <Text style={{ fontSize: 22 }}>⚙️</Text>
+            <Settings size={22} color={Colors.pearl} strokeWidth={1.5} />
           </Pressable>
         </View>
 
@@ -284,7 +284,8 @@ export default function ProfileScreen() {
             style={({ pressed }) => [styles.editProfileBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.98 }] }]}
             onPress={openEdit}
           >
-            <Text style={styles.editProfileBtnText}>✏️ Chỉnh sửa profile</Text>
+            <Edit2 size={16} color={Colors.primaryLight} strokeWidth={2} />
+            <Text style={styles.editProfileBtnText}>Edit Profile</Text>
           </Pressable>
         </LinearGradient>
 
@@ -310,12 +311,12 @@ export default function ProfileScreen() {
         {/* ── Menu list ── */}
         <View style={styles.sectionCard}>
           {[
-            { emoji: '✏️', label: 'Chỉnh sửa profile', desc: 'Tên, username, ảnh đại diện', onPress: openEdit },
-            { emoji: '🔔', label: 'Thông báo', desc: 'Quản lý thông báo', onPress: () => { setModalSection('settings'); Haptics.selectionAsync(); } },
-            { emoji: '🔒', label: 'Quyền riêng tư', desc: 'Kiểm soát ai nhìn thấy bạn', onPress: () => { setModalSection('privacy'); Haptics.selectionAsync(); } },
-            { emoji: '🎨', label: 'Giao diện', desc: 'Chế độ tối / sáng', onPress: () => Alert.alert('Sắp có', 'Tính năng đang phát triển') },
-            { emoji: '❓', label: 'Trợ giúp & Phản hồi', desc: 'Gửi góp ý cho chúng tôi', onPress: () => Alert.alert('Phản hồi', 'Gửi email: support@tamchau.app') },
-            { emoji: '📋', label: 'Điều khoản sử dụng', desc: '', onPress: () => Alert.alert('Điều khoản', 'Sẽ mở trình duyệt') },
+            { icon: <Edit2 size={22} color={Colors.primaryLight} strokeWidth={1.5} />, label: 'Edit Profile', desc: 'Name, username, avatar', onPress: openEdit },
+            { icon: <Bell size={22} color={Colors.primaryLight} strokeWidth={1.5} />, label: 'Notifications', desc: 'Manage alerts', onPress: () => { setModalSection('settings'); Haptics.selectionAsync(); } },
+            { icon: <Lock size={22} color={Colors.primaryLight} strokeWidth={1.5} />, label: 'Privacy', desc: 'Control who sees you', onPress: () => { setModalSection('privacy'); Haptics.selectionAsync(); } },
+            { icon: <Palette size={22} color={Colors.primaryLight} strokeWidth={1.5} />, label: 'Appearance', desc: 'Dark/Light mode', onPress: () => Alert.alert('Coming Soon', 'Feature in development') },
+            { icon: <HelpCircle size={22} color={Colors.primaryLight} strokeWidth={1.5} />, label: 'Help & Feedback', desc: 'Send us suggestions', onPress: () => Alert.alert('Feedback', 'Email: support@tamchau.app') },
+            { icon: <FileText size={22} color={Colors.primaryLight} strokeWidth={1.5} />, label: 'Terms of Use', desc: '', onPress: () => Alert.alert('Terms', 'Will open browser') },
           ].map((item, i, arr) => (
             <Pressable
               key={i}
@@ -326,12 +327,12 @@ export default function ProfileScreen() {
               ]}
               onPress={item.onPress}
             >
-              <Text style={styles.menuEmoji}>{item.emoji}</Text>
+              <View style={styles.menuIconWrap}>{item.icon}</View>
               <View style={styles.menuLabelCol}>
                 <Text style={styles.menuLabel}>{item.label}</Text>
                 {!!item.desc && <Text style={styles.menuDesc}>{item.desc}</Text>}
               </View>
-              <Text style={styles.menuArrow}>›</Text>
+              <ChevronRight size={20} color={Colors.textMuted} strokeWidth={1.5} />
             </Pressable>
           ))}
         </View>
@@ -349,7 +350,8 @@ export default function ProfileScreen() {
           style={({ pressed }) => [styles.signOutBtn, pressed && { opacity: 0.8 }]}
           onPress={handleSignOut}
         >
-          <Text style={styles.signOutText}>🚪 Đăng xuất</Text>
+          <LogOut size={18} color={Colors.error} strokeWidth={2} />
+          <Text style={styles.signOutText}>Log Out</Text>
         </Pressable>
 
         {/* App version */}
@@ -375,13 +377,13 @@ export default function ProfileScreen() {
                 <View style={styles.modalHandle} />
                 {/* Header */}
                 <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>Chỉnh sửa Profile ✏️</Text>
+                  <Text style={styles.modalTitle}>Edit Profile</Text>
                   <Pressable
                     onPress={() => !loading && setModalSection('main')}
                     style={styles.modalCloseBtn}
                     hitSlop={12}
                   >
-                    <Text style={styles.modalCloseText}>✕</Text>
+                    <X size={20} color={Colors.textMuted} strokeWidth={2} />
                   </Pressable>
                 </View>
 
@@ -472,9 +474,9 @@ export default function ProfileScreen() {
           <View style={styles.modalSheet}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>⚙️ Cài đặt thông báo</Text>
+              <Text style={styles.modalTitle}>Notification Settings</Text>
               <Pressable onPress={() => setModalSection('main')} style={styles.modalCloseBtn} hitSlop={12}>
-                <Text style={styles.modalCloseText}>✕</Text>
+                <X size={20} color={Colors.textMuted} strokeWidth={2} />
               </Pressable>
             </View>
             <ScrollView contentContainerStyle={styles.modalBody}>
@@ -517,9 +519,9 @@ export default function ProfileScreen() {
           <View style={styles.modalSheet}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>🔒 Quyền riêng tư</Text>
+              <Text style={styles.modalTitle}>Privacy</Text>
               <Pressable onPress={() => setModalSection('main')} style={styles.modalCloseBtn} hitSlop={12}>
-                <Text style={styles.modalCloseText}>✕</Text>
+                <X size={20} color={Colors.textMuted} strokeWidth={2} />
               </Pressable>
             </View>
             <ScrollView contentContainerStyle={styles.modalBody}>
@@ -527,12 +529,11 @@ export default function ProfileScreen() {
                 Tâm Châu chỉ chia sẻ ảnh/video của bạn với những người bạn bè bạn đã chọn.
               </Text>
               {[
-                { emoji: '👥', title: 'Bạn bè', desc: 'Chỉ bạn bè của bạn mới nhận được ảnh/video.' },
-                { emoji: '🔐', title: 'Mã hoá', desc: 'Dữ liệu được bảo vệ bởi Firebase Security Rules.' },
-                { emoji: '🗑️', title: 'Xoá dữ liệu', desc: 'Liên hệ support@tamchau.app để yêu cầu xoá tài khoản.' },
+                { icon: <Users size={24} color={Colors.primary} />, title: 'Friends Only', desc: 'Only approved friends receive your photos.' },
+                { icon: <Lock size={24} color={Colors.primary} />, title: 'Encrypted', desc: 'Your data is secured by Firebase Security Rules.' },
               ].map((item, i) => (
                 <View key={i} style={styles.privacyItem}>
-                  <Text style={styles.privacyItemEmoji}>{item.emoji}</Text>
+                  <View style={styles.privacyItemEmoji}>{item.icon}</View>
                   <View>
                     <Text style={styles.privacyItemTitle}>{item.title}</Text>
                     <Text style={styles.privacyItemDesc}>{item.desc}</Text>
@@ -673,14 +674,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xl,
     paddingVertical: 10,
     borderRadius: BorderRadius.full,
-    borderWidth: 1.5,
-    borderColor: Colors.primary,
-    backgroundColor: `${Colors.primary}12`,
+    borderWidth: 1,
+    borderColor: Colors.primaryLight,
+    backgroundColor: 'transparent',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   editProfileBtnText: {
     fontFamily: Typography.fontFamily.semiBold,
     fontSize: Typography.fontSize.sm,
-    color: Colors.primary,
+    color: Colors.primaryLight,
   },
 
   // Share card
@@ -746,8 +750,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     gap: 14,
   },
-  menuRowBorder: { borderBottomWidth: 1, borderBottomColor: Colors.border },
-  menuEmoji: { fontSize: 22, width: 32, textAlign: 'center' },
+  menuEmoji: { width: 32, alignItems: 'center', justifyContent: 'center' },
+  menuIconWrap: { width: 32, alignItems: 'center', justifyContent: 'center' },
   menuLabelCol: { flex: 1 },
   menuLabel: {
     fontFamily: Typography.fontFamily.medium,
@@ -762,7 +766,6 @@ const styles = StyleSheet.create({
   },
   menuArrow: { fontSize: 20, color: Colors.textMuted },
 
-  // Sign out
   signOutBtn: {
     backgroundColor: Colors.surface,
     borderRadius: BorderRadius.xl,
@@ -770,6 +773,9 @@ const styles = StyleSheet.create({
     borderColor: `${Colors.error}60`,
     paddingVertical: Spacing.base,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
   },
   signOutText: {
     fontFamily: Typography.fontFamily.semiBold,

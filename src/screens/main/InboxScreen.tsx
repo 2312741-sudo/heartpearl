@@ -25,6 +25,7 @@ import { useAuthStore } from '../../store/auth.store';
 import { usePhotoStore } from '../../store/photo.store';
 import { Colors, Typography, Spacing, BorderRadius } from '../../constants/theme';
 import { Photo, RootStackParamList } from '../../types';
+import { Mailbox, Play, Sparkles } from 'lucide-react-native';
 
 dayjs.extend(relativeTime);
 dayjs.locale('vi');
@@ -84,7 +85,7 @@ function PhotoCard({ photo, userId }: { photo: Photo; userId: string }) {
         {/* Video badge */}
         {photo.mediaType === 'video' && (
           <View style={styles.videoBadge}>
-            <Text style={styles.videoBadgeText}>🎬</Text>
+            <Play size={14} color={Colors.pearl} strokeWidth={2} />
           </View>
         )}
 
@@ -145,9 +146,12 @@ export default function InboxScreen() {
         <View>
           <Text style={styles.headerTitle}>Inbox</Text>
           {newCount > 0 && (
-            <Text style={styles.headerSubtitle}>
-              {newCount} ảnh mới từ bạn bè 🎉
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+              <Text style={styles.headerSubtitle}>
+                {newCount} ảnh mới từ bạn bè
+              </Text>
+              <Sparkles size={14} color={Colors.primaryLight} strokeWidth={2} />
+            </View>
           )}
         </View>
         <View style={styles.headerRight}>
@@ -162,7 +166,7 @@ export default function InboxScreen() {
       {/* Photo Grid */}
       {inbox.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyEmoji}>📭</Text>
+          <Mailbox size={64} color={Colors.pearl} strokeWidth={1} style={{ marginBottom: 16 }} />
           <Text style={styles.emptyTitle}>Chưa có ảnh nào</Text>
           <Text style={styles.emptySubtitle}>
             Khi bạn bè gửi ảnh, chúng sẽ xuất hiện ở đây nhé!
@@ -238,28 +242,32 @@ const styles = StyleSheet.create({
     gap: Spacing.base,
     marginBottom: Spacing.base,
   },
-  // Photo Card
   card: {
     width: CARD_SIZE,
     height: CARD_SIZE * 1.25,
-    borderRadius: BorderRadius.xl,
-    overflow: 'hidden',
+    borderRadius: 20,
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
+    padding: 4,
   },
   cardImage: {
     width: '100%',
     height: '100%',
     position: 'absolute',
+    top: 4,
+    left: 4,
+    borderRadius: 14,
     resizeMode: 'cover',
   },
   cardGradient: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    bottom: 4,
+    left: 4,
+    right: 4,
     height: '60%',
+    borderBottomLeftRadius: 14,
+    borderBottomRightRadius: 14,
   },
   newBadge: {
     position: 'absolute',
@@ -342,7 +350,6 @@ const styles = StyleSheet.create({
     gap: Spacing.base,
     paddingHorizontal: Spacing['3xl'],
   },
-  emptyEmoji: { fontSize: 64 },
   emptyTitle: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.xl,

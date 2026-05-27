@@ -3,29 +3,32 @@
 // ─────────────────────────────────────────────
 
 export const Colors = {
-  // Brand
-  primary: '#FF6B35',
-  primaryLight: '#FF8C5A',
-  primaryDark: '#E5521A',
-  secondary: '#FFD700',
+  // Brand (HeartPearl)
+  primary: '#C42E5C',         // rose — main brand color
+  primaryLight: '#E55080',    // rose light — hover states, highlights
+  primaryDark: '#9C2549',     // for pressed states
+  secondary: '#FF80A0',       // blush — secondary accents
+  soft: '#FFD0DD',            // soft pink
+  pearl: '#FFFFFF',           // pearl white
+  pearlTint: '#F6EEFF',       // pearl lavender
 
   // Background
-  background: '#0A0A0F',
-  surface: '#13131A',
-  surfaceLight: '#1E1E2A',
-  card: '#1A1A24',
+  background: '#120716',      // deep berry
+  surface: '#1E0D26',         // slightly lighter surface/cards
+  surfaceLight: '#281335',
+  card: '#1E0D26',
 
   // Text
   textPrimary: '#FFFFFF',
-  textSecondary: '#A0A0B0',
-  textMuted: '#5A5A70',
-  textInverse: '#0A0A0F',
+  textSecondary: '#F6EEFF',   // 85% opacity pearl lavender
+  textMuted: '#6A3555',       // muted rose — secondary text
+  textInverse: '#120716',
 
   // UI
-  border: '#2A2A38',
-  borderLight: '#3A3A50',
-  overlay: 'rgba(0,0,0,0.7)',
-  overlayLight: 'rgba(0,0,0,0.4)',
+  border: '#3A1535',          // subtle border
+  borderLight: '#4F1E48',
+  overlay: 'rgba(18, 7, 22, 0.7)',
+  overlayLight: 'rgba(18, 7, 22, 0.4)',
 
   // Status
   success: '#2ECC71',
@@ -34,9 +37,9 @@ export const Colors = {
   info: '#3498DB',
 
   // Gradients
-  gradientPrimary: ['#FF6B35', '#FF8C5A', '#FFD700'] as const,
-  gradientDark: ['#0A0A0F', '#13131A'] as const,
-  gradientCard: ['rgba(255,107,53,0.15)', 'rgba(255,107,53,0.05)'] as const,
+  gradientPrimary: ['#C42E5C', '#E55080'] as const,
+  gradientDark: ['#120716', '#1E0D26'] as const,
+  gradientCard: ['rgba(196, 46, 92, 0.15)', 'rgba(196, 46, 92, 0.05)'] as const,
 
   transparent: 'transparent',
   white: '#FFFFFF',
@@ -68,6 +71,9 @@ export const Typography = {
     normal: 1.5,
     relaxed: 1.8,
   },
+  letterSpacing: {
+    label: 0.3,
+  }
 };
 
 export const Spacing = {
@@ -86,38 +92,38 @@ export const Spacing = {
 export const BorderRadius = {
   sm: 8,
   md: 12,
-  lg: 16,
-  xl: 24,
+  lg: 14,
+  xl: 20,
   '2xl': 32,
   full: 9999,
 };
 
 export const Shadows = {
   sm: {
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 2 },
+    shadowColor: Colors.primaryLight,
+    shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.15,
-    shadowRadius: 4,
+    shadowRadius: 10,
     elevation: 3,
   },
   md: {
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
+    shadowColor: Colors.primaryLight,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.20,
+    shadowRadius: 15,
     elevation: 6,
   },
   lg: {
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
+    shadowColor: Colors.primaryLight,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.30,
+    shadowRadius: 20,
     elevation: 12,
   },
   glow: {
     shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
+    shadowOpacity: 0.2, // 20% opacity glow as per Vibe Rules
     shadowRadius: 20,
     elevation: 10,
   },

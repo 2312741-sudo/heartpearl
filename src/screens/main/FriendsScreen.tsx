@@ -29,6 +29,7 @@ import {
 import { useAuthStore } from '../../store/auth.store';
 import { Colors, Typography, Spacing, BorderRadius } from '../../constants/theme';
 import { User, FriendRequest } from '../../types';
+import { Users, Mailbox, Search, Check, X } from 'lucide-react-native';
 
 type Tab = 'friends' | 'requests' | 'search';
 
@@ -179,7 +180,7 @@ export default function FriendsScreen() {
           contentContainerStyle={styles.list}
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Text style={styles.emptyEmoji}>👥</Text>
+              <Users size={48} color={Colors.pearl} strokeWidth={1} style={{ marginBottom: 8 }} />
               <Text style={styles.emptyText}>Chưa có bạn bè nào</Text>
               <Text style={styles.emptySubText}>Tìm kiếm bạn bè ở tab "Tìm kiếm"</Text>
             </View>
@@ -191,7 +192,7 @@ export default function FriendsScreen() {
                 <Text style={styles.friendName}>{item.displayName}</Text>
                 <Text style={styles.friendPhone}>@{item.username || 'user'}</Text>
               </View>
-              <Text style={styles.friendCheckmark}>✓</Text>
+              <Check size={20} color={Colors.success} strokeWidth={2} />
             </View>
           )}
         />
@@ -204,7 +205,7 @@ export default function FriendsScreen() {
           contentContainerStyle={styles.list}
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Text style={styles.emptyEmoji}>📬</Text>
+              <Mailbox size={48} color={Colors.pearl} strokeWidth={1} style={{ marginBottom: 8 }} />
               <Text style={styles.emptyText}>Không có lời mời nào</Text>
             </View>
           }
@@ -222,13 +223,13 @@ export default function FriendsScreen() {
                   style={styles.acceptBtn}
                   onPress={() => handleAccept(item)}
                 >
-                  <Text style={styles.acceptBtnText}>✓</Text>
+                  <Check size={16} color={Colors.white} strokeWidth={3} />
                 </Pressable>
                 <Pressable
                   style={styles.rejectBtn}
                   onPress={() => handleReject(item.id)}
                 >
-                  <Text style={styles.rejectBtnText}>✕</Text>
+                  <X size={16} color={Colors.textSecondary} strokeWidth={2} />
                 </Pressable>
               </View>
             </View>
@@ -240,7 +241,7 @@ export default function FriendsScreen() {
         <View style={styles.searchContainer}>
           <View style={styles.searchInputRow}>
             <View style={styles.searchInputWrapper}>
-              <Text style={styles.searchIcon}>🔍</Text>
+              <Search size={16} color={Colors.textMuted} strokeWidth={2} />
               <TextInput
                 style={styles.searchInput}
                 placeholder="Tìm theo username..."
@@ -275,7 +276,7 @@ export default function FriendsScreen() {
             ListEmptyComponent={
               searchQuery ? null : (
                 <View style={styles.empty}>
-                  <Text style={styles.emptyEmoji}>🔍</Text>
+                  <Search size={48} color={Colors.pearl} strokeWidth={1} style={{ marginBottom: 8 }} />
                   <Text style={styles.emptyText}>Nhập username để tìm bạn bè</Text>
                 </View>
               )
@@ -480,7 +481,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.base,
     gap: Spacing.sm,
   },
-  searchIcon: { fontSize: 16 },
   searchInput: {
     flex: 1,
     paddingVertical: 12,
@@ -507,7 +507,6 @@ const styles = StyleSheet.create({
     paddingTop: Spacing['4xl'],
     gap: Spacing.base,
   },
-  emptyEmoji: { fontSize: 48 },
   emptyText: {
     fontFamily: Typography.fontFamily.semiBold,
     fontSize: Typography.fontSize.lg,

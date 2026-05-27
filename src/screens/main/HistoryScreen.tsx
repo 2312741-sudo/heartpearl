@@ -21,6 +21,7 @@ import { useAuthStore } from '../../store/auth.store';
 import { usePhotoStore } from '../../store/photo.store';
 import { Colors, Typography, Spacing, BorderRadius } from '../../constants/theme';
 import { Photo, RootStackParamList } from '../../types';
+import { CalendarHeart, Heart } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
 const THUMB_SIZE = (width - Spacing['2xl'] * 2 - Spacing.sm * 2) / 3;
@@ -60,7 +61,7 @@ export default function HistoryScreen() {
 
       {sections.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyEmoji}>🕐</Text>
+          <CalendarHeart size={64} color={Colors.pearl} strokeWidth={1} style={{ marginBottom: 16 }} />
           <Text style={styles.emptyTitle}>Chưa có ảnh nào</Text>
           <Text style={styles.emptySubtitle}>
             Các ảnh bạn đã gửi sẽ xuất hiện ở đây
@@ -88,8 +89,9 @@ export default function HistoryScreen() {
                     <Image source={{ uri: photo.imageUrl }} style={styles.thumbImage} />
                     {Object.keys(photo.reactions || {}).length > 0 && (
                       <View style={styles.reactionIndicator}>
+                        <Heart size={10} color={Colors.primary} fill={Colors.primary} />
                         <Text style={styles.reactionIndicatorText}>
-                          ❤️ {Object.keys(photo.reactions).length}
+                          {Object.keys(photo.reactions).length}
                         </Text>
                       </View>
                     )}
@@ -146,28 +148,36 @@ const styles = StyleSheet.create({
   thumb: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
-    borderRadius: BorderRadius.md,
-    overflow: 'hidden',
+    borderRadius: 20,
     backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 4,
   },
   thumbImage: {
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
+    borderRadius: 14,
   },
   reactionIndicator: {
     position: 'absolute',
-    bottom: 4,
-    right: 4,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
+    bottom: 8,
+    right: 8,
+    backgroundColor: Colors.surface,
+    borderColor: Colors.border,
+    borderWidth: 1,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   reactionIndicatorText: {
     fontSize: 10,
-    color: Colors.white,
-    fontFamily: Typography.fontFamily.medium,
+    color: Colors.pearl,
+    fontFamily: Typography.fontFamily.semiBold,
   },
   empty: {
     flex: 1,
@@ -176,7 +186,6 @@ const styles = StyleSheet.create({
     gap: Spacing.base,
     paddingHorizontal: Spacing['3xl'],
   },
-  emptyEmoji: { fontSize: 64 },
   emptyTitle: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.xl,
