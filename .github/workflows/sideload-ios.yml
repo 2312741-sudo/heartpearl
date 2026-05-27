@@ -20,6 +20,11 @@ jobs:
       - name: 📦 Install dependencies
         run: npm install
 
+      - name: 🔧 Remove iOS Widget for Sideload (Requires real dev account)
+        run: |
+          npm install -g json
+          json -I -f app.json -e "this.expo.plugins = this.expo.plugins ? this.expo.plugins.filter(p => !p || p[0] !== '@bacons/apple-targets') : []"
+
       - name: 🚀 Prebuild
         run: npx expo prebuild --platform ios --clean
 
@@ -28,16 +33,21 @@ jobs:
           cd ios
           WORKSPACE=$(ls | grep .xcworkspace | head -n 1)
           SCHEME=$(basename "$WORKSPACE" .xcworkspace)
+          # Fix Node path for Xcode
+          ln -s $(which node) /usr/local/bin/node || true
+          
           # Tắt yêu cầu code signing để build được không cần chứng chỉ
           xcodebuild -workspace "$WORKSPACE" \
             -scheme "$SCHEME" \
             -configuration Release \
             -sdk iphoneos \
+            -destination "generic/platform=iOS" \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            PROVISIONING_PROFILE_SPECIFIER=""
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            COMPILER_INDEX_STORE_ENABLE=NO
 
       - name: 📦 Package IPA
         run: |
