@@ -27,6 +27,24 @@ jobs:
         run: |
           echo "Building with iOS and Android widgets enabled."
 
+      - name: 💾 Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cocoapods/repos
+            ~/Library/Caches/CocoaPods
+          key: ${{ runner.os }}-cocoapods-${{ hashFiles('package-lock.json', 'app.json') }}
+          restore-keys: |
+            ${{ runner.os }}-cocoapods-
+
+      - name: 💾 Cache Xcode Derived Data
+        uses: actions/cache@v4
+        with:
+          path: DerivedData
+          key: ${{ runner.os }}-xcodebuild-${{ hashFiles('package-lock.json', 'app.json') }}
+          restore-keys: |
+            ${{ runner.os }}-xcodebuild-
+
       - name: 🚀 Prebuild
         run: npx expo prebuild --platform ios --clean
 
@@ -44,13 +62,13 @@ jobs:
             -configuration Release \
             -sdk iphoneos \
             -destination "generic/platform=iOS" \
-            -derivedDataPath build \
+            -derivedDataPath ../DerivedData \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO > build.log 2>&1
             
           echo "=== Kiểm tra Widget Extension trong thư mục Build ==="
-          ls -la build/Build/Products/Release-iphoneos/*.app/PlugIns/ || echo "Không tìm thấy PlugIns directory"
+          ls -la ../DerivedData/Build/Products/Release-iphoneos/*.app/PlugIns/ || echo "Không tìm thấy PlugIns directory"
 
       - name: 📄 Print Build Log on Failure
         if: failure()
@@ -71,7 +89,7 @@ jobs:
 
       - name: 📦 Package IPA
         run: |
-          cd ios/build/Build/Products/Release-iphoneos
+          cd DerivedData/Build/Products/Release-iphoneos
           mkdir Payload
           # Tìm file .app và di chuyển vào Payload
           APP_NAME=$(ls -d *.app | head -n 1)
@@ -83,5 +101,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ios-sideload-ipa
-          path: ios/build/Build/Products/Release-iphoneos/app-sideload.ipa
+          path: DerivedData/Build/Products/Release-iphoneos/app-sideload.ipa
           retention-days: 7
