@@ -68,6 +68,8 @@ export default function RootNavigator() {
               component={PhotoViewerScreen}
               options={{ presentation: 'modal' }}
             />
+            <Stack.Screen name="Chat" component={ChatScreen} />
+            <Stack.Screen name="ChatList" component={ChatListScreen} />
           </>
         ) : (
           <Stack.Screen name="Auth" component={AuthNavigator} />

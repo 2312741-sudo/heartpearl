@@ -18,6 +18,7 @@ import {
   TouchableWithoutFeedback,
   PanResponder,
   FlatList,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -548,19 +549,23 @@ export default function HomeScreen() {
           audio={(micPermission as any).granted}
 
         ref={cameraRef}
-        style={styles.camera}
+        style={[styles.camera, { transform: [{ scaleX: facing === 'front' ? -1 : 1 }] }]}
         
                         zoom={zoom}
         {...pinchResponder.panHandlers}
       />}
-      {/* Fake Beauty Filter Overlay: Lớp phủ nhẹ giúp sáng da, hồng hào */}
-      <View 
-        style={[
-          StyleSheet.absoluteFill, 
-          { backgroundColor: 'rgba(255, 235, 225, 0.12)' }
-        ]} 
-        pointerEvents="none" 
-      />
+      {selectedFilter !== 'normal' && (
+        <View 
+          style={[
+            StyleSheet.absoluteFill, 
+            { 
+              backgroundColor: BEAUTY_FILTERS.find(f => f.id === selectedFilter)?.overlay?.color || 'transparent',
+              opacity: BEAUTY_FILTERS.find(f => f.id === selectedFilter)?.overlay?.opacity || 0
+            }
+          ]} 
+          pointerEvents="none" 
+        />
+      )}
 
       {/* Top Bar */}
       <SafeAreaView style={styles.topBar}>
@@ -654,6 +659,28 @@ export default function HomeScreen() {
       )}
 
 
+
+      {/* Filter Selector */}
+      {!capturedImage && !capturedVideo && (
+        <View style={{ position: 'absolute', bottom: 180, left: 0, right: 0, height: 60, zIndex: 50 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 15, alignItems: 'center' }}>
+            {BEAUTY_FILTERS.map(f => (
+              <Pressable
+                key={f.id}
+                onPress={() => { setSelectedFilter(f.id); Haptics.selectionAsync(); }}
+                style={{
+                  paddingHorizontal: 16, paddingVertical: 8,
+                  borderRadius: 20,
+                  backgroundColor: selectedFilter === f.id ? colors.primary : 'rgba(0,0,0,0.5)',
+                  borderWidth: 1, borderColor: selectedFilter === f.id ? colors.primary : 'rgba(255,255,255,0.3)'
+                }}
+              >
+                <Text style={{ color: '#FFF', fontFamily: Typography.fontFamily.semiBold }}>{f.name}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
       {/* Bottom Controls */}
       <View style={styles.bottomControls}>
