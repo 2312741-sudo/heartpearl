@@ -440,7 +440,7 @@ export default function HomeScreen() {
         caption || undefined,
         capturedVideo ? 'video' : 'photo',
         capturedVideo ? mediaUrl : undefined, // videoUrl
-        facing === 'front', // isMirrored
+        !isExpoGo && facing === 'front', // isMirrored
         true // filter applied globally in HeartPearl
       );
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -497,12 +497,12 @@ export default function HomeScreen() {
           {capturedImage ? (
             <Image 
               source={{ uri: capturedImage }} 
-              style={[styles.preview, { transform: [{ scaleX: facing === 'front' ? -1 : 1 }] }]} 
+              style={[styles.preview, { transform: [{ scaleX: (!isExpoGo && facing === 'front') ? -1 : 1 }] }]} 
             />
           ) : (
             <Video
               source={{ uri: capturedVideo! }}
-              style={[styles.preview, { transform: [{ scaleX: facing === 'front' ? -1 : 1 }] }]}
+              style={[styles.preview, { transform: [{ scaleX: (!isExpoGo && facing === 'front') ? -1 : 1 }] }]}
               resizeMode={ResizeMode.COVER}
               shouldPlay
               isLooping
