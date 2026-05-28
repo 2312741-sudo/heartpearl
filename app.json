@@ -54,6 +54,14 @@
           "photosPermission": "HeartPearl cần truy cập ảnh để chọn ảnh từ thư viện."
         }
       ],
+      [
+        "react-native-vision-camera",
+        {
+          "cameraPermissionText": "HeartPearl cần camera để chụp ảnh.",
+          "enableMicrophonePermission": true,
+          "microphonePermissionText": "HeartPearl cần microphone để quay video."
+        }
+      ],
       "@bacons/apple-targets",
       [
         "react-native-android-widget",
