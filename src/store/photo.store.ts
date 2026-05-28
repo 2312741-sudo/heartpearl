@@ -30,17 +30,17 @@ export const usePhotoStore = create<PhotoState>((set) => ({
 
   setInbox: (photos) => {
     set({ inbox: photos });
-    if (photos.length > 0 && photos[0].url) {
+    if (photos.length > 0 && photos[0].imageUrl) {
       import('../services/widget.service').then(({ updateWidgets }) => {
-        updateWidgets(photos[0].url);
+        updateWidgets(photos[0].imageUrl);
       }).catch(err => console.warn('Failed to load widget service:', err));
     }
   },
   addToInbox: (photo) => {
     set((state) => ({ inbox: [photo, ...state.inbox] }));
-    if (photo.url) {
+    if (photo.imageUrl) {
       import('../services/widget.service').then(({ updateWidgets }) => {
-        updateWidgets(photo.url);
+        updateWidgets(photo.imageUrl);
       }).catch(err => console.warn('Failed to load widget service:', err));
     }
   },

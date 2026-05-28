@@ -80,4 +80,5 @@ export type RootStackParamList = {
   Main: undefined;
   PhotoViewer: { photo: Photo };
   Camera: undefined;
+  Chat: { friendId: string; friendName: string; friendAvatar?: string };
 };

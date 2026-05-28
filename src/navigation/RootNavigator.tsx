@@ -12,6 +12,7 @@ import { AuthNavigator } from './AuthNavigator';
 import { MainNavigator } from './MainNavigator';
 import { RootStackParamList } from '../types';
 import PhotoViewerScreen from '../screens/main/PhotoViewerScreen';
+import ChatScreen from '../screens/main/ChatScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 

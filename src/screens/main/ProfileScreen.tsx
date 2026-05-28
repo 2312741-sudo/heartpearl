@@ -244,10 +244,10 @@ export default function ProfileScreen() {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>{t('profile.title')}</Text>
           <Pressable
-            style={styles.settingsBtn}
+            style={[styles.settingsBtn, { backgroundColor: colors.surface }]}
             onPress={() => { setModalSection('settings'); Haptics.selectionAsync(); }}
           >
-            <Settings size={22} color={colors.pearl} strokeWidth={1.5} />
+            <Settings size={22} color={colors.textPrimary} strokeWidth={1.5} />
           </Pressable>
         </View>
 
@@ -320,7 +320,6 @@ export default function ProfileScreen() {
             { icon: <Edit2 size={22} color={colors.primaryLight} strokeWidth={1.5} />, label: t('profile.editProfile'), desc: '', onPress: openEdit },
             { icon: <Bell size={22} color={colors.primaryLight} strokeWidth={1.5} />, label: t('profile.notif'), desc: t('profile.notifDesc'), onPress: () => { setModalSection('settings'); Haptics.selectionAsync(); } },
             { icon: <Lock size={22} color={colors.primaryLight} strokeWidth={1.5} />, label: t('profile.privacy'), desc: t('profile.privacyDesc'), onPress: () => { setModalSection('privacy'); Haptics.selectionAsync(); } },
-            { icon: <Palette size={22} color={colors.primaryLight} strokeWidth={1.5} />, label: t('profile.appearance'), desc: t('profile.appearanceDesc'), onPress: () => Alert.alert('Coming Soon', 'Feature in development') },
             { icon: <HelpCircle size={22} color={colors.primaryLight} strokeWidth={1.5} />, label: t('profile.help'), desc: t('profile.helpDesc'), onPress: () => Alert.alert('Feedback', 'Email: support@tamchau.app') },
             { icon: <FileText size={22} color={colors.primaryLight} strokeWidth={1.5} />, label: t('profile.terms'), desc: '', onPress: () => Alert.alert('Terms', 'Will open browser') },
           ].map((item, i, arr) => (
@@ -922,9 +921,7 @@ const createStyles = (colors: AppColors) => StyleSheet.create({
   settingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    width: '100%',
-    gap: 12,
+    paddingVertical: 12,
   },
   settingRowBorder: { borderTopWidth: 1, borderTopColor: colors.border },
   settingLabel: {

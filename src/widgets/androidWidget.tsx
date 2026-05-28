@@ -16,13 +16,14 @@ export function TamChauWidget({ imageUrl }: { imageUrl?: string }) {
     >
       {imageUrl ? (
         <ImageWidget
-          source={{ uri: imageUrl }}
+          image={imageUrl as any}
+          imageWidth={300}
+          imageHeight={300}
           style={{
             width: 'match_parent',
             height: 'match_parent',
             borderRadius: 16,
           }}
-          resizeMode="cover"
         />
       ) : (
         <FlexWidget
