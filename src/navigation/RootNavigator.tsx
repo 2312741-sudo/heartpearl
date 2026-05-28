@@ -36,7 +36,7 @@ export default function RootNavigator() {
 
         registerForPushNotificationsAsync().then((token) => {
           if (token) {
-            updateUserDocument(user.uid, { pushToken: token }).catch(console.error);
+            updateUserDocument(user.uid, { fcmToken: token }).catch(console.error);
           }
         });
       } else {

@@ -66,7 +66,14 @@ export default function HomeScreen() {
   const { hasPermission: hasMic, requestPermission: requestMicPermission } = useMicrophonePermission();
   const micPermission = { granted: hasMic };
   const [facing, setFacing] = useState<'back' | 'front'>('back');
-  const device = useCameraDevice(facing);
+  // Choose logical multi-camera to support wide-angle 0.5x if available on camera back
+  const device = useCameraDevice(facing, facing === 'back' ? {
+    physicalDevices: [
+      'ultra-wide-angle-camera',
+      'wide-angle-camera',
+      'telephoto-camera'
+    ]
+  } : undefined) || useCameraDevice(facing);
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('normal');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [capturedVideo, setCapturedVideo] = useState<string | null>(null);
@@ -77,10 +84,21 @@ export default function HomeScreen() {
 
   // Camera controls
   const [flash, setFlash] = useState<'on' | 'off'>('off');
-  const [zoom, setZoom] = useState(0);          // 0 = 1x, 0.5 = 2x...
+  const minZoom = device?.minZoom ?? 1;
+  const maxZoom = Math.min(device?.maxZoom ?? 8, 8);
+  const [zoom, setZoom] = useState(1.0);          // actual zoom factor, starts at 1.0x
   const [zoomDisplay, setZoomDisplay] = useState(1.0); // label hiển thị
-  const zoomBaseRef = useRef(0);                // zoom khi bắt đầu pinch
+  const zoomBaseRef = useRef(1.0);                // zoom khi bắt đầu pinch
   const lastPinchDistRef = useRef<number | null>(null);
+
+  // Sync zoom when device changes
+  useEffect(() => {
+    if (device) {
+      const initialZoom = (device.minZoom <= 1.0 && 1.0 <= device.maxZoom) ? 1.0 : device.minZoom;
+      setZoom(initialZoom);
+      setZoomDisplay(parseFloat(initialZoom.toFixed(1)));
+    }
+  }, [device]);
 
   // Pinch-to-zoom PanResponder
   const pinchResponder = useRef(
@@ -104,9 +122,11 @@ export default function HomeScreen() {
         const delta = (dist - lastPinchDistRef.current) / 300;
         lastPinchDistRef.current = dist;
         setZoom(prev => {
-          const next = Math.max(0, Math.min(1, prev + delta));
-          setZoomDisplay(parseFloat((1 + next * 4).toFixed(1)));
-          return next;
+          const currentPercent = (prev - minZoom) / (maxZoom - minZoom || 1);
+          const nextPercent = Math.max(0, Math.min(1, currentPercent + delta));
+          const nextZoom = minZoom + nextPercent * (maxZoom - minZoom);
+          setZoomDisplay(parseFloat(nextZoom.toFixed(1)));
+          return nextZoom;
         });
       },
       onPanResponderRelease: () => { lastPinchDistRef.current = null; },
@@ -549,7 +569,7 @@ export default function HomeScreen() {
           audio={(micPermission as any).granted}
 
         ref={cameraRef}
-        style={[styles.camera, { transform: [{ scaleX: facing === 'front' ? -1 : 1 }] }]}
+        style={styles.camera}
         
                         zoom={zoom}
         {...pinchResponder.panHandlers}
@@ -646,10 +666,11 @@ export default function HomeScreen() {
             style={{ width: 160, height: 40 }}
             minimumValue={0}
             maximumValue={1}
-            value={zoom}
+            value={(zoom - minZoom) / (maxZoom - minZoom || 1)}
             onValueChange={(val) => {
-              setZoom(val);
-              setZoomDisplay(parseFloat((1 + val * 4).toFixed(1)));
+              const nextZoom = minZoom + val * (maxZoom - minZoom);
+              setZoom(nextZoom);
+              setZoomDisplay(parseFloat(nextZoom.toFixed(1)));
             }}
             minimumTrackTintColor={colors.primary}
             maximumTrackTintColor="rgba(255,255,255,0.3)"
@@ -679,6 +700,36 @@ export default function HomeScreen() {
               </Pressable>
             ))}
           </ScrollView>
+        </View>
+      )}
+
+      {/* Zoom Presets Row */}
+      {!capturedImage && !capturedVideo && !isRecording && (
+        <View style={styles.zoomPresetsContainer}>
+          {[0.5, 1.0, 2.0, 5.0].map((preset) => {
+            const isSupported = preset >= minZoom && preset <= maxZoom;
+            const isActive = zoomDisplay === preset;
+            return (
+              <Pressable
+                key={preset}
+                style={[
+                  styles.zoomPresetCircle,
+                  isActive && styles.zoomPresetCircleActive,
+                  !isSupported && { opacity: 0.4 }
+                ]}
+                onPress={() => {
+                  const target = Math.max(minZoom, Math.min(preset, maxZoom));
+                  setZoom(target);
+                  setZoomDisplay(preset);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
+              >
+                <Text style={[styles.zoomPresetText, isActive && styles.zoomPresetTextActive]}>
+                  {preset === 1.0 ? '1x' : preset === 2.0 ? '2x' : preset === 5.0 ? '5x' : '0.5'}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
       )}
 
@@ -894,6 +945,37 @@ const createStyles = (colors: AppColors) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
+  },
+  // Zoom Presets
+  zoomPresetsContainer: {
+    position: 'absolute',
+    bottom: 135,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    gap: 12,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: BorderRadius.full,
+    padding: 4,
+    zIndex: 50,
+  },
+  zoomPresetCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  zoomPresetCircleActive: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  zoomPresetText: {
+    fontFamily: Typography.fontFamily.bold,
+    fontSize: 12,
+    color: '#FFF',
+  },
+  zoomPresetTextActive: {
+    color: colors.primaryLight,
   },
   // Filter Picker
   filterPickerContainer: {

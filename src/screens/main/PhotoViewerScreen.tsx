@@ -37,6 +37,9 @@ import { uploadPhoto } from '../../services/photo.service';
 import { useAuthStore } from '../../store/auth.store';
 import { useTranslation } from 'react-i18next';
 import { useAppTheme, AppColors, Typography, Spacing, BorderRadius } from '../../constants/theme';
+import { collection, addDoc, setDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../services/firebase.config';
+import { getUserDocument } from '../../services/auth.service';
 
 dayjs.extend(relativeTime);
 dayjs.locale('vi');
@@ -86,6 +89,44 @@ export default function PhotoViewerScreen() {
       const reactionUrl = await uploadPhoto(result.assets[0].uri, userProfile.uid);
       await reactToPhoto(photo.id, userProfile.uid, reactionUrl);
 
+      // Sync to chat room
+      if (photo.senderId && userProfile.uid !== photo.senderId) {
+        const chatId = [userProfile.uid, photo.senderId].sort().join('_');
+        
+        await addDoc(collection(db, `chats/${chatId}/messages`), {
+          text: t('photo.react.selfieReactText', { defaultValue: 'Đã phản hồi bằng một ảnh selfie' }),
+          photoUrl: reactionUrl,
+          senderId: userProfile.uid,
+          type: 'reaction',
+          createdAt: serverTimestamp(),
+        });
+
+        let friendName = photo.senderUser?.displayName || 'Bạn bè';
+        let friendAvatar = photo.senderUser?.avatarUrl || '';
+
+        if (!photo.senderUser?.displayName) {
+          try {
+            const docData = await getUserDocument(photo.senderId);
+            if (docData) {
+              friendName = docData.displayName;
+              friendAvatar = docData.avatarUrl || '';
+            }
+          } catch (err) {
+            console.warn('Failed to fetch sender profile for selfie react sync:', err);
+          }
+        }
+
+        await setDoc(doc(db, `chats/${chatId}`), {
+          participants: [userProfile.uid, photo.senderId],
+          participantsInfo: {
+            [userProfile.uid]: { name: userProfile.displayName || '', avatar: userProfile.avatarUrl || '' },
+            [photo.senderId]: { name: friendName, avatar: friendAvatar }
+          },
+          lastMessage: `📷 ${t('photo.react.selfieReactText', { defaultValue: 'Đã phản hồi bằng một ảnh selfie' })}`,
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
+      }
+
       Animated.sequence([
         Animated.spring(reactScaleAnim, { toValue: 1.3, useNativeDriver: true }),
         Animated.spring(reactScaleAnim, { toValue: 1, useNativeDriver: true }),
@@ -93,7 +134,8 @@ export default function PhotoViewerScreen() {
 
       setReactionMode('none');
       Alert.alert('✅', t('photo.react.selfieSuccess'));
-    } catch {
+    } catch (err) {
+      console.error('Selfie reaction sync error:', err);
       Alert.alert(t('home.err.title'), t('photo.react.errSend'));
     } finally {
       setIsReacting(false);
@@ -106,7 +148,46 @@ export default function PhotoViewerScreen() {
     setIsReacting(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     try {
-      await textReactToPhoto(photo.id, userProfile.uid, message.trim());
+      const trimmedMessage = message.trim();
+      await textReactToPhoto(photo.id, userProfile.uid, trimmedMessage);
+
+      // Sync to chat room
+      if (photo.senderId && userProfile.uid !== photo.senderId) {
+        const chatId = [userProfile.uid, photo.senderId].sort().join('_');
+        
+        await addDoc(collection(db, `chats/${chatId}/messages`), {
+          text: trimmedMessage,
+          senderId: userProfile.uid,
+          type: 'text',
+          createdAt: serverTimestamp(),
+        });
+
+        let friendName = photo.senderUser?.displayName || 'Bạn bè';
+        let friendAvatar = photo.senderUser?.avatarUrl || '';
+
+        if (!photo.senderUser?.displayName) {
+          try {
+            const docData = await getUserDocument(photo.senderId);
+            if (docData) {
+              friendName = docData.displayName;
+              friendAvatar = docData.avatarUrl || '';
+            }
+          } catch (err) {
+            console.warn('Failed to fetch sender profile for text react sync:', err);
+          }
+        }
+
+        await setDoc(doc(db, `chats/${chatId}`), {
+          participants: [userProfile.uid, photo.senderId],
+          participantsInfo: {
+            [userProfile.uid]: { name: userProfile.displayName || '', avatar: userProfile.avatarUrl || '' },
+            [photo.senderId]: { name: friendName, avatar: friendAvatar }
+          },
+          lastMessage: trimmedMessage,
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
+      }
+
       Animated.sequence([
         Animated.spring(reactScaleAnim, { toValue: 1.2, useNativeDriver: true }),
         Animated.spring(reactScaleAnim, { toValue: 1, useNativeDriver: true }),
@@ -114,7 +195,8 @@ export default function PhotoViewerScreen() {
       setReactionMode('none');
       setTextMessage('');
       Alert.alert('✅', t('photo.react.msgSuccess'));
-    } catch {
+    } catch (err) {
+      console.error('Text reaction sync error:', err);
       Alert.alert(t('home.err.title'), t('photo.react.errSend'));
     } finally {
       setIsReacting(false);
