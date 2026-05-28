@@ -20,6 +20,7 @@ import {
   FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { Camera, useCameraDevice, useCameraPermission, useMicrophonePermission, useSkiaFrameProcessor } from 'react-native-vision-camera';
 import { Skia, Paint, ImageFilter, BlendMode } from '@shopify/react-native-skia';
 import { BEAUTY_FILTERS, FilterType } from '../../utils/filters';
@@ -28,7 +29,7 @@ import * as VideoThumbnails from 'expo-video-thumbnails';
 import Slider from '@react-native-community/slider';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Camera as CameraIcon, Send, Sparkles, RefreshCcw, Zap, ZapOff, Check, X, Users, AlertCircle, Play } from 'lucide-react-native';
+import { Camera as CameraIcon, Send, Sparkles, RefreshCcw, Zap, ZapOff, Check, X, Users, AlertCircle, Play, MessageCircle } from 'lucide-react-native';
 import { useAuthStore } from '../../store/auth.store';
 import { usePhotoStore } from '../../store/photo.store';
 import { uploadPhoto, sendPhoto, uploadVideo } from '../../services/photo.service';
@@ -42,6 +43,7 @@ const { width, height } = Dimensions.get('window');
 const MAX_VIDEO_DURATION = 15; // giây
 
 export default function HomeScreen() {
+  const navigation = useNavigation<any>();
 
   const frameProcessor = useSkiaFrameProcessor((frame) => {
     'worklet';
@@ -568,6 +570,14 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.topRightControls}>
+
+          <Pressable
+            style={[styles.controlBtn, { marginRight: 15 }]}
+            onPress={() => navigation.navigate('ChatList')}
+          >
+            <MessageCircle color={colors.textPrimary} size={28} />
+          </Pressable>
+
           {/* Flash toggle */}
           {!isRecording && (
             <Pressable

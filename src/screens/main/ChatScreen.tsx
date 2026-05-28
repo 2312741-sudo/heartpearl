@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, getDoc, doc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, getDoc, doc, setDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase.config';
 import { useAuthStore } from '../../store/auth.store';
 import { useAppTheme, Typography, Spacing, BorderRadius } from '../../constants/theme';
@@ -72,6 +72,18 @@ export default function ChatScreen() {
       type: 'text',
       createdAt: serverTimestamp(),
     });
+
+    // Update chat document metadata
+    await setDoc(doc(db, `chats/${chatId}`), {
+      participants: [userProfile?.uid, friendId],
+      participantsInfo: {
+        [userProfile!.uid]: { name: userProfile?.displayName, avatar: userProfile?.avatarUrl || '' },
+        [friendId as string]: { name: friendName, avatar: friendAvatar || '' }
+      },
+      lastMessage: text,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+
   };
 
   const renderItem = ({ item }: { item: any }) => {
