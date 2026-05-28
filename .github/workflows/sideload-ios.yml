@@ -90,6 +90,7 @@ jobs:
       - name: 📦 Package IPA
         run: |
           cd DerivedData/Build/Products/Release-iphoneos
+          rm -rf Payload
           mkdir Payload
           # Tìm file .app và di chuyển vào Payload
           APP_NAME=$(ls -d *.app | head -n 1)
