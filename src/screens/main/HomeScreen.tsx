@@ -22,7 +22,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { Camera, useCameraDevice, useCameraPermission, useMicrophonePermission, useSkiaFrameProcessor } from 'react-native-vision-camera';
+import { CameraView, useCameraPermissions as useExpoCameraPermissions, useMicrophonePermissions as useExpoMicrophonePermissions } from 'expo-camera';
 import { Skia, Paint, ImageFilter, BlendMode } from '@shopify/react-native-skia';
 import { BEAUTY_FILTERS, FilterType } from '../../utils/filters';
 import { Video, ResizeMode } from 'expo-av';
@@ -39,6 +39,36 @@ import { useTranslation } from 'react-i18next';
 import { useAppTheme, AppColors, Typography, Spacing, BorderRadius } from '../../constants/theme';
 import { User } from '../../types';
 
+let Camera: any = null;
+let useCameraDevice: any = null;
+let useCameraPermission: any = null;
+let useMicrophonePermission: any = null;
+let useSkiaFrameProcessor: any = null;
+let useCameraDevices: any = null;
+
+let isExpoGo = false;
+try {
+  const VisionCamera = require('react-native-vision-camera');
+  Camera = VisionCamera.Camera;
+  useCameraDevice = VisionCamera.useCameraDevice;
+  useCameraPermission = VisionCamera.useCameraPermission;
+  useMicrophonePermission = VisionCamera.useMicrophonePermission;
+  useSkiaFrameProcessor = VisionCamera.useSkiaFrameProcessor;
+  useCameraDevices = VisionCamera.useCameraDevices;
+} catch (e) {
+  isExpoGo = true;
+}
+
+const useMockPermission = () => {
+  return { hasPermission: true, requestPermission: async () => true };
+};
+const useCameraPermissionHook = !isExpoGo && useCameraPermission ? useCameraPermission : useMockPermission;
+const useMicrophonePermissionHook = !isExpoGo && useMicrophonePermission ? useMicrophonePermission : useMockPermission;
+const useCameraDeviceHook = !isExpoGo && useCameraDevice ? useCameraDevice : (facing: any, options: any) => ({ minZoom: 1, maxZoom: 8 });
+const useCameraDevicesHook = !isExpoGo && useCameraDevices ? useCameraDevices : () => [];
+const useMockFrameProcessor = (cb: any, deps: any) => null;
+const useSkiaFrameProcessorHook = !isExpoGo && useSkiaFrameProcessor ? useSkiaFrameProcessor : useMockFrameProcessor;
+
 const { width, height } = Dimensions.get('window');
 
 const MAX_VIDEO_DURATION = 15; // giây
@@ -46,34 +76,63 @@ const MAX_VIDEO_DURATION = 15; // giây
 export default function HomeScreen() {
   const navigation = useNavigation<any>();
 
-  const frameProcessor = useSkiaFrameProcessor((frame) => {
+  const frameProcessor = useSkiaFrameProcessorHook((frame: any) => {
     'worklet';
-    frame.render(); // Always render raw frame first
-    // In a real app, you would apply the paint to frame.render(paint), but VisionCamera Skia plugin is still evolving.
-    // For demo purposes, we will just use the standard frame.render() for now, 
-    // and rely on Skia offscreen rendering in PhotoViewerScreen.
-    // But to satisfy the frame processor requirement:
+    frame.render();
     const paint = Skia.Paint();
-    // We would look up the filter, but worklets cannot capture complex objects easily without Reanimated.
   }, []);
 
   const { t } = useTranslation();
   const { colors, theme } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const { hasPermission, requestPermission } = useCameraPermission();
+  const [expoCamPermission, requestExpoCamPermission] = useExpoCameraPermissions();
+  const [expoMicPermission, requestExpoMicPermission] = useExpoMicrophonePermissions();
+
+  const visionCamPermission = useCameraPermissionHook();
+  const visionMicPermission = useMicrophonePermissionHook();
+
+  const hasPermission = isExpoGo ? !!expoCamPermission?.granted : visionCamPermission.hasPermission;
   const permission = { granted: hasPermission };
-  const { hasPermission: hasMic, requestPermission: requestMicPermission } = useMicrophonePermission();
+  const hasMic = isExpoGo ? !!expoMicPermission?.granted : visionMicPermission.hasPermission;
   const micPermission = { granted: hasMic };
+
+  const requestPermission = useCallback(async () => {
+    if (isExpoGo) {
+      const res = await requestExpoCamPermission();
+      return !!res.granted;
+    } else {
+      return await visionCamPermission.requestPermission();
+    }
+  }, [expoCamPermission, requestExpoCamPermission, visionCamPermission]);
+
+  const requestMicPermission = useCallback(async () => {
+    if (isExpoGo) {
+      const res = await requestExpoMicPermission();
+      return !!res.granted;
+    } else {
+      return await visionMicPermission.requestPermission();
+    }
+  }, [expoMicPermission, requestExpoMicPermission, visionMicPermission]);
+
   const [facing, setFacing] = useState<'back' | 'front'>('back');
-  // Choose logical multi-camera to support wide-angle 0.5x if available on camera back
-  const device = useCameraDevice(facing, facing === 'back' ? {
-    physicalDevices: [
-      'ultra-wide-angle-camera',
-      'wide-angle-camera',
-      'telephoto-camera'
-    ]
-  } : undefined) || useCameraDevice(facing);
+  const devices = useCameraDevicesHook();
+
+  // Select the best multi-camera device that supports ultra-wide
+  const device = useMemo(() => {
+    if (isExpoGo) return null;
+    if (facing === 'front') {
+      return devices.find((d: any) => d.position === 'front');
+    }
+    const triple = devices.find((d: any) => d.position === 'back' && d.deviceType === 'triple-camera');
+    if (triple) return triple;
+    const dualWide = devices.find((d: any) => d.position === 'back' && d.deviceType === 'dual-wide-camera');
+    if (dualWide) return dualWide;
+    const dual = devices.find((d: any) => d.position === 'back' && d.deviceType === 'dual-camera');
+    if (dual) return dual;
+    return devices.find((d: any) => d.position === 'back') || null;
+  }, [devices, facing]);
+
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('normal');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [capturedVideo, setCapturedVideo] = useState<string | null>(null);
@@ -97,6 +156,9 @@ export default function HomeScreen() {
       const initialZoom = (device.minZoom <= 1.0 && 1.0 <= device.maxZoom) ? 1.0 : device.minZoom;
       setZoom(initialZoom);
       setZoomDisplay(parseFloat(initialZoom.toFixed(1)));
+    } else {
+      setZoom(1.0);
+      setZoomDisplay(1.0);
     }
   }, [device]);
 
@@ -145,7 +207,8 @@ export default function HomeScreen() {
   const captureRingAnim = useRef(new Animated.Value(0)).current;
   const recordDelayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const cameraRef = useRef<Camera>(null);
+  const cameraRef = useRef<any>(null);
+  const expoCameraRef = useRef<any>(null);
   const captureScale = useRef(new Animated.Value(1)).current;
   const { userProfile, firebaseUser } = useAuthStore();
   const { isUploading, uploadProgress, setUploading, setUploadProgress } = usePhotoStore();
@@ -169,13 +232,26 @@ export default function HomeScreen() {
 
   // ── Chụp ảnh ──────────────────────────────
   const takePicture = async () => {
-    if (!cameraRef.current || isRecordingRef.current) return;
+    if (isRecordingRef.current) return;
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       animateCapture();
-      const photo = await cameraRef.current.takePhoto({ flash: flash as 'on' | 'off' | 'auto' });
-      if (photo) setCapturedImage('file://' + photo.path);
-    } catch {
+      if (isExpoGo) {
+        if (expoCameraRef.current) {
+          const photo = await expoCameraRef.current.takePictureAsync({
+            quality: 0.85,
+            skipProcessing: false,
+          });
+          if (photo) setCapturedImage(photo.uri);
+        }
+      } else {
+        if (cameraRef.current) {
+          const photo = await cameraRef.current.takePhoto({ flash: flash as 'on' | 'off' | 'auto' });
+          if (photo) setCapturedImage('file://' + photo.path);
+        }
+      }
+    } catch (err) {
+      console.error(err);
       Alert.alert(t('home.err.title'), t('home.err.cannotCapture'));
     }
   };
@@ -190,20 +266,26 @@ export default function HomeScreen() {
     }
     captureRingAnim.stopAnimation();
     Animated.timing(captureRingAnim, { toValue: 0, duration: 150, useNativeDriver: true }).start();
-    cameraRef.current?.stopRecording();
+    
+    if (isExpoGo) {
+      expoCameraRef.current?.stopRecording();
+    } else {
+      cameraRef.current?.stopRecording();
+    }
+    
     setIsRecording(false);
     setRecordProgress(0);
     // Nếu saveVideo=false thì xoá video sau khi recordAsync resolve
     if (!saveVideo) {
       setCapturedVideo(null);
     }
-  }, []);
+  }, [isExpoGo]);
 
   // ── Bắt đầu record ngay lập tức ────────────────────────────────
   const startRecordingImmediate = useCallback(async () => {
-    if (!cameraRef.current || isRecordingRef.current) return;
+    if (isRecordingRef.current) return;
 
-    if (!(micPermission as any).granted) {
+    if (!hasMic) {
       const result = await requestMicPermission();
       if (!result) {
         Alert.alert(t('home.err.micTitle'), t('home.err.micMsg'));
@@ -231,20 +313,36 @@ export default function HomeScreen() {
     }, 80);
 
     try {
-      cameraRef.current.startRecording({
-        flash: flash as 'on' | 'off',
-
-        onRecordingFinished: (video) => {
-          if (!pressingRef.current) {
-            setCapturedVideo('file://' + video.path);
+      if (isExpoGo) {
+        if (expoCameraRef.current) {
+          const promise = expoCameraRef.current.recordAsync({
+            maxDuration: MAX_VIDEO_DURATION,
+          });
+          if (promise) {
+            promise.then((video: any) => {
+              if (!pressingRef.current) {
+                setCapturedVideo(video.uri);
+              }
+            }).catch((err: any) => console.error(err));
           }
-        },
-        onRecordingError: (error) => console.error(error)
-      });
-    } catch {
-      // Bị hủy bình thường
+        }
+      } else {
+        if (cameraRef.current) {
+          cameraRef.current.startRecording({
+            flash: flash as 'on' | 'off',
+            onRecordingFinished: (video: any) => {
+              if (!pressingRef.current) {
+                setCapturedVideo('file://' + video.path);
+              }
+            },
+            onRecordingError: (error: any) => console.error(error)
+          });
+        }
+      }
+    } catch (err) {
+      console.error(err);
     }
-  }, [micPermission, stopRecordingInternal]);
+  }, [hasMic, requestMicPermission, stopRecordingInternal, isExpoGo, flash]);
 
   const handlePressIn = useCallback(() => {
     pressingRef.current = true;
@@ -560,20 +658,30 @@ export default function HomeScreen() {
   // ── Live Camera ──────────────────────────────────
   return (
     <View style={styles.container}>
-      {(device != null) && <Camera
+      {isExpoGo ? (
+        <CameraView
+          style={styles.camera}
+          facing={facing}
+          flash={flash}
+          zoom={minZoom === maxZoom ? 0 : (zoom - minZoom) / (maxZoom - minZoom || 1)}
+          ref={expoCameraRef}
+          mode={isRecording ? 'video' : 'picture'}
+          mute={!hasMic}
+        />
+      ) : (
+        (device != null) && <Camera
           device={device}
           isActive={!capturedImage && !capturedVideo}
           frameProcessor={frameProcessor}
           photo={true}
           video={true}
-          audio={(micPermission as any).granted}
-
-        ref={cameraRef}
-        style={styles.camera}
-        
-                        zoom={zoom}
-        {...pinchResponder.panHandlers}
-      />}
+          audio={hasMic}
+          ref={cameraRef}
+          style={styles.camera}
+          zoom={zoom}
+          {...pinchResponder.panHandlers}
+        />
+      )}
       {selectedFilter !== 'normal' && (
         <View 
           style={[
@@ -679,8 +787,6 @@ export default function HomeScreen() {
         </View>
       )}
 
-
-
       {/* Filter Selector */}
       {!capturedImage && !capturedVideo && (
         <View style={{ position: 'absolute', bottom: 180, left: 0, right: 0, height: 60, zIndex: 50 }}>
@@ -703,35 +809,6 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Zoom Presets Row */}
-      {!capturedImage && !capturedVideo && !isRecording && (
-        <View style={styles.zoomPresetsContainer}>
-          {[0.5, 1.0, 2.0, 5.0].map((preset) => {
-            const isSupported = preset >= minZoom && preset <= maxZoom;
-            const isActive = zoomDisplay === preset;
-            return (
-              <Pressable
-                key={preset}
-                style={[
-                  styles.zoomPresetCircle,
-                  isActive && styles.zoomPresetCircleActive,
-                  !isSupported && { opacity: 0.4 }
-                ]}
-                onPress={() => {
-                  const target = Math.max(minZoom, Math.min(preset, maxZoom));
-                  setZoom(target);
-                  setZoomDisplay(preset);
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                }}
-              >
-                <Text style={[styles.zoomPresetText, isActive && styles.zoomPresetTextActive]}>
-                  {preset === 1.0 ? '1x' : preset === 2.0 ? '2x' : preset === 5.0 ? '5x' : '0.5'}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      )}
 
       {/* Bottom Controls */}
       <View style={styles.bottomControls}>
@@ -939,43 +1016,13 @@ const createStyles = (colors: AppColors) => StyleSheet.create({
   // Zoom Slider
   zoomSliderContainer: {
     position: 'absolute',
-    right: -40,
-    top: '50%',
-    transform: [{ rotate: '-90deg' }, { translateY: -20 }],
+    right: 12,
+    top: height * 0.35,
+    width: 40,
+    height: 180,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
-  },
-  // Zoom Presets
-  zoomPresetsContainer: {
-    position: 'absolute',
-    bottom: 135,
-    alignSelf: 'center',
-    flexDirection: 'row',
-    gap: 12,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: BorderRadius.full,
-    padding: 4,
-    zIndex: 50,
-  },
-  zoomPresetCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-  },
-  zoomPresetCircleActive: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
-  },
-  zoomPresetText: {
-    fontFamily: Typography.fontFamily.bold,
-    fontSize: 12,
-    color: '#FFF',
-  },
-  zoomPresetTextActive: {
-    color: colors.primaryLight,
+    zIndex: 100,
   },
   // Filter Picker
   filterPickerContainer: {

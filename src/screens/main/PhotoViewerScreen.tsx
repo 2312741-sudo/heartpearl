@@ -108,7 +108,7 @@ export default function PhotoViewerScreen() {
           try {
             const docData = await getUserDocument(photo.senderId);
             if (docData) {
-              friendName = docData.displayName;
+              friendName = docData.displayName || 'Bạn bè';
               friendAvatar = docData.avatarUrl || '';
             }
           } catch (err) {
@@ -116,11 +116,16 @@ export default function PhotoViewerScreen() {
           }
         }
 
+        const finalFriendName = friendName || 'Bạn bè';
+        const finalFriendAvatar = friendAvatar || '';
+        const myName = userProfile.displayName || 'Người dùng';
+        const myAvatar = userProfile.avatarUrl || '';
+
         await setDoc(doc(db, `chats/${chatId}`), {
           participants: [userProfile.uid, photo.senderId],
           participantsInfo: {
-            [userProfile.uid]: { name: userProfile.displayName || '', avatar: userProfile.avatarUrl || '' },
-            [photo.senderId]: { name: friendName, avatar: friendAvatar }
+            [userProfile.uid]: { name: myName, avatar: myAvatar },
+            [photo.senderId]: { name: finalFriendName, avatar: finalFriendAvatar }
           },
           lastMessage: `📷 ${t('photo.react.selfieReactText', { defaultValue: 'Đã phản hồi bằng một ảnh selfie' })}`,
           updatedAt: serverTimestamp(),
@@ -169,7 +174,7 @@ export default function PhotoViewerScreen() {
           try {
             const docData = await getUserDocument(photo.senderId);
             if (docData) {
-              friendName = docData.displayName;
+              friendName = docData.displayName || 'Bạn bè';
               friendAvatar = docData.avatarUrl || '';
             }
           } catch (err) {
@@ -177,11 +182,16 @@ export default function PhotoViewerScreen() {
           }
         }
 
+        const finalFriendName = friendName || 'Bạn bè';
+        const finalFriendAvatar = friendAvatar || '';
+        const myName = userProfile.displayName || 'Người dùng';
+        const myAvatar = userProfile.avatarUrl || '';
+
         await setDoc(doc(db, `chats/${chatId}`), {
           participants: [userProfile.uid, photo.senderId],
           participantsInfo: {
-            [userProfile.uid]: { name: userProfile.displayName || '', avatar: userProfile.avatarUrl || '' },
-            [photo.senderId]: { name: friendName, avatar: friendAvatar }
+            [userProfile.uid]: { name: myName, avatar: myAvatar },
+            [photo.senderId]: { name: finalFriendName, avatar: finalFriendAvatar }
           },
           lastMessage: trimmedMessage,
           updatedAt: serverTimestamp(),
