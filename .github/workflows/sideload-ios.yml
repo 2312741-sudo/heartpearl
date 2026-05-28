@@ -57,6 +57,7 @@ jobs:
           sudo ln -s $(which node) /usr/local/bin/node || true
           
           # Tắt yêu cầu code signing nhưng GIỮ LẠI entitlements để sideload tool (AltStore/Sideloadly) có thể re-sign với App Group
+          # Thêm các cờ tối ưu hóa tốc độ biên dịch (bỏ qua dSYM, stripping, debug symbols)
           xcodebuild -workspace "$WORKSPACE" \
             -scheme "$SCHEME" \
             -configuration Release \
@@ -65,7 +66,11 @@ jobs:
             -derivedDataPath ../DerivedData \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            COMPILER_INDEX_STORE_ENABLE=NO > build.log 2>&1
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            DEBUG_INFORMATION_FORMAT=dwarf \
+            GCC_GENERATE_DEBUGGING_SYMBOLS=NO \
+            STRIP_INSTALLED_PRODUCT=NO \
+            COPY_PHASE_STRIP=NO > build.log 2>&1
             
           echo "=== Kiểm tra Widget Extension trong thư mục Build ==="
           ls -la ../DerivedData/Build/Products/Release-iphoneos/*.app/PlugIns/ || echo "Không tìm thấy PlugIns directory"
