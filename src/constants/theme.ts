@@ -2,7 +2,9 @@
 //  Locket Clone — Design Tokens
 // ─────────────────────────────────────────────
 
-export const Colors = {
+import { useSettingsStore } from '../store/settings.store';
+
+export const darkColors = {
   // Brand (HeartPearl)
   primary: '#C42E5C',         // rose — main brand color
   primaryLight: '#E55080',    // rose light — hover states, highlights
@@ -37,14 +39,35 @@ export const Colors = {
   info: '#3498DB',
 
   // Gradients
-  gradientPrimary: ['#C42E5C', '#E55080'] as const,
-  gradientDark: ['#120716', '#1E0D26'] as const,
-  gradientCard: ['rgba(196, 46, 92, 0.15)', 'rgba(196, 46, 92, 0.05)'] as const,
+  gradientPrimary: ['#C42E5C', '#E55080'] as [string, string],
+  gradientDark: ['#120716', '#1E0D26'] as [string, string],
+  gradientCard: ['rgba(196, 46, 92, 0.15)', 'rgba(196, 46, 92, 0.05)'] as [string, string],
 
   transparent: 'transparent',
   white: '#FFFFFF',
   black: '#000000',
 };
+
+export const lightColors: typeof darkColors = {
+  ...darkColors,
+  background: '#FFF0F5', // Lavender blush / Light pinkish white
+  surface: '#FFFFFF',
+  surfaceLight: '#FCE4EC', // Very light pink
+  card: '#FFFFFF',
+  textPrimary: '#120716',
+  textSecondary: '#4A2338',
+  textMuted: '#9E657F',
+  textInverse: '#FFFFFF',
+  border: '#F8BBD0',
+  borderLight: '#F48FB1',
+  overlay: 'rgba(255, 255, 255, 0.7)',
+  overlayLight: 'rgba(255, 255, 255, 0.4)',
+  gradientDark: ['#FFFFFF', '#FCE4EC'] as [string, string],
+};
+
+// Fallback for components not yet updated
+export const Colors = darkColors;
+export type AppColors = typeof darkColors;
 
 export const Typography = {
   fontFamily: {
@@ -128,3 +151,11 @@ export const Shadows = {
     elevation: 10,
   },
 };
+
+export function useAppTheme() {
+  const theme = useSettingsStore((state) => state.theme);
+  return {
+    theme,
+    colors: theme === 'light' ? lightColors : darkColors,
+  };
+}

@@ -2,7 +2,7 @@
 //  Welcome Screen
 // ─────────────────────────────────────────────
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,8 +14,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { AuthStackParamList } from '../../types';
-import { Colors, Typography, Spacing, BorderRadius } from '../../constants/theme';
+import { useAppTheme, AppColors, Typography, Spacing, BorderRadius } from '../../constants/theme';
 
 const { width, height } = Dimensions.get('window');
 
@@ -34,6 +35,10 @@ const DEMO_CARDS = [
 const CARD_EMOJIS = ['🌅', '🎉', '😄', '🌸'];
 
 export default function WelcomeScreen({ navigation }: Props) {
+  const { t } = useTranslation();
+  const { colors, theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(40)).current;
   const cardAnims = DEMO_CARDS.map(() => ({
@@ -80,7 +85,7 @@ export default function WelcomeScreen({ navigation }: Props) {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#0A0A0F', '#13131A', '#1A1020']}
+        colors={theme === 'dark' ? ['#0A0A0F', '#13131A', '#1A1020'] : colors.gradientDark}
         style={StyleSheet.absoluteFillObject}
       />
 
@@ -105,7 +110,7 @@ export default function WelcomeScreen({ navigation }: Props) {
           ]}
         >
           <LinearGradient
-            colors={[Colors.surface, Colors.surfaceLight]}
+            colors={[colors.surface, colors.surfaceLight]}
             style={styles.demoCardInner}
           >
             <Text style={styles.demoCardEmoji}>{CARD_EMOJIS[i]}</Text>
@@ -123,7 +128,7 @@ export default function WelcomeScreen({ navigation }: Props) {
         {/* Logo */}
         <View style={styles.logoContainer}>
           <LinearGradient
-            colors={Colors.gradientPrimary}
+            colors={colors.gradientPrimary}
             style={styles.logoBadge}
           >
             <Text style={styles.logoEmoji}>📸</Text>
@@ -132,7 +137,7 @@ export default function WelcomeScreen({ navigation }: Props) {
 
         <Text style={styles.appName}>HeartPearl</Text>
         <Text style={styles.tagline}>
-          Chia sẻ khoảnh khắc{'\n'}với những người thân yêu 💛
+          {t('welcome.tagline')}
         </Text>
 
         {/* CTA Button */}
@@ -141,36 +146,38 @@ export default function WelcomeScreen({ navigation }: Props) {
           onPress={() => navigation.navigate('PhoneLogin')}
         >
           <LinearGradient
-            colors={Colors.gradientPrimary}
+            colors={colors.gradientPrimary}
             style={styles.ctaGradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
           >
-            <Text style={styles.ctaText}>Bắt đầu ngay</Text>
+            <Text style={styles.ctaText}>{t('welcome.getStarted')}</Text>
           </LinearGradient>
         </Pressable>
 
         <Text style={styles.termsText}>
-          Bằng cách tiếp tục, bạn đồng ý với{' '}
-          <Text style={styles.termsLink}>Điều khoản dịch vụ</Text> và{' '}
-          <Text style={styles.termsLink}>Chính sách bảo mật</Text> của chúng tôi.
+          {t('welcome.terms1')}
+          <Text style={styles.termsLink}>{t('welcome.termsLink1')}</Text>
+          {t('welcome.terms2')}
+          <Text style={styles.termsLink}>{t('welcome.termsLink2')}</Text>
+          {t('welcome.terms3')}
         </Text>
       </Animated.View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   glowOrb: {
     position: 'absolute',
     width: 300,
     height: 300,
     borderRadius: 150,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     opacity: 0.08,
     top: height * 0.2,
     left: width * 0.5 - 150,
@@ -182,7 +189,7 @@ const styles = StyleSheet.create({
     height: 160,
     borderRadius: 20,
     overflow: 'hidden',
-    shadowColor: Colors.primary,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
@@ -193,7 +200,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: 20,
   },
   demoCardEmoji: {
@@ -207,11 +214,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing['2xl'],
     paddingBottom: 48,
     paddingTop: 32,
-    backgroundColor: 'rgba(10,10,15,0.95)',
+    backgroundColor: colors.background === 'light' ? 'rgba(255,255,255,0.95)' : 'rgba(10,10,15,0.95)',
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     borderTopWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     alignItems: 'center',
   },
   logoContainer: {
@@ -230,14 +237,14 @@ const styles = StyleSheet.create({
   appName: {
     fontFamily: Typography.fontFamily.extraBold,
     fontSize: Typography.fontSize['3xl'],
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: Spacing.sm,
     letterSpacing: -1,
   },
   tagline: {
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.base,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: Spacing['2xl'],
@@ -247,7 +254,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
     overflow: 'hidden',
     marginBottom: Spacing.lg,
-    shadowColor: Colors.primary,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.5,
     shadowRadius: 16,
@@ -264,18 +271,18 @@ const styles = StyleSheet.create({
   ctaText: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.lg,
-    color: Colors.textInverse,
+    color: colors.textInverse,
     letterSpacing: 0.3,
   },
   termsText: {
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.xs,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 18,
   },
   termsLink: {
-    color: Colors.primary,
+    color: colors.primary,
     fontFamily: Typography.fontFamily.medium,
   },
 });

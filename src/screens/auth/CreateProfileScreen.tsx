@@ -2,7 +2,7 @@
 //  Create Profile Screen
 // ─────────────────────────────────────────────
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -16,13 +16,18 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
+import { useTranslation } from 'react-i18next';
 import { auth, storage } from '../../services/firebase.config';
 import { updateProfile } from 'firebase/auth';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { updateUserDocument, isUsernameAvailable } from '../../services/auth.service';
-import { Colors, Typography, Spacing, BorderRadius } from '../../constants/theme';
+import { useAppTheme, AppColors, Typography, Spacing, BorderRadius } from '../../constants/theme';
 
 export default function CreateProfileScreen() {
+  const { t } = useTranslation();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
@@ -42,24 +47,24 @@ export default function CreateProfileScreen() {
 
   const handleSave = async () => {
     if (!displayName.trim()) {
-      Alert.alert('Thông báo', 'Vui lòng nhập tên hiển thị');
+      Alert.alert(t('profile.alert'), t('profile.err.noDisplayName'));
       return;
     }
     
     const cleanUsername = username.trim().toLowerCase();
     if (!cleanUsername) {
-      Alert.alert('Thông báo', 'Vui lòng nhập username');
+      Alert.alert(t('profile.alert'), t('profile.err.noUsername'));
       return;
     }
 
     if (cleanUsername.length < 3) {
-      Alert.alert('Thông báo', 'Username phải có ít nhất 3 ký tự');
+      Alert.alert(t('profile.alert'), t('profile.err.shortUsername'));
       return;
     }
 
     const usernameRegex = /^[a-z0-9_.]+$/;
     if (!usernameRegex.test(cleanUsername)) {
-      Alert.alert('Thông báo', 'Username chỉ chứa chữ thường, số, dấu gạch dưới (_) và dấu chấm (.)');
+      Alert.alert(t('profile.alert'), t('profile.err.invalidUsername'));
       return;
     }
 
@@ -70,7 +75,7 @@ export default function CreateProfileScreen() {
     try {
       const available = await isUsernameAvailable(cleanUsername);
       if (!available) {
-        Alert.alert('Lỗi', 'Username này đã có người sử dụng. Vui lòng chọn tên khác!');
+        Alert.alert(t('auth.error'), t('profile.err.takenUsername'));
         setLoading(false);
         return;
       }
@@ -107,7 +112,7 @@ export default function CreateProfileScreen() {
 
       // Navigation happens automatically via auth state change
     } catch (error) {
-      Alert.alert('Lỗi', 'Không thể lưu profile. Thử lại nhé!');
+      Alert.alert(t('auth.error'), t('profile.err.saveFailed'));
     } finally {
       setLoading(false);
     }
@@ -116,9 +121,9 @@ export default function CreateProfileScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
-        <Text style={styles.title}>Tạo Profile 🎨</Text>
+        <Text style={styles.title}>{t('profile.createTitle')}</Text>
         <Text style={styles.subtitle}>
-          Cho bạn bè biết đây là bạn!
+          {t('profile.createSub')}
         </Text>
 
         {/* Avatar Picker */}
@@ -127,11 +132,11 @@ export default function CreateProfileScreen() {
             <Image source={{ uri: avatarUri }} style={styles.avatar} />
           ) : (
             <LinearGradient
-              colors={Colors.gradientPrimary}
+              colors={colors.gradientPrimary}
               style={styles.avatarPlaceholder}
             >
               <Text style={styles.avatarEmoji}>👤</Text>
-              <Text style={styles.avatarHint}>Chọn ảnh</Text>
+              <Text style={styles.avatarHint}>{t('profile.pickAvatar')}</Text>
             </LinearGradient>
           )}
           <View style={styles.avatarBadge}>
@@ -141,15 +146,15 @@ export default function CreateProfileScreen() {
 
         {/* Name Input */}
         <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>Tên hiển thị</Text>
+          <Text style={styles.inputLabel}>{t('profile.displayName')}</Text>
           <View style={styles.inputWrapper}>
             <TextInput
               style={styles.input}
-              placeholder="Tên của bạn"
-              placeholderTextColor={Colors.textMuted}
+              placeholder={t('profile.displayNamePlaceholder')}
+              placeholderTextColor={colors.textMuted}
               value={displayName}
               onChangeText={setDisplayName}
-              selectionColor={Colors.primary}
+              selectionColor={colors.primary}
               maxLength={30}
             />
           </View>
@@ -157,18 +162,18 @@ export default function CreateProfileScreen() {
 
         {/* Username Input */}
         <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>Username (viết liền, không dấu)</Text>
+          <Text style={styles.inputLabel}>{t('profile.username')}</Text>
           <View style={styles.inputWrapper}>
             <TextInput
               style={styles.input}
-              placeholder="username"
-              placeholderTextColor={Colors.textMuted}
+              placeholder={t('profile.usernamePlaceholder')}
+              placeholderTextColor={colors.textMuted}
               value={username}
               onChangeText={(text) => {
                 const cleaned = text.toLowerCase().replace(/[^a-z0-9_.]/g, '');
                 setUsername(cleaned);
               }}
-              selectionColor={Colors.primary}
+              selectionColor={colors.primary}
               maxLength={20}
               autoCapitalize="none"
               autoCorrect={false}
@@ -186,15 +191,15 @@ export default function CreateProfileScreen() {
           disabled={loading}
         >
           <LinearGradient
-            colors={Colors.gradientPrimary}
+            colors={colors.gradientPrimary}
             style={styles.saveGradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
           >
             {loading ? (
-              <ActivityIndicator color={Colors.textInverse} />
+              <ActivityIndicator color={colors.textInverse} />
             ) : (
-              <Text style={styles.saveText}>Lưu & Tiếp tục 🚀</Text>
+              <Text style={styles.saveText}>{t('profile.saveContinue')}</Text>
             )}
           </LinearGradient>
         </Pressable>
@@ -203,8 +208,8 @@ export default function CreateProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.background },
+const createStyles = (colors: AppColors) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.background },
   container: {
     flex: 1,
     paddingHorizontal: Spacing['2xl'],
@@ -214,14 +219,14 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: Typography.fontFamily.extraBold,
     fontSize: Typography.fontSize['2xl'],
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: Spacing.sm,
     letterSpacing: -0.5,
   },
   subtitle: {
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.base,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginBottom: Spacing['3xl'],
   },
   avatarContainer: {
@@ -233,7 +238,7 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 60,
     borderWidth: 3,
-    borderColor: Colors.primary,
+    borderColor: colors.primary,
   },
   avatarPlaceholder: {
     width: 120,
@@ -246,7 +251,7 @@ const styles = StyleSheet.create({
   avatarEmoji: { fontSize: 40 },
   avatarHint: {
     fontSize: Typography.fontSize.xs,
-    color: Colors.textInverse,
+    color: colors.textInverse,
     fontFamily: Typography.fontFamily.medium,
   },
   avatarBadge: {
@@ -256,9 +261,9 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 2,
-    borderColor: Colors.primary,
+    borderColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -271,26 +276,26 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontFamily: Typography.fontFamily.medium,
     fontSize: Typography.fontSize.sm,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   inputWrapper: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   input: {
     paddingHorizontal: Spacing.base,
     paddingVertical: 14,
     fontSize: Typography.fontSize.base,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.fontFamily.regular,
   },
   saveBtn: {
     width: '100%',
     borderRadius: BorderRadius.full,
     overflow: 'hidden',
-    shadowColor: Colors.primary,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
     shadowRadius: 12,
@@ -303,6 +308,6 @@ const styles = StyleSheet.create({
   saveText: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.lg,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
 });

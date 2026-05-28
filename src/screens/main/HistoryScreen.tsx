@@ -2,7 +2,7 @@
 //  History Screen — Photo Grid by Date
 // ─────────────────────────────────────────────
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -16,10 +16,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 import { subscribeToSentPhotos } from '../../services/photo.service';
 import { useAuthStore } from '../../store/auth.store';
 import { usePhotoStore } from '../../store/photo.store';
-import { Colors, Typography, Spacing, BorderRadius } from '../../constants/theme';
+import { useAppTheme, AppColors, Typography, Spacing, BorderRadius } from '../../constants/theme';
 import { Photo, RootStackParamList } from '../../types';
 import { CalendarHeart, Heart } from 'lucide-react-native';
 
@@ -29,6 +30,10 @@ const THUMB_SIZE = (width - Spacing['2xl'] * 2 - Spacing.sm * 2) / 3;
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function HistoryScreen() {
+  const { t } = useTranslation();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const { userProfile } = useAuthStore();
   const { sentPhotos, setSentPhotos } = usePhotoStore();
   const navigation = useNavigation<NavProp>();
@@ -55,16 +60,16 @@ export default function HistoryScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
-        <Text style={styles.title}>Lịch sử</Text>
-        <Text style={styles.subtitle}>{sentPhotos.length} ảnh đã gửi</Text>
+        <Text style={styles.title}>{t('history.title')}</Text>
+        <Text style={styles.subtitle}>{sentPhotos.length} {t('history.photosSent')}</Text>
       </View>
 
       {sections.length === 0 ? (
         <View style={styles.empty}>
-          <CalendarHeart size={64} color={Colors.pearl} strokeWidth={1} style={{ marginBottom: 16 }} />
-          <Text style={styles.emptyTitle}>Chưa có ảnh nào</Text>
+          <CalendarHeart size={64} color={colors.pearl} strokeWidth={1} style={{ marginBottom: 16 }} />
+          <Text style={styles.emptyTitle}>{t('history.emptyTitle')}</Text>
           <Text style={styles.emptySubtitle}>
-            Các ảnh bạn đã gửi sẽ xuất hiện ở đây
+            {t('history.emptyMsg')}
           </Text>
         </View>
       ) : (
@@ -101,7 +106,7 @@ export default function HistoryScreen() {
                     )}
                     {Object.keys(photo.reactions || {}).length > 0 && (
                       <View style={styles.reactionIndicator}>
-                        <Heart size={10} color={Colors.primary} fill={Colors.primary} />
+                        <Heart size={10} color={colors.primary} fill={colors.primary} />
                         <Text style={styles.reactionIndicatorText}>
                           {Object.keys(photo.reactions).length}
                         </Text>
@@ -118,8 +123,8 @@ export default function HistoryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.background },
+const createStyles = (colors: AppColors) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.background },
   header: {
     paddingHorizontal: Spacing['2xl'],
     paddingTop: Spacing.base,
@@ -128,13 +133,13 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: Typography.fontFamily.extraBold,
     fontSize: Typography.fontSize['2xl'],
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.5,
   },
   subtitle: {
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.sm,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   content: {
@@ -147,7 +152,7 @@ const styles = StyleSheet.create({
   sectionDate: {
     fontFamily: Typography.fontFamily.semiBold,
     fontSize: Typography.fontSize.sm,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginBottom: Spacing.md,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -161,9 +166,9 @@ const styles = StyleSheet.create({
     width: THUMB_SIZE,
     height: THUMB_SIZE,
     borderRadius: 20,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     padding: 4,
   },
   thumbImage: {
@@ -176,8 +181,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 8,
     right: 8,
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
     borderWidth: 1,
     borderRadius: BorderRadius.full,
     paddingHorizontal: 6,
@@ -188,7 +193,7 @@ const styles = StyleSheet.create({
   },
   reactionIndicatorText: {
     fontSize: 10,
-    color: Colors.pearl,
+    color: colors.pearl,
     fontFamily: Typography.fontFamily.semiBold,
   },
   empty: {
@@ -201,12 +206,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.xl,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   emptySubtitle: {
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.base,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
   },
 });

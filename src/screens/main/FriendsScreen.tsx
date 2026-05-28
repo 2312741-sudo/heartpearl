@@ -2,7 +2,7 @@
 //  Friends Screen
 // ─────────────────────────────────────────────
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -27,13 +27,17 @@ import {
   getFriendsList,
 } from '../../services/friend.service';
 import { useAuthStore } from '../../store/auth.store';
-import { Colors, Typography, Spacing, BorderRadius } from '../../constants/theme';
+import { useTranslation } from 'react-i18next';
+import { useAppTheme, AppColors, Typography, Spacing, BorderRadius } from '../../constants/theme';
 import { User, FriendRequest } from '../../types';
 import { Users, Mailbox, Search, Check, X } from 'lucide-react-native';
 
 type Tab = 'friends' | 'requests' | 'search';
 
 export default function FriendsScreen() {
+  const { t } = useTranslation();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { userProfile } = useAuthStore();
   const [activeTab, setActiveTab] = useState<Tab>('friends');
   const [searchQuery, setSearchQuery] = useState('');
@@ -73,7 +77,7 @@ export default function FriendsScreen() {
       const results = await searchUserByUsername(searchQuery.trim());
       setSearchResults(results.filter((u) => u.uid !== userProfile?.uid));
     } catch {
-      Alert.alert('Lỗi', 'Không thể tìm kiếm');
+      Alert.alert(t('home.err.title'), t('friends.err.search'));
     } finally {
       setSearching(false);
     }
@@ -83,16 +87,16 @@ export default function FriendsScreen() {
     if (!userProfile) return;
     try {
       await sendFriendRequest(userProfile.uid, toUid);
-      Alert.alert('✅', 'Đã gửi lời mời kết bạn!');
+      Alert.alert(t('home.successTitle'), t('friends.success.reqSent'));
     } catch {
-      Alert.alert('Lỗi', 'Không thể gửi lời mời');
+      Alert.alert(t('home.err.title'), t('friends.err.sendReq'));
     }
   };
 
   const handleAccept = async (req: FriendRequest) => {
     try {
       await acceptFriendRequest(req.id, req.from, req.to);
-      Alert.alert('✅', `Đã kết bạn với ${req.fromUser?.displayName}!`);
+      Alert.alert(t('home.successTitle'), `${t('friends.success.accepted')} ${req.fromUser?.displayName}!`);
       // Cập nhật danh sách bạn bè ngay lập tức (Firestore subscription sẽ tự cập nhật userProfile)
       if (req.fromUser) {
         setFriends((prev) => {
@@ -102,7 +106,7 @@ export default function FriendsScreen() {
         });
       }
     } catch {
-      Alert.alert('Lỗi', 'Không thể chấp nhận lời mời');
+      Alert.alert(t('home.err.title'), t('friends.err.acceptReq'));
     }
   };
 
@@ -110,14 +114,14 @@ export default function FriendsScreen() {
     try {
       await rejectFriendRequest(reqId);
     } catch {
-      Alert.alert('Lỗi', 'Không thể từ chối');
+      Alert.alert(t('home.err.title'), t('friends.err.rejectReq'));
     }
   };
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
-    { id: 'friends', label: 'Bạn bè', count: friends.length },
-    { id: 'requests', label: 'Lời mời', count: friendRequests.length },
-    { id: 'search', label: 'Tìm kiếm' },
+    { id: 'friends', label: t('friends.tab.friends'), count: friends.length },
+    { id: 'requests', label: t('friends.tab.requests'), count: friendRequests.length },
+    { id: 'search', label: t('friends.tab.search') },
   ];
 
   const UserAvatar = ({ user, size = 44 }: { user: Partial<User>; size?: number }) => (
@@ -133,7 +137,7 @@ export default function FriendsScreen() {
           style={{ width: size, height: size, borderRadius: size / 2 }}
         />
       ) : (
-        <LinearGradient colors={Colors.gradientPrimary} style={StyleSheet.absoluteFillObject}>
+        <LinearGradient colors={colors.gradientPrimary} style={StyleSheet.absoluteFillObject}>
           <Text style={[styles.avatarText, { fontSize: size * 0.4 }]}>
             {user.displayName?.charAt(0).toUpperCase() || '?'}
           </Text>
@@ -147,7 +151,7 @@ export default function FriendsScreen() {
     <SafeAreaView style={styles.safe}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Bạn bè</Text>
+        <Text style={styles.title}>{t('friends.title')}</Text>
       </View>
 
       {/* Tabs */}
@@ -180,9 +184,9 @@ export default function FriendsScreen() {
           contentContainerStyle={styles.list}
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Users size={48} color={Colors.pearl} strokeWidth={1} style={{ marginBottom: 8 }} />
-              <Text style={styles.emptyText}>Chưa có bạn bè nào</Text>
-              <Text style={styles.emptySubText}>Tìm kiếm bạn bè ở tab "Tìm kiếm"</Text>
+              <Users size={48} color={colors.pearl} strokeWidth={1} style={{ marginBottom: 8 }} />
+              <Text style={styles.emptyText}>{t('friends.empty.friendsTitle')}</Text>
+              <Text style={styles.emptySubText}>{t('friends.empty.friendsSub')}</Text>
             </View>
           }
           renderItem={({ item }) => (
@@ -192,7 +196,7 @@ export default function FriendsScreen() {
                 <Text style={styles.friendName}>{item.displayName}</Text>
                 <Text style={styles.friendPhone}>@{item.username || 'user'}</Text>
               </View>
-              <Check size={20} color={Colors.success} strokeWidth={2} />
+              <Check size={20} color={colors.success} strokeWidth={2} />
             </View>
           )}
         />
@@ -205,8 +209,8 @@ export default function FriendsScreen() {
           contentContainerStyle={styles.list}
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Mailbox size={48} color={Colors.pearl} strokeWidth={1} style={{ marginBottom: 8 }} />
-              <Text style={styles.emptyText}>Không có lời mời nào</Text>
+              <Mailbox size={48} color={colors.pearl} strokeWidth={1} style={{ marginBottom: 8 }} />
+              <Text style={styles.emptyText}>{t('friends.empty.reqTitle')}</Text>
             </View>
           }
           renderItem={({ item }) => (
@@ -214,22 +218,22 @@ export default function FriendsScreen() {
               <UserAvatar user={item.fromUser || {}} />
               <View style={styles.friendInfo}>
                 <Text style={styles.friendName}>
-                  {item.fromUser?.displayName || 'Người dùng'}
+                  {item.fromUser?.displayName || t('friends.req.defaultUser')}
                 </Text>
-                <Text style={styles.friendPhone}>@{item.fromUser?.username || 'user'} muốn kết bạn</Text>
+                <Text style={styles.friendPhone}>@{item.fromUser?.username || 'user'} {t('friends.req.wantsToFriend')}</Text>
               </View>
               <View style={styles.requestActions}>
                 <Pressable
                   style={styles.acceptBtn}
                   onPress={() => handleAccept(item)}
                 >
-                  <Check size={16} color={Colors.white} strokeWidth={3} />
+                  <Check size={16} color={colors.white} strokeWidth={3} />
                 </Pressable>
                 <Pressable
                   style={styles.rejectBtn}
                   onPress={() => handleReject(item.id)}
                 >
-                  <X size={16} color={Colors.textSecondary} strokeWidth={2} />
+                  <X size={16} color={colors.textSecondary} strokeWidth={2} />
                 </Pressable>
               </View>
             </View>
@@ -241,11 +245,11 @@ export default function FriendsScreen() {
         <View style={styles.searchContainer}>
           <View style={styles.searchInputRow}>
             <View style={styles.searchInputWrapper}>
-              <Search size={16} color={Colors.textMuted} strokeWidth={2} />
+              <Search size={16} color={colors.textMuted} strokeWidth={2} />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Tìm theo username..."
-                placeholderTextColor={Colors.textMuted}
+                placeholder={t('friends.searchPlaceholder')}
+                placeholderTextColor={colors.textMuted}
                 value={searchQuery}
                 onChangeText={(text) => {
                   const cleaned = text.toLowerCase().replace(/[^a-z0-9_.]/g, '');
@@ -253,19 +257,19 @@ export default function FriendsScreen() {
                 }}
                 onSubmitEditing={handleSearch}
                 returnKeyType="search"
-                selectionColor={Colors.primary}
+                selectionColor={colors.primary}
               />
             </View>
             <Pressable style={styles.searchBtn} onPress={handleSearch}>
               {searching ? (
-                <ActivityIndicator color={Colors.white} size="small" />
+                <ActivityIndicator color={colors.white} size="small" />
               ) : (
                 <LinearGradient
-                  colors={Colors.gradientPrimary}
+                  colors={colors.gradientPrimary}
                   style={StyleSheet.absoluteFillObject}
                 />
               )}
-              {!searching && <Text style={styles.searchBtnText}>Tìm</Text>}
+              {!searching && <Text style={styles.searchBtnText}>{t('friends.searchBtn')}</Text>}
             </Pressable>
           </View>
 
@@ -276,8 +280,8 @@ export default function FriendsScreen() {
             ListEmptyComponent={
               searchQuery ? null : (
                 <View style={styles.empty}>
-                  <Search size={48} color={Colors.pearl} strokeWidth={1} style={{ marginBottom: 8 }} />
-                  <Text style={styles.emptyText}>Nhập username để tìm bạn bè</Text>
+                  <Search size={48} color={colors.pearl} strokeWidth={1} style={{ marginBottom: 8 }} />
+                  <Text style={styles.emptyText}>{t('friends.empty.searchTitle')}</Text>
                 </View>
               )
             }
@@ -293,10 +297,10 @@ export default function FriendsScreen() {
                   onPress={() => handleSendRequest(item.uid)}
                 >
                   <LinearGradient
-                    colors={Colors.gradientPrimary}
+                    colors={colors.gradientPrimary}
                     style={styles.addBtnGradient}
                   >
-                    <Text style={styles.addBtnText}>+ Kết bạn</Text>
+                    <Text style={styles.addBtnText}>{t('friends.addBtn')}</Text>
                   </LinearGradient>
                 </Pressable>
               </View>
@@ -309,8 +313,8 @@ export default function FriendsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.background },
+const createStyles = (colors: AppColors) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.background },
   header: {
     paddingHorizontal: Spacing['2xl'],
     paddingTop: Spacing.base,
@@ -319,7 +323,7 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: Typography.fontFamily.extraBold,
     fontSize: Typography.fontSize['2xl'],
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.5,
   },
   tabsContainer: {
@@ -334,26 +338,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.base,
     paddingVertical: 8,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     gap: 6,
   },
   tabActive: {
-    backgroundColor: `${Colors.primary}20`,
-    borderColor: Colors.primary,
+    backgroundColor: `${colors.primary}20`,
+    borderColor: colors.primary,
   },
   tabText: {
     fontFamily: Typography.fontFamily.medium,
     fontSize: Typography.fontSize.sm,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   tabTextActive: {
-    color: Colors.primary,
+    color: colors.primary,
     fontFamily: Typography.fontFamily.semiBold,
   },
   tabBadge: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: 10,
     width: 18,
     height: 18,
@@ -362,7 +366,7 @@ const styles = StyleSheet.create({
   },
   tabBadgeText: {
     fontSize: 10,
-    color: Colors.white,
+    color: colors.white,
     fontFamily: Typography.fontFamily.bold,
   },
   list: {
@@ -374,7 +378,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
     gap: Spacing.base,
   },
   requestRow: {
@@ -382,17 +386,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
     gap: Spacing.base,
   },
   avatarContainer: {
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
   },
   avatarText: {
-    color: Colors.white,
+    color: colors.white,
     fontFamily: Typography.fontFamily.bold,
     textAlign: 'center',
     textAlignVertical: 'center',
@@ -405,17 +409,17 @@ const styles = StyleSheet.create({
   friendName: {
     fontFamily: Typography.fontFamily.semiBold,
     fontSize: Typography.fontSize.base,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   friendPhone: {
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.sm,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
   friendCheckmark: {
     fontSize: 20,
-    color: Colors.success,
+    color: colors.success,
   },
   requestActions: {
     flexDirection: 'row',
@@ -425,12 +429,12 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Colors.success,
+    backgroundColor: colors.success,
     alignItems: 'center',
     justifyContent: 'center',
   },
   acceptBtnText: {
-    color: Colors.white,
+    color: colors.white,
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -438,14 +442,14 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   rejectBtnText: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontSize: 16,
   },
   addBtn: {
@@ -459,7 +463,7 @@ const styles = StyleSheet.create({
   addBtnText: {
     fontFamily: Typography.fontFamily.semiBold,
     fontSize: Typography.fontSize.sm,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   searchContainer: {
     flex: 1,
@@ -474,10 +478,10 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     paddingHorizontal: Spacing.base,
     gap: Spacing.sm,
   },
@@ -485,7 +489,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     fontSize: Typography.fontSize.base,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.fontFamily.regular,
   },
   searchBtn: {
@@ -495,12 +499,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
   },
   searchBtnText: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.sm,
-    color: Colors.white,
+    color: colors.white,
   },
   empty: {
     alignItems: 'center',
@@ -510,12 +514,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontFamily: Typography.fontFamily.semiBold,
     fontSize: Typography.fontSize.lg,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   emptySubText: {
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.sm,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
   },
 });

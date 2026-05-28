@@ -2,7 +2,7 @@
 //  Profile Screen — Đầy đủ chức năng + Scrollable
 // ─────────────────────────────────────────────
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -31,7 +31,9 @@ import { collection, query, where, getDocs, orderBy, limit } from 'firebase/fire
 import { auth, storage, db } from '../../services/firebase.config';
 import { signOutUser, updateUserDocument, isUsernameAvailable } from '../../services/auth.service';
 import { useAuthStore } from '../../store/auth.store';
-import { Colors, Typography, Spacing, BorderRadius } from '../../constants/theme';
+import { useSettingsStore } from '../../store/settings.store';
+import { useTranslation } from 'react-i18next';
+import { useAppTheme, AppColors, Typography, Spacing, BorderRadius } from '../../constants/theme';
 import { Settings, Edit2, Bell, Lock, Palette, HelpCircle, FileText, LogOut, Camera, X, ChevronRight, Users } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
@@ -39,6 +41,10 @@ const { width } = Dimensions.get('window');
 type ProfileSection = 'main' | 'edit' | 'settings' | 'privacy';
 
 export default function ProfileScreen() {
+  const { t } = useTranslation();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { language, setLanguage, theme, setTheme } = useSettingsStore();
   const insets = useSafeAreaInsets();
   const { userProfile, firebaseUser } = useAuthStore();
 
@@ -97,9 +103,9 @@ export default function ProfileScreen() {
 
   // ── Handlers ──────────────────────────────────
   const handleSignOut = () => {
-    Alert.alert('Đăng xuất', 'Bạn chắc chắn muốn đăng xuất?', [
-      { text: 'Hủy', style: 'cancel' },
-      { text: 'Đăng xuất', style: 'destructive', onPress: () => signOutUser() },
+    Alert.alert(t('profile.logout'), t('profile.confirmLogout'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('profile.logout'), style: 'destructive', onPress: () => signOutUser() },
     ]);
   };
 
@@ -127,16 +133,16 @@ export default function ProfileScreen() {
 
   const handleSaveProfile = async () => {
     if (!editDisplayName.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập tên hiển thị');
+      Alert.alert(t('home.err.title'), t('profile.err.nameReq'));
       return;
     }
     const cleanUsername = editUsername.trim().toLowerCase();
     if (!cleanUsername || cleanUsername.length < 3) {
-      Alert.alert('Username không hợp lệ', 'Username phải có ít nhất 3 ký tự');
+      Alert.alert(t('home.err.title'), t('profile.err.userInvalid'));
       return;
     }
     if (!/^[a-z0-9_.]+$/.test(cleanUsername)) {
-      Alert.alert('Username không hợp lệ', 'Chỉ dùng chữ thường, số, dấu gạch dưới (_) và dấu chấm (.)');
+      Alert.alert(t('home.err.title'), t('profile.err.userChars'));
       return;
     }
 
@@ -148,7 +154,7 @@ export default function ProfileScreen() {
       if (cleanUsername !== userProfile?.username) {
         const available = await isUsernameAvailable(cleanUsername);
         if (!available) {
-          Alert.alert('Đã tồn tại', 'Username này đã có người dùng. Thử tên khác nhé!');
+          Alert.alert(t('home.err.title'), t('profile.err.userExists'));
           setLoading(false);
           return;
         }
@@ -189,7 +195,7 @@ export default function ProfileScreen() {
         createdAt: userProfile?.createdAt || new Date(),
       });
 
-      Alert.alert('✅', 'Đã cập nhật profile!');
+      Alert.alert(t('home.successTitle'), t('profile.success.updated'));
       setModalSection('main');
     } catch (error: unknown) {
       Alert.alert('Lỗi', error instanceof Error ? error.message : 'Không thể cập nhật');
@@ -208,7 +214,7 @@ export default function ProfileScreen() {
           {avatarUrl ? (
             <Image source={{ uri: avatarUrl }} style={[styles.avatarImg, { width: size, height: size, borderRadius: size / 2 }]} />
           ) : (
-            <LinearGradient colors={Colors.gradientPrimary} style={[styles.avatarImg, { width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center' }]}>
+            <LinearGradient colors={colors.gradientPrimary} style={[styles.avatarImg, { width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center' }]}>
               <Text style={[styles.avatarInitial, { fontSize: size * 0.38 }]}>
                 {userProfile?.displayName?.charAt(0).toUpperCase() || '?'}
               </Text>
@@ -217,7 +223,7 @@ export default function ProfileScreen() {
         </View>
         {pressable && (
           <View style={styles.cameraEditBadge}>
-            <Camera size={14} color={Colors.pearl} strokeWidth={2} />
+            <Camera size={14} color={colors.pearl} strokeWidth={2} />
           </View>
         )}
         <View style={styles.onlineDot} />
@@ -236,23 +242,23 @@ export default function ProfileScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Profile</Text>
+          <Text style={styles.headerTitle}>{t('profile.title')}</Text>
           <Pressable
             style={styles.settingsBtn}
             onPress={() => { setModalSection('settings'); Haptics.selectionAsync(); }}
           >
-            <Settings size={22} color={Colors.pearl} strokeWidth={1.5} />
+            <Settings size={22} color={colors.pearl} strokeWidth={1.5} />
           </Pressable>
         </View>
 
         {/* ── Profile Hero Card ── */}
         <LinearGradient
-          colors={[Colors.surfaceLight, Colors.surface]}
+          colors={[colors.surfaceLight, colors.surface]}
           style={styles.heroCard}
         >
           <AvatarDisplay size={90} />
           <Text style={styles.displayName}>
-            {userProfile?.displayName || firebaseUser?.displayName || 'Người dùng'}
+            {userProfile?.displayName || firebaseUser?.displayName || t('friends.req.defaultUser')}
           </Text>
           {userProfile?.username && (
             <Text style={styles.username}>@{userProfile.username}</Text>
@@ -265,17 +271,17 @@ export default function ProfileScreen() {
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{userProfile?.friends?.length || 0}</Text>
-              <Text style={styles.statLabel}>Bạn bè</Text>
+              <Text style={styles.statLabel}>{t('profile.friends')}</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{sentCount}</Text>
-              <Text style={styles.statLabel}>Đã gửi</Text>
+              <Text style={styles.statLabel}>{t('profile.sent')}</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{reactionsGiven}</Text>
-              <Text style={styles.statLabel}>Reactions</Text>
+              <Text style={styles.statLabel}>{t('profile.reactions')}</Text>
             </View>
           </View>
 
@@ -284,8 +290,8 @@ export default function ProfileScreen() {
             style={({ pressed }) => [styles.editProfileBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.98 }] }]}
             onPress={openEdit}
           >
-            <Edit2 size={16} color={Colors.primaryLight} strokeWidth={2} />
-            <Text style={styles.editProfileBtnText}>Edit Profile</Text>
+            <Edit2 size={16} color={colors.primaryLight} strokeWidth={2} />
+            <Text style={styles.editProfileBtnText}>{t('profile.editProfile')}</Text>
           </Pressable>
         </LinearGradient>
 
@@ -293,14 +299,14 @@ export default function ProfileScreen() {
         <View style={styles.sectionCard}>
           <View style={styles.shareRow}>
             <View>
-              <Text style={styles.shareTitle}>Chia sẻ tài khoản</Text>
-              <Text style={styles.shareSubtitle}>Bạn bè tìm bạn qua username</Text>
+              <Text style={styles.shareTitle}>{t('profile.shareAccount')}</Text>
+              <Text style={styles.shareSubtitle}>{t('profile.shareSubtitle')}</Text>
             </View>
             <Pressable
               style={styles.shareTag}
               onPress={() => {
                 Haptics.selectionAsync();
-                Alert.alert('Username của bạn', `@${userProfile?.username || '(chưa đặt)'}`, [{ text: 'OK' }]);
+                Alert.alert(t('profile.username'), `@${userProfile?.username || ''}`, [{ text: 'OK' }]);
               }}
             >
               <Text style={styles.shareTagText}>@{userProfile?.username || '...'}</Text>
@@ -311,19 +317,19 @@ export default function ProfileScreen() {
         {/* ── Menu list ── */}
         <View style={styles.sectionCard}>
           {[
-            { icon: <Edit2 size={22} color={Colors.primaryLight} strokeWidth={1.5} />, label: 'Edit Profile', desc: 'Name, username, avatar', onPress: openEdit },
-            { icon: <Bell size={22} color={Colors.primaryLight} strokeWidth={1.5} />, label: 'Notifications', desc: 'Manage alerts', onPress: () => { setModalSection('settings'); Haptics.selectionAsync(); } },
-            { icon: <Lock size={22} color={Colors.primaryLight} strokeWidth={1.5} />, label: 'Privacy', desc: 'Control who sees you', onPress: () => { setModalSection('privacy'); Haptics.selectionAsync(); } },
-            { icon: <Palette size={22} color={Colors.primaryLight} strokeWidth={1.5} />, label: 'Appearance', desc: 'Dark/Light mode', onPress: () => Alert.alert('Coming Soon', 'Feature in development') },
-            { icon: <HelpCircle size={22} color={Colors.primaryLight} strokeWidth={1.5} />, label: 'Help & Feedback', desc: 'Send us suggestions', onPress: () => Alert.alert('Feedback', 'Email: support@tamchau.app') },
-            { icon: <FileText size={22} color={Colors.primaryLight} strokeWidth={1.5} />, label: 'Terms of Use', desc: '', onPress: () => Alert.alert('Terms', 'Will open browser') },
+            { icon: <Edit2 size={22} color={colors.primaryLight} strokeWidth={1.5} />, label: t('profile.editProfile'), desc: '', onPress: openEdit },
+            { icon: <Bell size={22} color={colors.primaryLight} strokeWidth={1.5} />, label: t('profile.notif'), desc: t('profile.notifDesc'), onPress: () => { setModalSection('settings'); Haptics.selectionAsync(); } },
+            { icon: <Lock size={22} color={colors.primaryLight} strokeWidth={1.5} />, label: t('profile.privacy'), desc: t('profile.privacyDesc'), onPress: () => { setModalSection('privacy'); Haptics.selectionAsync(); } },
+            { icon: <Palette size={22} color={colors.primaryLight} strokeWidth={1.5} />, label: t('profile.appearance'), desc: t('profile.appearanceDesc'), onPress: () => Alert.alert('Coming Soon', 'Feature in development') },
+            { icon: <HelpCircle size={22} color={colors.primaryLight} strokeWidth={1.5} />, label: t('profile.help'), desc: t('profile.helpDesc'), onPress: () => Alert.alert('Feedback', 'Email: support@tamchau.app') },
+            { icon: <FileText size={22} color={colors.primaryLight} strokeWidth={1.5} />, label: t('profile.terms'), desc: '', onPress: () => Alert.alert('Terms', 'Will open browser') },
           ].map((item, i, arr) => (
             <Pressable
               key={i}
               style={({ pressed }) => [
                 styles.menuRow,
-                i < arr.length - 1 && styles.menuRowBorder,
-                pressed && { backgroundColor: Colors.surfaceLight },
+                i < arr.length - 1 && styles.settingRowBorder,
+                pressed && { backgroundColor: colors.surfaceLight },
               ]}
               onPress={item.onPress}
             >
@@ -332,7 +338,7 @@ export default function ProfileScreen() {
                 <Text style={styles.menuLabel}>{item.label}</Text>
                 {!!item.desc && <Text style={styles.menuDesc}>{item.desc}</Text>}
               </View>
-              <ChevronRight size={20} color={Colors.textMuted} strokeWidth={1.5} />
+              <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.5} />
             </Pressable>
           ))}
         </View>
@@ -340,8 +346,8 @@ export default function ProfileScreen() {
         {/* ── Received media preview ── */}
         {receivedCount > 0 && (
           <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>📥 Đã nhận ({receivedCount})</Text>
-            <Text style={styles.sectionSubtitle}>Vào Inbox để xem hình bạn bè đã gửi cho bạn</Text>
+            <Text style={styles.sectionTitle}>{t('profile.received')} ({receivedCount})</Text>
+            <Text style={styles.sectionSubtitle}>{t('profile.receivedSub')}</Text>
           </View>
         )}
 
@@ -350,8 +356,8 @@ export default function ProfileScreen() {
           style={({ pressed }) => [styles.signOutBtn, pressed && { opacity: 0.8 }]}
           onPress={handleSignOut}
         >
-          <LogOut size={18} color={Colors.error} strokeWidth={2} />
-          <Text style={styles.signOutText}>Log Out</Text>
+          <LogOut size={18} color={colors.error} strokeWidth={2} />
+          <Text style={styles.signOutText}>{t('profile.logout')}</Text>
         </Pressable>
 
         {/* App version */}
@@ -377,13 +383,13 @@ export default function ProfileScreen() {
                 <View style={styles.modalHandle} />
                 {/* Header */}
                 <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>Edit Profile</Text>
+                  <Text style={styles.modalTitle}>{t('profile.editProfile')}</Text>
                   <Pressable
                     onPress={() => !loading && setModalSection('main')}
                     style={styles.modalCloseBtn}
                     hitSlop={12}
                   >
-                    <X size={20} color={Colors.textMuted} strokeWidth={2} />
+                    <X size={20} color={colors.textMuted} strokeWidth={2} />
                   </Pressable>
                 </View>
 
@@ -398,15 +404,15 @@ export default function ProfileScreen() {
 
                   {/* Display name */}
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Tên hiển thị</Text>
+                    <Text style={styles.inputLabel}>{t('profile.displayName')}</Text>
                     <View style={styles.inputWrapper}>
                       <TextInput
                         style={styles.textInput}
                         placeholder="Tên của bạn"
-                        placeholderTextColor={Colors.textMuted}
+                        placeholderTextColor={colors.textMuted}
                         value={editDisplayName}
                         onChangeText={setEditDisplayName}
-                        selectionColor={Colors.primary}
+                        selectionColor={colors.primary}
                         maxLength={30}
                       />
                     </View>
@@ -414,22 +420,22 @@ export default function ProfileScreen() {
 
                   {/* Username */}
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Username</Text>
+                    <Text style={styles.inputLabel}>{t('profile.username')}</Text>
                     <View style={styles.inputWrapper}>
                       <Text style={styles.inputPrefix}>@</Text>
                       <TextInput
                         style={[styles.textInput, { flex: 1 }]}
                         placeholder="username"
-                        placeholderTextColor={Colors.textMuted}
+                        placeholderTextColor={colors.textMuted}
                         value={editUsername}
                         onChangeText={(t) => setEditUsername(t.toLowerCase().replace(/[^a-z0-9_.]/g, ''))}
-                        selectionColor={Colors.primary}
+                        selectionColor={colors.primary}
                         maxLength={20}
                         autoCapitalize="none"
                         autoCorrect={false}
                       />
                     </View>
-                    <Text style={styles.inputHint}>Viết liền, không dấu, 3–20 ký tự</Text>
+                    <Text style={styles.inputHint}>{t('profile.usernameHint')}</Text>
                   </View>
 
                   {/* Buttons */}
@@ -443,13 +449,13 @@ export default function ProfileScreen() {
                     </Pressable>
                     <Pressable style={styles.modalBtn} onPress={handleSaveProfile} disabled={loading}>
                       <LinearGradient
-                        colors={Colors.gradientPrimary}
+                        colors={colors.gradientPrimary}
                         style={styles.saveBtnGrad}
                         start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                       >
                         {loading
-                          ? <ActivityIndicator color={Colors.textInverse} />
-                          : <Text style={styles.saveBtnText}>Lưu thay đổi</Text>
+                          ? <ActivityIndicator color={colors.textInverse} />
+                          : <Text style={styles.saveBtnText}>{t('profile.saveChanges')}</Text>
                         }
                       </LinearGradient>
                     </Pressable>
@@ -474,16 +480,18 @@ export default function ProfileScreen() {
           <View style={styles.modalSheet}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Notification Settings</Text>
+              <Text style={styles.modalTitle}>{t('profile.notif')}</Text>
               <Pressable onPress={() => setModalSection('main')} style={styles.modalCloseBtn} hitSlop={12}>
-                <X size={20} color={Colors.textMuted} strokeWidth={2} />
+                <X size={20} color={colors.textMuted} strokeWidth={2} />
               </Pressable>
             </View>
             <ScrollView contentContainerStyle={styles.modalBody}>
               {[
-                { label: 'Ảnh/video mới từ bạn bè', desc: 'Thông báo khi nhận được media', value: notifNew, onChange: setNotifNew },
-                { label: 'Reactions', desc: 'Khi bạn bè react lên ảnh của bạn', value: notifReaction, onChange: setNotifReaction },
-                { label: 'Lời mời kết bạn', desc: 'Khi có người muốn kết bạn', value: notifFriend, onChange: setNotifFriend },
+                { label: t('profile.settings.language'), desc: t('profile.settings.languageDesc'), value: language === 'vi', onChange: (v: boolean) => setLanguage(v ? 'vi' : 'en') },
+                { label: t('profile.settings.theme'), desc: t('profile.settings.themeDesc'), value: theme === 'dark', onChange: (v: boolean) => setTheme(v ? 'dark' : 'light') },
+                { label: t('profile.notif.newMedia'), desc: t('profile.notif.newMediaDesc'), value: notifNew, onChange: setNotifNew },
+                { label: 'Reactions', desc: t('profile.notif.reactionDesc'), value: notifReaction, onChange: setNotifReaction },
+                { label: t('profile.notif.friendReq'), desc: t('profile.notif.friendReqDesc'), value: notifFriend, onChange: setNotifFriend },
               ].map((item, i) => (
                 <View key={i} style={[styles.settingRow, i > 0 && styles.settingRowBorder]}>
                   <View style={{ flex: 1 }}>
@@ -493,13 +501,13 @@ export default function ProfileScreen() {
                   <Switch
                     value={item.value}
                     onValueChange={(v) => { item.onChange(v); Haptics.selectionAsync(); }}
-                    trackColor={{ false: Colors.border, true: Colors.primary }}
-                    thumbColor={Colors.white}
+                    trackColor={{ false: colors.border, true: colors.primary }}
+                    thumbColor={colors.white}
                   />
                 </View>
               ))}
               <Pressable style={styles.closeModalBtn} onPress={() => setModalSection('main')}>
-                <Text style={styles.closeModalText}>Xong</Text>
+                <Text style={styles.closeModalText}>{t('profile.done')}</Text>
               </Pressable>
             </ScrollView>
           </View>
@@ -521,16 +529,16 @@ export default function ProfileScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Privacy</Text>
               <Pressable onPress={() => setModalSection('main')} style={styles.modalCloseBtn} hitSlop={12}>
-                <X size={20} color={Colors.textMuted} strokeWidth={2} />
+                <X size={20} color={colors.textMuted} strokeWidth={2} />
               </Pressable>
             </View>
             <ScrollView contentContainerStyle={styles.modalBody}>
               <Text style={styles.privacyText}>
-                HeartPearl chỉ chia sẻ ảnh/video của bạn với những người bạn bè bạn đã chọn.
+                {t('profile.privacy.text1')}
               </Text>
               {[
-                { icon: <Users size={24} color={Colors.primary} />, title: 'Friends Only', desc: 'Only approved friends receive your photos.' },
-                { icon: <Lock size={24} color={Colors.primary} />, title: 'Encrypted', desc: 'Your data is secured by Firebase Security Rules.' },
+                { icon: <Users size={24} color={colors.primary} />, title: t('profile.privacy.friendsOnly'), desc: t('profile.privacy.friendsOnlyDesc') },
+                { icon: <Lock size={24} color={colors.primary} />, title: t('profile.privacy.encrypted'), desc: t('profile.privacy.encryptedDesc') },
               ].map((item, i) => (
                 <View key={i} style={styles.privacyItem}>
                   <View style={styles.privacyItemEmoji}>{item.icon}</View>
@@ -541,7 +549,7 @@ export default function ProfileScreen() {
                 </View>
               ))}
               <Pressable style={styles.closeModalBtn} onPress={() => setModalSection('main')}>
-                <Text style={styles.closeModalText}>Đóng</Text>
+                <Text style={styles.closeModalText}>{t('profile.close')}</Text>
               </Pressable>
             </ScrollView>
           </View>
@@ -554,8 +562,8 @@ export default function ProfileScreen() {
 // ─────────────────────────────────────────────
 // Styles
 // ─────────────────────────────────────────────
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.background },
+const createStyles = (colors: AppColors) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.background },
   scrollContent: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.base,
@@ -572,25 +580,25 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontFamily: Typography.fontFamily.extraBold,
     fontSize: Typography.fontSize['2xl'],
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.5,
   },
   settingsBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
 
   // Hero card
   heroCard: {
     borderRadius: BorderRadius.xl,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     padding: Spacing['2xl'],
     alignItems: 'center',
     gap: Spacing.sm,
@@ -599,13 +607,13 @@ const styles = StyleSheet.create({
     padding: 3,
     borderRadius: 999,
     borderWidth: 2.5,
-    borderColor: Colors.primary,
+    borderColor: colors.primary,
     marginBottom: 4,
   },
   avatarImg: {},
   avatarInitial: {
     fontFamily: Typography.fontFamily.extraBold,
-    color: Colors.white,
+    color: colors.white,
   },
   onlineDot: {
     position: 'absolute',
@@ -614,9 +622,9 @@ const styles = StyleSheet.create({
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: Colors.success,
+    backgroundColor: colors.success,
     borderWidth: 2,
-    borderColor: Colors.surface,
+    borderColor: colors.surface,
   },
   cameraEditBadge: {
     position: 'absolute',
@@ -625,26 +633,26 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 2,
-    borderColor: Colors.primary,
+    borderColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   displayName: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.xl,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   username: {
     fontFamily: Typography.fontFamily.medium,
     fontSize: Typography.fontSize.base,
-    color: Colors.primary,
+    color: colors.primary,
   },
   email: {
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.sm,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginBottom: Spacing.sm,
   },
   statsRow: {
@@ -652,7 +660,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
     paddingTop: Spacing.base,
     marginTop: 4,
   },
@@ -660,22 +668,22 @@ const styles = StyleSheet.create({
   statValue: {
     fontFamily: Typography.fontFamily.extraBold,
     fontSize: Typography.fontSize.xl,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   statLabel: {
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.xs,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
-  statDivider: { width: 1, height: 32, backgroundColor: Colors.border },
+  statDivider: { width: 1, height: 32, backgroundColor: colors.border },
   editProfileBtn: {
     marginTop: Spacing.sm,
     paddingHorizontal: Spacing.xl,
     paddingVertical: 10,
     borderRadius: BorderRadius.full,
     borderWidth: 1,
-    borderColor: Colors.primaryLight,
+    borderColor: colors.primaryLight,
     backgroundColor: 'transparent',
     flexDirection: 'row',
     alignItems: 'center',
@@ -684,28 +692,28 @@ const styles = StyleSheet.create({
   editProfileBtnText: {
     fontFamily: Typography.fontFamily.semiBold,
     fontSize: Typography.fontSize.sm,
-    color: Colors.primaryLight,
+    color: colors.primaryLight,
   },
 
   // Share card
   sectionCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: BorderRadius.xl,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     overflow: 'hidden',
   },
   sectionTitle: {
     fontFamily: Typography.fontFamily.semiBold,
     fontSize: Typography.fontSize.base,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     paddingHorizontal: Spacing.base,
     paddingTop: Spacing.base,
   },
   sectionSubtitle: {
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.sm,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     paddingHorizontal: Spacing.base,
     paddingBottom: Spacing.base,
   },
@@ -720,26 +728,26 @@ const styles = StyleSheet.create({
   shareTitle: {
     fontFamily: Typography.fontFamily.semiBold,
     fontSize: Typography.fontSize.base,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   shareSubtitle: {
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.xs,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
   shareTag: {
-    backgroundColor: `${Colors.primary}15`,
+    backgroundColor: `${colors.primary}15`,
     borderRadius: BorderRadius.full,
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderWidth: 1.5,
-    borderColor: `${Colors.primary}40`,
+    borderColor: `${colors.primary}40`,
   },
   shareTagText: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.sm,
-    color: Colors.primary,
+    color: colors.primary,
   },
 
   // Menu
@@ -756,21 +764,21 @@ const styles = StyleSheet.create({
   menuLabel: {
     fontFamily: Typography.fontFamily.medium,
     fontSize: Typography.fontSize.base,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   menuDesc: {
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.xs,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 1,
   },
-  menuArrow: { fontSize: 20, color: Colors.textMuted },
+  menuArrow: { fontSize: 20, color: colors.textMuted },
 
   signOutBtn: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: BorderRadius.xl,
     borderWidth: 1,
-    borderColor: `${Colors.error}60`,
+    borderColor: `${colors.error}60`,
     paddingVertical: Spacing.base,
     alignItems: 'center',
     flexDirection: 'row',
@@ -780,13 +788,13 @@ const styles = StyleSheet.create({
   signOutText: {
     fontFamily: Typography.fontFamily.semiBold,
     fontSize: Typography.fontSize.base,
-    color: Colors.error,
+    color: colors.error,
   },
   versionText: {
     textAlign: 'center',
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.xs,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     paddingTop: 4,
   },
 
@@ -797,17 +805,17 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalSheet: {
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
     paddingTop: 12,
     maxHeight: '92%',
   },
   modalHandle: {
     width: 36, height: 4, borderRadius: 2,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     alignSelf: 'center',
     marginBottom: Spacing.base,
   },
@@ -818,22 +826,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing['2xl'],
     paddingBottom: Spacing.base,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   modalTitle: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.lg,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   modalCloseBtn: {
     width: 32, height: 32, borderRadius: 16,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  modalCloseText: { color: Colors.textMuted, fontSize: 14, fontWeight: 'bold' },
+  modalCloseText: { color: colors.textMuted, fontSize: 14, fontWeight: 'bold' },
   modalBody: {
     paddingHorizontal: Spacing['2xl'],
     paddingTop: Spacing.lg,
@@ -846,43 +854,43 @@ const styles = StyleSheet.create({
   progressWrap: {
     width: '100%',
     height: 4,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     borderRadius: 2,
     overflow: 'hidden',
   },
-  progressFill: { height: 4, backgroundColor: Colors.primary },
+  progressFill: { height: 4, backgroundColor: colors.primary },
   inputGroup: { width: '100%', gap: 6 },
   inputLabel: {
     fontFamily: Typography.fontFamily.medium,
     fontSize: Typography.fontSize.sm,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     paddingHorizontal: Spacing.base,
   },
   inputPrefix: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.base,
-    color: Colors.primary,
+    color: colors.primary,
     marginRight: 4,
   },
   textInput: {
     paddingVertical: 13,
     fontSize: Typography.fontSize.base,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.fontFamily.regular,
     flex: 1,
   },
   inputHint: {
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.xs,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   modalBtnRow: {
     flexDirection: 'row',
@@ -892,22 +900,22 @@ const styles = StyleSheet.create({
   },
   modalBtn: { flex: 1, borderRadius: BorderRadius.full, overflow: 'hidden', height: 52 },
   cancelBtn: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   cancelBtnText: {
     fontFamily: Typography.fontFamily.semiBold,
     fontSize: Typography.fontSize.base,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   saveBtnGrad: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   saveBtnText: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.base,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
 
   // Settings
@@ -918,39 +926,39 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: 12,
   },
-  settingRowBorder: { borderTopWidth: 1, borderTopColor: Colors.border },
+  settingRowBorder: { borderTopWidth: 1, borderTopColor: colors.border },
   settingLabel: {
     fontFamily: Typography.fontFamily.medium,
     fontSize: Typography.fontSize.base,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   settingDesc: {
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.xs,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 1,
   },
   closeModalBtn: {
     marginTop: Spacing.lg,
     width: '100%',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: BorderRadius.full,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     paddingVertical: 14,
     alignItems: 'center',
   },
   closeModalText: {
     fontFamily: Typography.fontFamily.semiBold,
     fontSize: Typography.fontSize.base,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
 
   // Privacy
   privacyText: {
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.base,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     lineHeight: 22,
     textAlign: 'center',
     marginBottom: Spacing.base,
@@ -963,18 +971,18 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   privacyItemEmoji: { fontSize: 24, width: 32, textAlign: 'center', marginTop: 2 },
   privacyItemTitle: {
     fontFamily: Typography.fontFamily.semiBold,
     fontSize: Typography.fontSize.base,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   privacyItemDesc: {
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.sm,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
 });

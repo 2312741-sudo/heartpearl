@@ -2,7 +2,7 @@
 //  Inbox Screen — Realtime Photo Feed
 // ─────────────────────────────────────────────
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -23,7 +23,8 @@ import 'dayjs/locale/vi';
 import { subscribeToInbox, markPhotoAsSeen } from '../../services/photo.service';
 import { useAuthStore } from '../../store/auth.store';
 import { usePhotoStore } from '../../store/photo.store';
-import { Colors, Typography, Spacing, BorderRadius } from '../../constants/theme';
+import { useTranslation } from 'react-i18next';
+import { useAppTheme, AppColors, Typography, Spacing, BorderRadius } from '../../constants/theme';
 import { Photo, RootStackParamList } from '../../types';
 import { Mailbox, Play, Sparkles } from 'lucide-react-native';
 
@@ -36,6 +37,9 @@ const CARD_SIZE = (width - Spacing['2xl'] * 2 - Spacing.base) / 2;
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
 function PhotoCard({ photo, userId }: { photo: Photo; userId: string }) {
+  const { t } = useTranslation();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavProp>();
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
   const isNew = !photo.seen?.[userId];
@@ -86,10 +90,10 @@ function PhotoCard({ photo, userId }: { photo: Photo; userId: string }) {
         {isNew && (
           <View style={styles.newBadge}>
             <LinearGradient
-              colors={Colors.gradientPrimary}
+              colors={colors.gradientPrimary}
               style={styles.newBadgeGradient}
             >
-              <Text style={styles.newBadgeText}>Mới</Text>
+              <Text style={styles.newBadgeText}>{t('inbox.new')}</Text>
             </LinearGradient>
           </View>
         )}
@@ -97,14 +101,14 @@ function PhotoCard({ photo, userId }: { photo: Photo; userId: string }) {
         {/* Video badge */}
         {photo.mediaType === 'video' && (
           <View style={styles.videoBadge}>
-            <Play size={14} color={Colors.pearl} strokeWidth={2} />
+            <Play size={14} color={colors.pearl} strokeWidth={2} />
           </View>
         )}
 
         {/* Card footer */}
         <View style={styles.cardFooter}>
           <Text style={styles.senderName} numberOfLines={1}>
-            {photo.senderUser?.displayName || 'Bạn bè'}
+            {photo.senderUser?.displayName || t('inbox.defaultSender')}
           </Text>
           <Text style={styles.timeText}>
             {dayjs(photo.createdAt).fromNow()}
@@ -140,6 +144,9 @@ function PhotoCard({ photo, userId }: { photo: Photo; userId: string }) {
 }
 
 export default function InboxScreen() {
+  const { t } = useTranslation();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { userProfile } = useAuthStore();
   const { inbox, setInbox } = usePhotoStore();
 
@@ -156,13 +163,13 @@ export default function InboxScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.headerTitle}>Inbox</Text>
+          <Text style={styles.headerTitle}>{t('inbox.title')}</Text>
           {newCount > 0 && (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
               <Text style={styles.headerSubtitle}>
                 {newCount} ảnh mới từ bạn bè
               </Text>
-              <Sparkles size={14} color={Colors.primaryLight} strokeWidth={2} />
+              <Sparkles size={14} color={colors.primaryLight} strokeWidth={2} />
             </View>
           )}
         </View>
@@ -178,8 +185,8 @@ export default function InboxScreen() {
       {/* Photo Grid */}
       {inbox.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Mailbox size={64} color={Colors.pearl} strokeWidth={1} style={{ marginBottom: 16 }} />
-          <Text style={styles.emptyTitle}>Chưa có ảnh nào</Text>
+          <Mailbox size={64} color={colors.pearl} strokeWidth={1} style={{ marginBottom: 16 }} />
+          <Text style={styles.emptyTitle}>{t('inbox.emptyTitle')}</Text>
           <Text style={styles.emptySubtitle}>
             Khi bạn bè gửi ảnh, chúng sẽ xuất hiện ở đây nhé!
           </Text>
@@ -204,10 +211,10 @@ export default function InboxScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -220,13 +227,13 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontFamily: Typography.fontFamily.extraBold,
     fontSize: Typography.fontSize['2xl'],
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.5,
   },
   headerSubtitle: {
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.sm,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   headerRight: {
@@ -234,7 +241,7 @@ const styles = StyleSheet.create({
     paddingTop: 4,
   },
   countBadge: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: BorderRadius.full,
     paddingHorizontal: 10,
     paddingVertical: 3,
@@ -244,7 +251,7 @@ const styles = StyleSheet.create({
   countBadgeText: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.sm,
-    color: Colors.white,
+    color: colors.white,
   },
   grid: {
     paddingHorizontal: Spacing['2xl'],
@@ -258,9 +265,9 @@ const styles = StyleSheet.create({
     width: CARD_SIZE,
     height: CARD_SIZE * 1.25,
     borderRadius: 20,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     padding: 4,
   },
   cardImage: {
@@ -295,7 +302,7 @@ const styles = StyleSheet.create({
   newBadgeText: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.xs,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   videoBadge: {
     position: 'absolute',
@@ -318,7 +325,7 @@ const styles = StyleSheet.create({
   senderName: {
     fontFamily: Typography.fontFamily.semiBold,
     fontSize: Typography.fontSize.sm,
-    color: Colors.white,
+    color: colors.white,
   },
   timeText: {
     fontFamily: Typography.fontFamily.regular,
@@ -337,7 +344,7 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: Colors.white,
+    borderColor: colors.white,
   },
   captionBubble: {
     position: 'absolute',
@@ -352,7 +359,7 @@ const styles = StyleSheet.create({
   captionText: {
     fontFamily: Typography.fontFamily.regular,
     fontSize: 10,
-    color: Colors.white,
+    color: colors.white,
   },
   // Empty
   emptyContainer: {
@@ -365,12 +372,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.xl,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   emptySubtitle: {
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.base,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
   },

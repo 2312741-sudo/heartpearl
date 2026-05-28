@@ -2,7 +2,7 @@
 //  Photo Viewer Screen — Full Screen + React
 // ─────────────────────────────────────────────
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -35,7 +35,8 @@ import { RootStackParamList } from '../../types';
 import { reactToPhoto, textReactToPhoto } from '../../services/photo.service';
 import { uploadPhoto } from '../../services/photo.service';
 import { useAuthStore } from '../../store/auth.store';
-import { Colors, Typography, Spacing, BorderRadius } from '../../constants/theme';
+import { useTranslation } from 'react-i18next';
+import { useAppTheme, AppColors, Typography, Spacing, BorderRadius } from '../../constants/theme';
 
 dayjs.extend(relativeTime);
 dayjs.locale('vi');
@@ -51,6 +52,9 @@ type ReactionMode = 'none' | 'selfie' | 'text';
 const QUICK_MESSAGES = ['❤️', '😍', '🔥', '😂', '🥺', '👏', 'Đẹp quá!', 'Thích!', 'Haha'];
 
 export default function PhotoViewerScreen() {
+  const { t } = useTranslation();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavProp>();
   const route = useRoute<RoutePropType>();
   const { photo } = route.params;
@@ -88,9 +92,9 @@ export default function PhotoViewerScreen() {
       ]).start();
 
       setReactionMode('none');
-      Alert.alert('✅', 'Đã react bằng selfie!');
+      Alert.alert('✅', t('photo.react.selfieSuccess'));
     } catch {
-      Alert.alert('Lỗi', 'Không thể gửi reaction');
+      Alert.alert(t('home.err.title'), t('photo.react.errSend'));
     } finally {
       setIsReacting(false);
     }
@@ -109,9 +113,9 @@ export default function PhotoViewerScreen() {
       ]).start();
       setReactionMode('none');
       setTextMessage('');
-      Alert.alert('✅', 'Đã gửi tin nhắn!');
+      Alert.alert('✅', t('photo.react.msgSuccess'));
     } catch {
-      Alert.alert('Lỗi', 'Không thể gửi tin nhắn');
+      Alert.alert(t('home.err.title'), t('photo.react.errSend'));
     } finally {
       setIsReacting(false);
     }
@@ -185,7 +189,7 @@ export default function PhotoViewerScreen() {
           </View>
           <View>
             <Text style={styles.senderName}>
-              {photo.senderUser?.displayName || 'Bạn bè'}
+              {photo.senderUser?.displayName || t('inbox.defaultSender')}
             </Text>
             <Text style={styles.sendTime}>
               {dayjs(photo.createdAt).fromNow()}
@@ -283,16 +287,16 @@ export default function PhotoViewerScreen() {
             disabled={isReacting}
           >
             <LinearGradient
-              colors={Colors.gradientPrimary}
+              colors={colors.gradientPrimary}
               style={styles.reactBtnGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
               {isReacting && reactionMode !== 'text' ? (
-                <ActivityIndicator color={Colors.textInverse} size="small" />
+                <ActivityIndicator color={colors.textInverse} size="small" />
               ) : (
                 <Text style={styles.reactBtnText}>
-                  {myReaction ? '🔄 Đổi selfie' : '📸 Selfie'}
+                  {myReaction ? t('photo.react.changeSelfie') : t('photo.react.selfie')}
                 </Text>
               )}
             </LinearGradient>
@@ -312,7 +316,7 @@ export default function PhotoViewerScreen() {
             disabled={isReacting}
           >
             <Text style={styles.reactBtnMessageText}>
-              {myTextReaction ? '✏️ Sửa tin' : '💬 Nhắn tin'}
+              {myTextReaction ? t('photo.react.changeMessage') : t('photo.react.message')}
             </Text>
           </Pressable>
         </View>
@@ -335,7 +339,7 @@ export default function PhotoViewerScreen() {
               <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
                 <View style={styles.textModalContent}>
                   <View style={styles.textModalHandle} />
-                  <Text style={styles.textModalTitle}>💬 Gửi tin nhắn reaction</Text>
+                  <Text style={styles.textModalTitle}>{t('photo.react.sendMsg')}</Text>
 
                   {/* Quick messages — luôn hiện trước bàn phím */}
                   <ScrollView
@@ -366,14 +370,14 @@ export default function PhotoViewerScreen() {
                   <View style={styles.textInputRow}>
                     <TextInput
                       style={styles.textInput}
-                      placeholder="Hoặc nhập tin nhắn khác..."
-                      placeholderTextColor={Colors.textMuted}
+                      placeholder={t('photo.react.msgPlaceholder')}
+                      placeholderTextColor={colors.textMuted}
                       value={textMessage}
                       onChangeText={setTextMessage}
                       maxLength={120}
                       returnKeyType="send"
                       onSubmitEditing={() => handleTextReact(textMessage)}
-                      selectionColor={Colors.primary}
+                      selectionColor={colors.primary}
                     />
                     <Pressable
                       style={[
@@ -384,16 +388,16 @@ export default function PhotoViewerScreen() {
                       disabled={!textMessage.trim() || isReacting}
                     >
                       {isReacting ? (
-                        <ActivityIndicator color={Colors.white} size="small" />
+                        <ActivityIndicator color={colors.white} size="small" />
                       ) : (
                         <LinearGradient
-                          colors={Colors.gradientPrimary}
+                          colors={colors.gradientPrimary}
                           style={StyleSheet.absoluteFillObject}
                           start={{ x: 0, y: 0 }}
                           end={{ x: 1, y: 0 }}
                         />
                       )}
-                      {!isReacting && <Text style={styles.sendMsgBtnText}>Gửi</Text>}
+                      {!isReacting && <Text style={styles.sendMsgBtnText}>{t('home.send')}</Text>}
                     </Pressable>
                   </View>
 
@@ -401,7 +405,7 @@ export default function PhotoViewerScreen() {
                     style={styles.cancelTextBtn}
                     onPress={() => { setReactionMode('none'); setTextMessage(''); }}
                   >
-                    <Text style={styles.cancelTextBtnText}>Huỷ</Text>
+                    <Text style={styles.cancelTextBtnText}>{t('common.cancel')}</Text>
                   </Pressable>
                 </View>
               </TouchableWithoutFeedback>
@@ -428,7 +432,7 @@ export default function PhotoViewerScreen() {
                 style={styles.largeReactionImage}
               />
             )}
-            <Text style={styles.modalCloseHint}>Chạm vào màn hình để đóng ✕</Text>
+            <Text style={styles.modalCloseHint}>{t('photo.react.closeHint1')}</Text>
           </View>
         </Pressable>
       </Modal>
@@ -447,7 +451,7 @@ export default function PhotoViewerScreen() {
           <View style={styles.textReactionModal}>
             <Text style={styles.textReactionModalEmoji}>💬</Text>
             <Text style={styles.textReactionModalText}>{selectedTextReaction}</Text>
-            <Text style={styles.modalCloseHint}>Chạm để đóng ✕</Text>
+            <Text style={styles.modalCloseHint}>{t('photo.react.closeHint2')}</Text>
           </View>
         </Pressable>
       </Modal>
@@ -455,10 +459,10 @@ export default function PhotoViewerScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.black,
+    backgroundColor: colors.black,
   },
   image: {
     ...StyleSheet.absoluteFillObject,
@@ -487,7 +491,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   closeBtnText: {
-    color: Colors.white,
+    color: colors.white,
     fontSize: 18,
     fontWeight: 'bold',
   },
@@ -501,21 +505,21 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: Colors.white,
+    borderColor: colors.white,
   },
   senderAvatarText: {
-    color: Colors.white,
+    color: colors.white,
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.base,
   },
   senderName: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.base,
-    color: Colors.white,
+    color: colors.white,
   },
   sendTime: {
     fontFamily: Typography.fontFamily.regular,
@@ -534,7 +538,7 @@ const styles = StyleSheet.create({
   captionText: {
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.base,
-    color: Colors.white,
+    color: colors.white,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -550,7 +554,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
     overflow: 'hidden',
     borderWidth: 2,
-    borderColor: Colors.white,
+    borderColor: colors.white,
   },
   reactionImage: {
     width: 44,
@@ -580,7 +584,7 @@ const styles = StyleSheet.create({
   textReactionText: {
     fontFamily: Typography.fontFamily.medium,
     fontSize: Typography.fontSize.sm,
-    color: Colors.white,
+    color: colors.white,
   },
   // Bottom actions
   bottomActions: {
@@ -595,8 +599,8 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
     overflow: 'hidden',
     borderWidth: 3,
-    borderColor: Colors.primary,
-    shadowColor: Colors.primary,
+    borderColor: colors.primary,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.7,
     shadowRadius: 10,
@@ -608,10 +612,10 @@ const styles = StyleSheet.create({
     borderRadius: 32,
   },
   myTextReaction: {
-    backgroundColor: `${Colors.primary}30`,
+    backgroundColor: `${colors.primary}30`,
     borderRadius: BorderRadius.xl,
     borderWidth: 2,
-    borderColor: Colors.primary,
+    borderColor: colors.primary,
     paddingHorizontal: 16,
     paddingVertical: 10,
     maxWidth: width * 0.7,
@@ -619,7 +623,7 @@ const styles = StyleSheet.create({
   myTextReactionText: {
     fontFamily: Typography.fontFamily.semiBold,
     fontSize: Typography.fontSize.base,
-    color: Colors.white,
+    color: colors.white,
     textAlign: 'center',
   },
   reactBtnsRow: {
@@ -631,7 +635,7 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: BorderRadius.full,
     overflow: 'hidden',
-    shadowColor: Colors.primary,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 10,
@@ -653,12 +657,12 @@ const styles = StyleSheet.create({
   reactBtnText: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.base,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   reactBtnMessageText: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.base,
-    color: Colors.white,
+    color: colors.white,
   },
   // Text modal
   textModalOverlay: {
@@ -667,7 +671,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   textModalContent: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingTop: 12,
@@ -675,20 +679,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing['2xl'],
     gap: Spacing.base,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   textModalHandle: {
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     alignSelf: 'center',
     marginBottom: 4,
   },
   textModalTitle: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.lg,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
     marginBottom: 4,
   },
@@ -698,17 +702,17 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   quickChip: {
-    backgroundColor: `${Colors.primary}20`,
+    backgroundColor: `${colors.primary}20`,
     borderRadius: BorderRadius.full,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderWidth: 1.5,
-    borderColor: `${Colors.primary}50`,
+    borderColor: `${colors.primary}50`,
   },
   quickChipText: {
     fontFamily: Typography.fontFamily.medium,
     fontSize: Typography.fontSize.base,
-    color: Colors.primary,
+    color: colors.primary,
   },
   textInputRow: {
     flexDirection: 'row',
@@ -717,15 +721,15 @@ const styles = StyleSheet.create({
   },
   textInput: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderRadius: BorderRadius.lg,
     paddingHorizontal: Spacing.base,
     paddingVertical: 12,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.base,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     maxHeight: 100,
   },
   sendMsgBtn: {
@@ -735,12 +739,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
   },
   sendMsgBtnText: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.sm,
-    color: Colors.white,
+    color: colors.white,
   },
   cancelTextBtn: {
     alignItems: 'center',
@@ -749,7 +753,7 @@ const styles = StyleSheet.create({
   cancelTextBtnText: {
     fontFamily: Typography.fontFamily.medium,
     fontSize: Typography.fontSize.base,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   // Selfie large view modal
   modalOverlay: {
@@ -764,7 +768,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.xl,
     overflow: 'hidden',
     borderWidth: 3,
-    borderColor: Colors.white,
+    borderColor: colors.white,
     position: 'relative',
   },
   largeReactionImage: {
@@ -782,20 +786,20 @@ const styles = StyleSheet.create({
   },
   // Text reaction large modal
   textReactionModal: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: BorderRadius['2xl'],
     padding: Spacing['3xl'],
     marginHorizontal: Spacing['2xl'],
     alignItems: 'center',
     gap: Spacing.base,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   textReactionModalEmoji: { fontSize: 40 },
   textReactionModalText: {
     fontFamily: Typography.fontFamily.semiBold,
     fontSize: Typography.fontSize.xl,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
     lineHeight: 28,
   },

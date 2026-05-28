@@ -2,7 +2,7 @@
 //  Home Screen — Camera (Chụp ảnh + Quay video)
 // ─────────────────────────────────────────────
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -31,7 +31,8 @@ import { useAuthStore } from '../../store/auth.store';
 import { usePhotoStore } from '../../store/photo.store';
 import { uploadPhoto, sendPhoto, uploadVideo } from '../../services/photo.service';
 import { getFriendsList } from '../../services/friend.service';
-import { Colors, Typography, Spacing, BorderRadius } from '../../constants/theme';
+import { useTranslation } from 'react-i18next';
+import { useAppTheme, AppColors, Typography, Spacing, BorderRadius } from '../../constants/theme';
 import { User } from '../../types';
 
 const { width, height } = Dimensions.get('window');
@@ -39,6 +40,10 @@ const { width, height } = Dimensions.get('window');
 const MAX_VIDEO_DURATION = 15; // giây
 
 export default function HomeScreen() {
+  const { t } = useTranslation();
+  const { colors, theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [permission, requestPermission] = useCameraPermissions();
   const [micPermission, requestMicPermission] = useMicrophonePermissions();
   const [facing, setFacing] = useState<CameraType>('back');
@@ -130,7 +135,7 @@ export default function HomeScreen() {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
       if (photo) setCapturedImage(photo.uri);
     } catch {
-      Alert.alert('Lỗi', 'Không thể chụp ảnh');
+      Alert.alert(t('home.err.title'), t('home.err.cannotCapture'));
     }
   };
 
@@ -160,7 +165,7 @@ export default function HomeScreen() {
     if (!micPermission?.granted) {
       const result = await requestMicPermission();
       if (!result.granted) {
-        Alert.alert('Cần quyền Microphone', 'Cấp quyền mic để quay video');
+        Alert.alert(t('home.err.micTitle'), t('home.err.micMsg'));
         return;
       }
     }
@@ -244,7 +249,7 @@ export default function HomeScreen() {
 
     let currentProfile = userProfile;
     if (!currentProfile) {
-      Alert.alert('Đang đồng bộ', 'Hệ thống đang tải thông tin, vui lòng đợi vài giây rồi gửi lại!');
+      Alert.alert(t('home.err.syncTitle'), t('home.err.syncMsg'));
       const { getUserDocument, createUserDocument } = require('../../services/auth.service');
       if (firebaseUser?.uid) {
         try {
@@ -255,14 +260,14 @@ export default function HomeScreen() {
           }
           if (docData) useAuthStore.getState().setUserProfile(docData);
         } catch (error: any) {
-          Alert.alert('Lỗi Firebase', 'Vui lòng kiểm tra lại Firebase Rules: ' + error.message);
+          Alert.alert(t('home.err.fbTitle'), t('home.err.fbMsg') + error.message);
         }
       }
       return;
     }
 
     if (selectedFriends.length === 0) {
-      Alert.alert('Chọn người nhận', 'Chọn ít nhất 1 người bạn để gửi!');
+      Alert.alert(t('home.err.recipientTitle'), t('home.err.recipientMsg'));
       return;
     }
 
@@ -300,10 +305,10 @@ export default function HomeScreen() {
       setCapturedVideo(null);
       setCaption('');
       setSelectedFriends([]);
-      Alert.alert('✅ Đã gửi!', capturedVideo ? 'Video của bạn đã được gửi!' : 'Ảnh của bạn đã được gửi thành công!');
+      Alert.alert(t('home.successTitle'), capturedVideo ? t('home.successVideo') : t('home.successPhoto'));
     } catch (error: any) {
       console.error('Lỗi gửi:', error);
-      Alert.alert('Lỗi', 'Không thể gửi: ' + (error.message || 'Thử lại nhé!'));
+      Alert.alert(t('home.err.title'), t('home.err.sendMsg') + (error.message || ''));
     } finally {
       setUploading(false);
       setUploadProgress(0);
@@ -326,14 +331,14 @@ export default function HomeScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.permissionContainer}>
-          <AlertCircle size={48} color={Colors.pearl} strokeWidth={1.5} style={{ marginBottom: 16 }} />
-          <Text style={styles.permissionTitle}>Camera Access Required</Text>
+          <AlertCircle size={48} color={colors.pearl} strokeWidth={1.5} style={{ marginBottom: 16 }} />
+          <Text style={styles.permissionTitle}>{t('home.camRequired')}</Text>
           <Text style={styles.permissionText}>
-            HeartPearl needs camera access to capture moments between us.
+            {t('home.camReason')}
           </Text>
           <Pressable style={styles.permissionBtn} onPress={requestPermission}>
-            <LinearGradient colors={Colors.gradientPrimary} style={styles.permissionBtnGradient}>
-              <Text style={styles.permissionBtnText}>Cấp quyền Camera</Text>
+            <LinearGradient colors={colors.gradientPrimary} style={styles.permissionBtnGradient}>
+              <Text style={styles.permissionBtnText}>{t('home.grantCam')}</Text>
             </LinearGradient>
           </Pressable>
         </View>
@@ -373,7 +378,7 @@ export default function HomeScreen() {
 
           {/* Gradient overlay */}
           <LinearGradient
-            colors={['rgba(0,0,0,0.5)', 'transparent', 'rgba(0,0,0,0.7)']}
+            colors={colors.background === '#120716' ? ['rgba(0,0,0,0.5)', 'transparent', 'rgba(0,0,0,0.7)'] : ['rgba(255,255,255,0.7)', 'transparent', 'rgba(255,255,255,0.9)']}
             style={StyleSheet.absoluteFillObject}
             locations={[0, 0.4, 1]}
           />
@@ -381,12 +386,12 @@ export default function HomeScreen() {
           {/* Top — Cancel + badge */}
           <SafeAreaView style={styles.previewTop}>
             <Pressable style={styles.cancelBtn} onPress={handleCancelPreview}>
-              <X size={24} color={Colors.pearl} strokeWidth={1.5} />
+              <X size={24} color={colors.pearl} strokeWidth={1.5} />
             </Pressable>
             {capturedVideo && (
               <View style={styles.videoBadge}>
-                <Play size={14} color={Colors.pearl} strokeWidth={2} />
-                <Text style={styles.videoBadgeText}>VIDEO</Text>
+                <Play size={14} color={colors.pearl} strokeWidth={2} />
+                <Text style={styles.videoBadgeText}>{t('home.video')}</Text>
               </View>
             )}
           </SafeAreaView>
@@ -395,13 +400,13 @@ export default function HomeScreen() {
           <View style={styles.captionContainer}>
             <TextInput
               style={styles.captionInput}
-              placeholder="Add a sweet note..."
-              placeholderTextColor={Colors.textMuted}
+              placeholder={t('home.captionPlaceholder')}
+              placeholderTextColor={colors.textMuted}
               value={caption}
               onChangeText={setCaption}
               maxLength={100}
               multiline
-              selectionColor={Colors.primary}
+              selectionColor={colors.primary}
             />
           </View>
 
@@ -416,8 +421,8 @@ export default function HomeScreen() {
             >
               <Text style={styles.friendPickerLabel}>
                 {selectedFriends.length === 0
-                  ? 'Select recipient'
-                  : `${selectedFriends.length} selected`}
+                  ? t('home.selectRecipient')
+                  : `${selectedFriends.length} ${t('home.selected')}`}
               </Text>
             </Pressable>
 
@@ -439,8 +444,8 @@ export default function HomeScreen() {
                     >
                       <Text style={styles.selectAllText}>
                         {selectedFriends.length === friends.length
-                          ? 'Deselect all'
-                          : 'Select all'}
+                          ? t('home.deselectAll')
+                          : t('home.selectAll')}
                       </Text>
                     </Pressable>
 
@@ -460,7 +465,7 @@ export default function HomeScreen() {
                         </View>
                         <Text style={styles.friendName}>{friend.displayName}</Text>
                         {selectedFriends.includes(friend.uid) && (
-                          <Check size={20} color={Colors.primary} strokeWidth={2} />
+                          <Check size={20} color={colors.primary} strokeWidth={2} />
                         )}
                       </Pressable>
                     ))}
@@ -481,22 +486,22 @@ export default function HomeScreen() {
               disabled={isUploading}
             >
               <LinearGradient
-                colors={Colors.gradientPrimary}
+                colors={colors.gradientPrimary}
                 style={styles.sendBtnGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               >
                 {isUploading ? (
                   <View style={styles.uploadingContainer}>
-                    <ActivityIndicator color={Colors.pearl} />
+                    <ActivityIndicator color={colors.pearl} />
                     <Text style={styles.uploadingText}>
                       {Math.round(uploadProgress)}%
                     </Text>
                   </View>
                 ) : (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={styles.sendText}>Send</Text>
-                    <Send size={18} color={Colors.pearl} strokeWidth={2} />
+                    <Text style={styles.sendText}>{t('home.send')}</Text>
+                    <Send size={18} color={colors.pearl} strokeWidth={2} />
                   </View>
                 )}
               </LinearGradient>
@@ -532,8 +537,8 @@ export default function HomeScreen() {
       {/* Top Bar */}
       <SafeAreaView style={styles.topBar}>
         <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-          <Text style={[styles.appTitle, { color: Colors.primaryLight }]}>Heart</Text>
-          <Text style={[styles.appTitle, { color: Colors.pearlTint }]}>Pearl</Text>
+          <Text style={[styles.appTitle, { color: colors.primaryLight }]}>Heart</Text>
+          <Text style={[styles.appTitle, { color: colors.pearlTint }]}>Pearl</Text>
         </View>
 
         <View style={styles.topRightControls}>
@@ -550,11 +555,11 @@ export default function HomeScreen() {
             >
               <View>
                 {flash === 'off' ? (
-                  <ZapOff size={24} color={Colors.pearl} strokeWidth={1.5} />
+                  <ZapOff size={24} color={colors.pearl} strokeWidth={1.5} />
                 ) : flash === 'on' ? (
-                  <Zap size={24} color={Colors.primaryLight} strokeWidth={1.5} />
+                  <Zap size={24} color={colors.primaryLight} strokeWidth={1.5} />
                 ) : (
-                  <Zap size={24} color={Colors.pearl} strokeWidth={1.5} />
+                  <Zap size={24} color={colors.pearl} strokeWidth={1.5} />
                 )}
               </View>
             </Pressable>
@@ -589,7 +594,7 @@ export default function HomeScreen() {
       {/* Hint text */}
       {!isRecording && zoom <= 0.02 && (
         <View style={styles.hintContainer}>
-          <Text style={styles.hintText}>Nhấn để chụp · Giữ để quay · Pinch để zoom</Text>
+          <Text style={styles.hintText}>{t('home.hint')}</Text>
         </View>
       )}
 
@@ -605,9 +610,9 @@ export default function HomeScreen() {
               setZoom(val);
               setZoomDisplay(parseFloat((1 + val * 4).toFixed(1)));
             }}
-            minimumTrackTintColor={Colors.primary}
+            minimumTrackTintColor={colors.primary}
             maximumTrackTintColor="rgba(255,255,255,0.3)"
-            thumbTintColor={Colors.white}
+            thumbTintColor={colors.white}
           />
         </View>
       )}
@@ -622,7 +627,7 @@ export default function HomeScreen() {
           onPress={toggleFacing}
           disabled={isRecording}
         >
-          <RefreshCcw size={24} color={Colors.pearl} strokeWidth={1.5} />
+          <RefreshCcw size={24} color={colors.pearl} strokeWidth={1.5} />
         </Pressable>
 
         {/* Capture / Record Button */}
@@ -649,7 +654,7 @@ export default function HomeScreen() {
                 ]}
               />
             ) : (
-              <LinearGradient colors={Colors.gradientPrimary} style={styles.captureInner} />
+              <LinearGradient colors={colors.gradientPrimary} style={styles.captureInner} />
             )}
           </Pressable>
         </Animated.View>
@@ -663,10 +668,10 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.black,
+    backgroundColor: colors.black,
   },
   camera: {
     flex: 1,
@@ -683,12 +688,12 @@ const styles = StyleSheet.create({
   permissionTitle: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.xl,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   permissionText: {
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.base,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -705,7 +710,7 @@ const styles = StyleSheet.create({
   permissionBtnText: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.base,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   // Top Bar
   topBar: {
@@ -723,7 +728,7 @@ const styles = StyleSheet.create({
   appTitle: {
     fontFamily: Typography.fontFamily.extraBold,
     fontSize: Typography.fontSize.xl,
-    color: Colors.white,
+    color: colors.white,
     letterSpacing: -0.5,
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 0, height: 1 },
@@ -746,17 +751,17 @@ const styles = StyleSheet.create({
   },
   controlBtnActive: {
     backgroundColor: 'rgba(255,255,255,0.2)',
-    borderColor: Colors.white,
+    borderColor: colors.white,
   },
   controlBtnText: {
     fontSize: 20,
-    color: Colors.white,
+    color: colors.white,
   },
   // Recording indicator
   recordingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(220,38,38,0.85)',
+    backgroundColor: colors.background === '#120716' ? 'rgba(220,38,38,0.85)' : 'rgba(220,38,38,1)',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: BorderRadius.full,
@@ -766,12 +771,12 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.white,
+    backgroundColor: colors.white,
   },
   recordingText: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.sm,
-    color: Colors.white,
+    color: colors.white,
   },
   // Progress bar
   progressBarContainer: {
@@ -801,7 +806,7 @@ const styles = StyleSheet.create({
   zoomText: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.sm,
-    color: Colors.white,
+    color: colors.white,
   },
   // Hint
   hintContainer: {
@@ -857,7 +862,7 @@ const styles = StyleSheet.create({
   filterText: {
     fontFamily: Typography.fontFamily.medium,
     fontSize: 10,
-    color: Colors.white,
+    color: colors.white,
     textShadowColor: 'rgba(0,0,0,0.8)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
@@ -889,8 +894,8 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     padding: 4,
     borderWidth: 3,
-    borderColor: Colors.white,
-    shadowColor: Colors.primary,
+    borderColor: colors.white,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8,
     shadowRadius: 12,
@@ -925,7 +930,7 @@ const styles = StyleSheet.create({
   videoPreviewText: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.xl,
-    color: Colors.white,
+    color: colors.white,
   },
   videoPreviewSub: {
     fontFamily: Typography.fontFamily.regular,
@@ -951,7 +956,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cancelText: {
-    color: Colors.white,
+    color: colors.white,
     fontSize: 18,
     fontWeight: 'bold',
   },
@@ -964,7 +969,7 @@ const styles = StyleSheet.create({
   videoBadgeText: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.xs,
-    color: Colors.white,
+    color: colors.white,
   },
   captionContainer: {
     position: 'absolute',
@@ -977,7 +982,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.lg,
     paddingHorizontal: Spacing.base,
     paddingVertical: Spacing.md,
-    color: Colors.white,
+    color: colors.white,
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.base,
     borderWidth: 1,
@@ -998,7 +1003,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.2)',
   },
   friendPickerLabel: {
-    color: Colors.white,
+    color: colors.white,
     fontFamily: Typography.fontFamily.medium,
     fontSize: Typography.fontSize.base,
   },
@@ -1019,7 +1024,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   selectAllText: {
-    color: Colors.primary,
+    color: colors.primary,
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.sm,
   },
@@ -1033,34 +1038,34 @@ const styles = StyleSheet.create({
     marginHorizontal: Spacing.sm,
   },
   friendItemSelected: {
-    backgroundColor: `${Colors.primary}30`,
+    backgroundColor: `${colors.primary}30`,
   },
   friendAvatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   friendAvatarText: {
-    color: Colors.white,
+    color: colors.white,
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.base,
   },
   friendName: {
     flex: 1,
-    color: Colors.white,
+    color: colors.white,
     fontFamily: Typography.fontFamily.medium,
     fontSize: Typography.fontSize.base,
   },
   friendCheck: {
-    color: Colors.primary,
+    color: colors.primary,
     fontSize: 18,
     fontWeight: 'bold',
   },
   noFriendsText: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.sm,
     textAlign: 'center',
@@ -1075,7 +1080,7 @@ const styles = StyleSheet.create({
   sendBtn: {
     borderRadius: BorderRadius.full,
     overflow: 'hidden',
-    shadowColor: Colors.primary,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.5,
     shadowRadius: 16,
@@ -1088,7 +1093,7 @@ const styles = StyleSheet.create({
   sendText: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.lg,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   uploadingContainer: {
     flexDirection: 'row',
@@ -1098,6 +1103,6 @@ const styles = StyleSheet.create({
   uploadingText: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.base,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
 });

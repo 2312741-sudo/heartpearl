@@ -2,7 +2,7 @@
 //  Phone Login Screen
 // ─────────────────────────────────────────────
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -19,8 +19,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { AuthStackParamList } from '../../types';
-import { Colors, Typography, Spacing, BorderRadius } from '../../constants/theme';
+import { useAppTheme, AppColors, Typography, Spacing, BorderRadius } from '../../constants/theme';
 import { signInWithEmail, signUpWithEmail } from '../../services/auth.service';
 import { useAuthStore } from '../../store/auth.store';
 
@@ -29,6 +30,10 @@ type Props = {
 };
 
 export default function PhoneLoginScreen({ navigation }: Props) {
+  const { t } = useTranslation();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
@@ -64,15 +69,15 @@ export default function PhoneLoginScreen({ navigation }: Props) {
       shake();
       const msg =
         error.code === 'auth/user-not-found'
-          ? 'Tài khoản không tồn tại'
+          ? t('auth.error.userNotFound')
           : error.code === 'auth/wrong-password'
-          ? 'Mật khẩu không đúng'
+          ? t('auth.error.wrongPassword')
           : error.code === 'auth/email-already-in-use'
-          ? 'Email đã được sử dụng'
+          ? t('auth.error.emailInUse')
           : error.code === 'auth/weak-password'
-          ? 'Mật khẩu phải có ít nhất 6 ký tự'
-          : 'Đã có lỗi xảy ra, thử lại nhé!';
-      Alert.alert('Lỗi', msg);
+          ? t('auth.error.weakPassword')
+          : t('auth.error.default');
+      Alert.alert(t('auth.error'), msg);
     } finally {
       setLoading(false);
     }
@@ -95,7 +100,7 @@ export default function PhoneLoginScreen({ navigation }: Props) {
           {/* Title */}
           <View style={styles.titleSection}>
             <LinearGradient
-              colors={Colors.gradientPrimary}
+              colors={colors.gradientPrimary}
               style={styles.iconBadge}
             >
               <Text style={styles.iconEmoji}>
@@ -103,12 +108,10 @@ export default function PhoneLoginScreen({ navigation }: Props) {
               </Text>
             </LinearGradient>
             <Text style={styles.title}>
-              {isSignUp ? 'Tạo tài khoản' : 'Chào mừng trở lại!'}
+              {isSignUp ? t('login.titleUp') : t('login.titleIn')}
             </Text>
             <Text style={styles.subtitle}>
-              {isSignUp
-                ? 'Bắt đầu chia sẻ khoảnh khắc với bạn bè'
-                : 'Đăng nhập để xem ảnh từ bạn bè'}
+              {isSignUp ? t('login.subUp') : t('login.subIn')}
             </Text>
           </View>
 
@@ -117,33 +120,33 @@ export default function PhoneLoginScreen({ navigation }: Props) {
             style={[styles.form, { transform: [{ translateX: shakeAnim }] }]}
           >
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Email</Text>
+              <Text style={styles.inputLabel}>{t('login.email')}</Text>
               <View style={styles.inputWrapper}>
                 <TextInput
                   style={styles.input}
                   placeholder="email@example.com"
-                  placeholderTextColor={Colors.textMuted}
+                  placeholderTextColor={colors.textMuted}
                   value={email}
                   onChangeText={setEmail}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
-                  selectionColor={Colors.primary}
+                  selectionColor={colors.primary}
                 />
               </View>
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Mật khẩu</Text>
+              <Text style={styles.inputLabel}>{t('login.password')}</Text>
               <View style={styles.inputWrapper}>
                 <TextInput
                   style={styles.input}
-                  placeholder="Tối thiểu 6 ký tự"
-                  placeholderTextColor={Colors.textMuted}
+                  placeholder={t('login.passwordMin')}
+                  placeholderTextColor={colors.textMuted}
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry
-                  selectionColor={Colors.primary}
+                  selectionColor={colors.primary}
                 />
               </View>
             </View>
@@ -160,16 +163,16 @@ export default function PhoneLoginScreen({ navigation }: Props) {
             disabled={loading}
           >
             <LinearGradient
-              colors={Colors.gradientPrimary}
+              colors={colors.gradientPrimary}
               style={styles.submitGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
               {loading ? (
-                <ActivityIndicator color={Colors.textInverse} />
+                <ActivityIndicator color={colors.textInverse} />
               ) : (
                 <Text style={styles.submitText}>
-                  {isSignUp ? 'Tạo tài khoản' : 'Đăng nhập'}
+                  {isSignUp ? t('login.btnUp') : t('login.btnIn')}
                 </Text>
               )}
             </LinearGradient>
@@ -181,9 +184,9 @@ export default function PhoneLoginScreen({ navigation }: Props) {
             onPress={() => setIsSignUp(!isSignUp)}
           >
             <Text style={styles.toggleText}>
-              {isSignUp ? 'Đã có tài khoản? ' : 'Chưa có tài khoản? '}
+              {isSignUp ? t('login.toggleUp') : t('login.toggleIn')}
               <Text style={styles.toggleLink}>
-                {isSignUp ? 'Đăng nhập' : 'Đăng ký ngay'}
+                {isSignUp ? t('login.toggleLinkUp') : t('login.toggleLinkIn')}
               </Text>
             </Text>
           </Pressable>
@@ -193,10 +196,10 @@ export default function PhoneLoginScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   container: {
     flex: 1,
@@ -209,15 +212,15 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   backText: {
     fontSize: 20,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   content: {
     flex: 1,
@@ -241,14 +244,14 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: Typography.fontFamily.extraBold,
     fontSize: Typography.fontSize['2xl'],
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: Spacing.sm,
     letterSpacing: -0.5,
   },
   subtitle: {
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.base,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     lineHeight: 22,
   },
   form: {
@@ -261,28 +264,28 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontFamily: Typography.fontFamily.medium,
     fontSize: Typography.fontSize.sm,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     letterSpacing: 0.3,
   },
   inputWrapper: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     overflow: 'hidden',
   },
   input: {
     paddingHorizontal: Spacing.base,
     paddingVertical: 14,
     fontSize: Typography.fontSize.base,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: Typography.fontFamily.regular,
   },
   submitBtn: {
     borderRadius: BorderRadius.full,
     overflow: 'hidden',
     marginBottom: Spacing.lg,
-    shadowColor: Colors.primary,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
     shadowRadius: 12,
@@ -298,7 +301,7 @@ const styles = StyleSheet.create({
   submitText: {
     fontFamily: Typography.fontFamily.bold,
     fontSize: Typography.fontSize.lg,
-    color: Colors.textInverse,
+    color: colors.textInverse,
   },
   toggleBtn: {
     alignItems: 'center',
@@ -307,10 +310,10 @@ const styles = StyleSheet.create({
   toggleText: {
     fontFamily: Typography.fontFamily.regular,
     fontSize: Typography.fontSize.sm,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   toggleLink: {
-    color: Colors.primary,
+    color: colors.primary,
     fontFamily: Typography.fontFamily.semiBold,
   },
 });
