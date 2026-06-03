@@ -22,15 +22,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { CameraView, useCameraPermissions as useExpoCameraPermissions, useMicrophonePermissions as useExpoMicrophonePermissions } from 'expo-camera';
-import { Skia, Paint, ImageFilter, BlendMode } from '@shopify/react-native-skia';
+import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { BEAUTY_FILTERS, FilterType } from '../../utils/filters';
 import { Video, ResizeMode } from 'expo-av';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import Slider from '@react-native-community/slider';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Camera as CameraIcon, Send, Sparkles, RefreshCcw, Zap, ZapOff, Check, X, Users, AlertCircle, Play, MessageCircle } from 'lucide-react-native';
+import { Camera as CameraIcon, Send, Zap, ZapOff, Check, X, AlertCircle, Play, MessageCircle } from 'lucide-react-native';
 import { useAuthStore } from '../../store/auth.store';
 import { usePhotoStore } from '../../store/photo.store';
 import { uploadPhoto, sendPhoto, uploadVideo } from '../../services/photo.service';
@@ -40,114 +39,34 @@ import { useAppTheme, AppColors, Typography, Spacing, BorderRadius } from '../..
 import { User } from '../../types';
 import { useUnreadData } from '../../hooks/useUnreadData';
 
-let Camera: any = null;
-let useCameraDevice: any = null;
-let useCameraPermission: any = null;
-let useMicrophonePermission: any = null;
-let useSkiaFrameProcessor: any = null;
-let useCameraDevices: any = null;
-
-import Constants from 'expo-constants';
-import { NativeModules } from 'react-native';
-
-// Phát hiện Expo Go:
-// Kiểm tra NativeModules của Vision Camera có thực sự tồn tại không.
-// Trong Expo Go, module JS load được nhưng NativeModule.CameraView sẽ là undefined.
-const hasVisionCameraNative = !!NativeModules.CameraView || !!NativeModules.VisionCameraModule;
-const isExpoGoEnv =
-  Constants.executionEnvironment === 'storeClient' ||
-  (Constants as any).appOwnership === 'expo' ||
-  !hasVisionCameraNative;
-
-let isExpoGo = isExpoGoEnv;
-if (!isExpoGo) {
-  try {
-    const VisionCamera = require('react-native-vision-camera');
-    Camera = VisionCamera.Camera;
-    useCameraDevice = VisionCamera.useCameraDevice;
-    useCameraPermission = VisionCamera.useCameraPermission;
-    useMicrophonePermission = VisionCamera.useMicrophonePermission;
-    useSkiaFrameProcessor = VisionCamera.useSkiaFrameProcessor;
-    useCameraDevices = VisionCamera.useCameraDevices;
-  } catch (e) {
-    isExpoGo = true;
-  }
-}
-
-const useMockPermission = () => {
-  return { hasPermission: true, requestPermission: async () => true };
-};
-const useCameraPermissionHook = !isExpoGo && useCameraPermission ? useCameraPermission : useMockPermission;
-const useMicrophonePermissionHook = !isExpoGo && useMicrophonePermission ? useMicrophonePermission : useMockPermission;
-const useCameraDeviceHook = !isExpoGo && useCameraDevice ? useCameraDevice : (facing: any, options: any) => ({ minZoom: 0.5, maxZoom: 8 });
-const useCameraDevicesHook = !isExpoGo && useCameraDevices ? useCameraDevices : () => [];
-const useMockFrameProcessor = (cb: any, deps: any) => null;
-const useSkiaFrameProcessorHook = !isExpoGo && useSkiaFrameProcessor ? useSkiaFrameProcessor : useMockFrameProcessor;
-
 const { width, height } = Dimensions.get('window');
-
 const MAX_VIDEO_DURATION = 15; // giây
 
 export default function HomeScreen() {
   const navigation = useNavigation<any>();
-
-  const frameProcessor = useSkiaFrameProcessorHook((frame: any) => {
-    'worklet';
-    frame.render();
-    const paint = Skia.Paint();
-  }, []);
 
   const { t } = useTranslation();
   const { colors, theme } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { totalUnread } = useUnreadData();
 
-  const [expoCamPermission, requestExpoCamPermission] = useExpoCameraPermissions();
-  const [expoMicPermission, requestExpoMicPermission] = useExpoMicrophonePermissions();
+  const [camPermission, requestCamPermission] = useCameraPermissions();
+  const [micPerm, requestMicPerm] = useMicrophonePermissions();
 
-  const visionCamPermission = useCameraPermissionHook();
-  const visionMicPermission = useMicrophonePermissionHook();
-
-  const hasPermission = isExpoGo ? !!expoCamPermission?.granted : visionCamPermission.hasPermission;
-  const permission = { granted: hasPermission };
-  const hasMic = isExpoGo ? !!expoMicPermission?.granted : visionMicPermission.hasPermission;
-  const micPermission = { granted: hasMic };
+  const hasPermission = !!camPermission?.granted;
+  const hasMic = !!micPerm?.granted;
 
   const requestPermission = useCallback(async () => {
-    if (isExpoGo) {
-      const res = await requestExpoCamPermission();
-      return !!res.granted;
-    } else {
-      return await visionCamPermission.requestPermission();
-    }
-  }, [expoCamPermission, requestExpoCamPermission, visionCamPermission]);
+    const res = await requestCamPermission();
+    return !!res.granted;
+  }, [requestCamPermission]);
 
   const requestMicPermission = useCallback(async () => {
-    if (isExpoGo) {
-      const res = await requestExpoMicPermission();
-      return !!res.granted;
-    } else {
-      return await visionMicPermission.requestPermission();
-    }
-  }, [expoMicPermission, requestExpoMicPermission, visionMicPermission]);
+    const res = await requestMicPerm();
+    return !!res?.granted;
+  }, [requestMicPerm]);
 
   const [facing, setFacing] = useState<'back' | 'front'>('back');
-  const devices = useCameraDevicesHook();
-
-  // Select the best multi-camera device that supports ultra-wide
-  const device = useMemo(() => {
-    if (isExpoGo) return null;
-    if (facing === 'front') {
-      return devices.find((d: any) => d.position === 'front');
-    }
-    const triple = devices.find((d: any) => d.position === 'back' && d.deviceType === 'triple-camera');
-    if (triple) return triple;
-    const dualWide = devices.find((d: any) => d.position === 'back' && d.deviceType === 'dual-wide-camera');
-    if (dualWide) return dualWide;
-    const dual = devices.find((d: any) => d.position === 'back' && d.deviceType === 'dual-camera');
-    if (dual) return dual;
-    return devices.find((d: any) => d.position === 'back') || null;
-  }, [devices, facing]);
 
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('normal');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -159,24 +78,8 @@ export default function HomeScreen() {
 
   // Camera controls
   const [flash, setFlash] = useState<'on' | 'off'>('off');
-  const minZoom = device?.minZoom ?? 1;
-  const maxZoom = Math.min(device?.maxZoom ?? 8, 8);
-  const [zoom, setZoom] = useState(1.0);          // actual zoom factor, starts at 1.0x
-  const [zoomDisplay, setZoomDisplay] = useState(1.0); // label hiển thị
-  const zoomBaseRef = useRef(1.0);                // zoom khi bắt đầu pinch
-  const lastPinchDistRef = useRef<number | null>(null);
-
-  // Sync zoom when device changes
-  useEffect(() => {
-    if (device) {
-      const initialZoom = (device.minZoom <= 1.0 && 1.0 <= device.maxZoom) ? 1.0 : device.minZoom;
-      setZoom(initialZoom);
-      setZoomDisplay(parseFloat(initialZoom.toFixed(1)));
-    } else {
-      setZoom(1.0);
-      setZoomDisplay(1.0);
-    }
-  }, [device]);
+  const [zoom, setZoom] = useState(0); // expo-camera zoom 0-1
+  const [zoomDisplay, setZoomDisplay] = useState(1.0);
 
   // Pinch-to-zoom PanResponder
   const pinchResponder = useRef(
@@ -239,11 +142,11 @@ export default function HomeScreen() {
     }
   }, [userProfile?.uid, JSON.stringify(userProfile?.friends)]);
 
-  // Fallback: đánh dấu camera sẵn sàng sau 2s phòng onCameraReady không bắn
+  // Fallback: camera ready sau 2s
   useEffect(() => {
-    if (!isExpoGo) return;
-    const t = setTimeout(() => { isCameraReadyRef.current = true; }, 2000);
-    return () => clearTimeout(t);
+    isCameraReadyRef.current = false;
+    const timer = setTimeout(() => { isCameraReadyRef.current = true; }, 2000);
+    return () => clearTimeout(timer);
   }, [facing]);
 
   // ── Capture animation ──────────────────────
@@ -260,29 +163,21 @@ export default function HomeScreen() {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       animateCapture();
-      if (isExpoGo) {
-        if (expoCameraRef.current) {
-          const photo = await expoCameraRef.current.takePictureAsync({
-            quality: 0.85,
-            skipProcessing: false,
-          });
-          if (photo) setCapturedImage(photo.uri);
-        }
-      } else {
-        if (cameraRef.current) {
-          const photo = await cameraRef.current.takePhoto({ flash: flash as 'on' | 'off' | 'auto' });
-          if (photo) setCapturedImage('file://' + photo.path);
-        }
+      if (expoCameraRef.current) {
+        const photo = await expoCameraRef.current.takePictureAsync({
+          quality: 0.85,
+          skipProcessing: false,
+        });
+        if (photo?.uri) setCapturedImage(photo.uri);
       }
     } catch (err: any) {
-      // Im lặng nếu camera chưa sẵn sàng, hiện alert cho các lỗi khác
       if (err?.message?.includes('not ready') || err?.message?.includes('onCameraReady')) return;
       console.error(err);
       Alert.alert(t('home.err.title'), t('home.err.cannotCapture'));
     }
   };
 
-  // ── Dừng record (không stale closure) ─────────────────────────
+  // ── Dừng record ──────────────────────────────
   const stopRecordingInternal = useCallback((saveVideo = true) => {
     if (!isRecordingRef.current) return;
     isRecordingRef.current = false;
@@ -292,20 +187,11 @@ export default function HomeScreen() {
     }
     captureRingAnim.stopAnimation();
     Animated.timing(captureRingAnim, { toValue: 0, duration: 150, useNativeDriver: true }).start();
-    
-    if (isExpoGo) {
-      expoCameraRef.current?.stopRecording();
-    } else {
-      cameraRef.current?.stopRecording();
-    }
-    
+    expoCameraRef.current?.stopRecording();
     setIsRecording(false);
     setRecordProgress(0);
-    // Nếu saveVideo=false thì xoá video sau khi recordAsync resolve
-    if (!saveVideo) {
-      setCapturedVideo(null);
-    }
-  }, [isExpoGo]);
+    if (!saveVideo) setCapturedVideo(null);
+  }, []);
 
   // ── Bắt đầu record ngay lập tức ────────────────────────────────
   const startRecordingImmediate = useCallback(async () => {
@@ -320,13 +206,12 @@ export default function HomeScreen() {
     }
 
     // Đợi camera sẵn sàng (tối đa 3 giây)
-    if (isExpoGo && !isCameraReadyRef.current) {
+    if (!isCameraReadyRef.current) {
       let waited = 0;
       while (!isCameraReadyRef.current && waited < 3000) {
         await new Promise(res => setTimeout(res, 100));
         waited += 100;
       }
-      if (!isCameraReadyRef.current) return; // vẫn chưa sẵn sàng → bỏ qua
     }
 
     isRecordingRef.current = true;
@@ -348,57 +233,24 @@ export default function HomeScreen() {
       if (elapsed >= MAX_VIDEO_DURATION) stopRecordingInternal(true);
     }, 80);
 
-    try {
-      if (isExpoGo) {
-        if (expoCameraRef.current) {
-          // Retry qua Promise chain để xử lý async rejection từ recordAsync
-          const attemptRecord = (retriesLeft: number): void => {
-            if (!isRecordingRef.current || !expoCameraRef.current) return;
-            expoCameraRef.current.recordAsync({ maxDuration: MAX_VIDEO_DURATION })
-              .then((video: any) => {
-                if (video?.uri) setCapturedVideo(video.uri);
-              })
-              .catch((err: any) => {
-                const notReady = err?.message?.includes('not ready') || err?.message?.includes('onCameraReady');
-                if (notReady && retriesLeft > 0 && isRecordingRef.current) {
-                  // Camera chưa sẵn sàng → đợi 300ms rồi thử lại
-                  setTimeout(() => attemptRecord(retriesLeft - 1), 300);
-                } else if (!notReady && !err?.message?.includes('stopped') && !err?.message?.includes('cancelled')) {
-                  console.error(err);
-                }
-              });
-          };
-          attemptRecord(15); // thử tối đa 15 lần (~4.5 giây)
-        }
-      } else {
-        if (cameraRef.current) {
-          cameraRef.current.startRecording({
-            flash: flash as 'on' | 'off',
-            onRecordingFinished: (video: any) => {
-              if (!pressingRef.current) {
-                setCapturedVideo('file://' + video.path);
-              }
-            },
-            onRecordingError: (error: any) => console.error(error)
-          });
-        }
-      }
-    } catch (err: any) {
-      // Reset trạng thái nếu record thất bại
-      isRecordingRef.current = false;
-      setIsRecording(false);
-      setRecordProgress(0);
-      if (recordTimerRef.current) {
-        clearInterval(recordTimerRef.current);
-        recordTimerRef.current = null;
-      }
-      captureRingAnim.stopAnimation();
-      Animated.timing(captureRingAnim, { toValue: 0, duration: 150, useNativeDriver: true }).start();
-      if (!err?.message?.includes('not ready') && !err?.message?.includes('onCameraReady')) {
-        console.error(err);
-      }
-    }
-  }, [hasMic, requestMicPermission, stopRecordingInternal, isExpoGo, flash]);
+    // Retry qua Promise chain
+    const attemptRecord = (retriesLeft: number): void => {
+      if (!isRecordingRef.current || !expoCameraRef.current) return;
+      expoCameraRef.current.recordAsync({ maxDuration: MAX_VIDEO_DURATION })
+        .then((video: any) => {
+          if (video?.uri) setCapturedVideo(video.uri);
+        })
+        .catch((err: any) => {
+          const notReady = err?.message?.includes('not ready') || err?.message?.includes('onCameraReady');
+          if (notReady && retriesLeft > 0 && isRecordingRef.current) {
+            setTimeout(() => attemptRecord(retriesLeft - 1), 300);
+          } else if (!notReady && !err?.message?.includes('stopped') && !err?.message?.includes('cancelled')) {
+            console.error(err);
+          }
+        });
+    };
+    attemptRecord(15);
+  }, [hasMic, requestMicPermission, stopRecordingInternal]);
 
   const handlePressIn = useCallback(() => {
     pressingRef.current = true;
@@ -525,9 +377,9 @@ export default function HomeScreen() {
   };
 
   // ── Permission not granted ─────────────────
-  if (!permission) return <View style={styles.container} />;
+  if (!camPermission) return <View style={styles.container} />;
 
-  if (!permission.granted) {
+  if (!hasPermission) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.permissionContainer}>
@@ -715,32 +567,16 @@ export default function HomeScreen() {
   // ── Live Camera ──────────────────────────────────
   return (
     <View style={styles.container}>
-      {isExpoGo ? (
-        <CameraView
-          style={styles.camera}
-          facing={facing}
-          flash={flash}
-          zoom={minZoom === maxZoom ? 0 : (zoom - minZoom) / (maxZoom - minZoom || 1)}
-          ref={expoCameraRef}
-          mode={isRecording ? 'video' : 'picture'}
-          mute={!hasMic}
-          onCameraReady={() => { isCameraReadyRef.current = true; }}
-          onMountError={() => { isCameraReadyRef.current = true; }}
-        />
-      ) : (
-        (device != null) && <Camera
-          device={device}
-          isActive={!capturedImage && !capturedVideo}
-          frameProcessor={frameProcessor}
-          photo={true}
-          video={true}
-          audio={hasMic}
-          ref={cameraRef}
-          style={styles.camera}
-          zoom={zoom}
-          {...pinchResponder.panHandlers}
-        />
-      )}
+      <CameraView
+        style={styles.camera}
+        facing={facing}
+        flash={flash}
+        zoom={zoom}
+        ref={expoCameraRef}
+        mode={isRecording ? 'video' : 'picture'}
+        mute={!hasMic}
+        onCameraReady={() => { isCameraReadyRef.current = true; }}
+      />
       {selectedFilter !== 'normal' && (
         <View 
           style={[
@@ -819,46 +655,19 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Zoom indicator / toggle button */}
+      {/* Zoom indicator */}
       {!isRecording && (
         <Pressable 
           style={styles.zoomIndicator}
           onPress={() => {
-            const nextZoom = zoom <= minZoom + 0.1 ? 1.0 : minZoom;
-            setZoom(nextZoom);
-            setZoomDisplay(parseFloat(nextZoom.toFixed(1)));
+            const next = zoom >= 0.5 ? 0 : 0.5;
+            setZoom(next);
+            setZoomDisplay(next === 0 ? 1.0 : 2.0);
             Haptics.selectionAsync();
           }}
         >
           <Text style={styles.zoomText}>{zoomDisplay}x</Text>
         </Pressable>
-      )}
-
-      {/* Hint text */}
-      {!isRecording && zoom <= 0.02 && (
-        <View style={styles.hintContainer}>
-          <Text style={styles.hintText}>{t('home.hint')}</Text>
-        </View>
-      )}
-
-      {/* Vertical Zoom Slider */}
-      {!isRecording && (
-        <View style={styles.zoomSliderContainer}>
-          <Slider
-            style={{ width: 180, height: 40, transform: [{ rotate: '-90deg' }] }}
-            minimumValue={0}
-            maximumValue={1}
-            value={(zoom - minZoom) / (maxZoom - minZoom || 1)}
-            onValueChange={(val) => {
-              const nextZoom = minZoom + val * (maxZoom - minZoom);
-              setZoom(nextZoom);
-              setZoomDisplay(parseFloat(nextZoom.toFixed(1)));
-            }}
-            minimumTrackTintColor={colors.primary}
-            maximumTrackTintColor="rgba(255,255,255,0.3)"
-            thumbTintColor={colors.white}
-          />
-        </View>
       )}
 
       {/* Filter Selector */}
@@ -892,7 +701,7 @@ export default function HomeScreen() {
           onPress={toggleFacing}
           disabled={isRecording}
         >
-          <RefreshCcw size={24} color={colors.pearl} strokeWidth={1.5} />
+          <CameraIcon size={24} color={colors.pearl} strokeWidth={1.5} />
         </Pressable>
 
         {/* Capture / Record Button */}
