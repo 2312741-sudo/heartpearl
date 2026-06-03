@@ -81,6 +81,9 @@ export default function HomeScreen() {
   const [zoom, setZoom] = useState(0); // expo-camera zoom 0-1
   const [zoomDisplay, setZoomDisplay] = useState(1.0);
 
+  const lastPinchDistRef = useRef<number | null>(null);
+  const zoomBaseRef = useRef<number>(0);
+
   // Pinch-to-zoom PanResponder
   const pinchResponder = useRef(
     PanResponder.create({
@@ -103,10 +106,8 @@ export default function HomeScreen() {
         const delta = (dist - lastPinchDistRef.current) / 300;
         lastPinchDistRef.current = dist;
         setZoom(prev => {
-          const currentPercent = (prev - minZoom) / (maxZoom - minZoom || 1);
-          const nextPercent = Math.max(0, Math.min(1, currentPercent + delta));
-          const nextZoom = minZoom + nextPercent * (maxZoom - minZoom);
-          setZoomDisplay(parseFloat(nextZoom.toFixed(1)));
+          const nextZoom = Math.max(0, Math.min(1, prev + delta));
+          setZoomDisplay(parseFloat((1 + nextZoom * 4).toFixed(1)));
           return nextZoom;
         });
       },
