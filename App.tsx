@@ -2,6 +2,8 @@
 //  Locket Clone — App Entry Point
 // ─────────────────────────────────────────────
 
+import 'react-native-gesture-handler';
+import 'react-native-reanimated';
 import './src/services/firebase.config';
 import './src/i18n';
 import React, { useCallback, useEffect } from 'react';

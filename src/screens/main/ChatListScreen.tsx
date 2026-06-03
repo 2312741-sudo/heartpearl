@@ -13,7 +13,8 @@ import { db } from '../../services/firebase.config';
 import { useAuthStore } from '../../store/auth.store';
 import { useAppTheme, Typography, Spacing } from '../../constants/theme';
 import { useNavigation } from '@react-navigation/native';
-import { ChevronLeft } from 'lucide-react-native';
+import { ChevronLeft, Bell } from 'lucide-react-native';
+import { useUnreadData } from '../../hooks/useUnreadData';
 import dayjs from 'dayjs';
 
 export default function ChatListScreen() {
@@ -21,6 +22,7 @@ export default function ChatListScreen() {
   const { colors } = useAppTheme();
   const navigation = useNavigation<any>();
   const [chats, setChats] = useState<any[]>([]);
+  const { unreadNotifications } = useUnreadData();
 
   useEffect(() => {
     if (!userProfile?.uid) return;
@@ -47,6 +49,7 @@ export default function ChatListScreen() {
     // Tìm friendId
     const friendId = item.participants.find((id: string) => id !== userProfile?.uid);
     const friendInfo = item.participantsInfo?.[friendId] || { name: 'Người dùng', avatar: '' };
+    const myUnreadCount = item.unreadCount?.[userProfile!.uid] || 0;
     
     return (
       <Pressable 
@@ -65,9 +68,16 @@ export default function ChatListScreen() {
             {item.lastMessage}
           </Text>
         </View>
-        <Text style={[styles.time, { color: colors.textMuted }]}>
-          {dayjs(item.updatedAt).format('HH:mm')}
-        </Text>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={[styles.time, { color: colors.textMuted }]}>
+            {dayjs(item.updatedAt).format('HH:mm')}
+          </Text>
+          {myUnreadCount > 0 && (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadText}>{myUnreadCount > 99 ? '99+' : myUnreadCount}</Text>
+            </View>
+          )}
+        </View>
       </Pressable>
     );
   };
@@ -75,11 +85,27 @@ export default function ChatListScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
       {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Pressable style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <ChevronLeft color={colors.textPrimary} size={24} />
+      <View style={[styles.header, { borderBottomColor: colors.border, justifyContent: 'space-between' }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Pressable style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <ChevronLeft color={colors.textPrimary} size={24} />
+          </Pressable>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Tin nhắn</Text>
+        </View>
+
+        <Pressable 
+          style={styles.bellBtn} 
+          onPress={() => navigation.navigate('Notifications')}
+        >
+          <Bell color={colors.textPrimary} size={24} />
+          {unreadNotifications > 0 && (
+            <View style={styles.headerBadge}>
+              <Text style={styles.headerBadgeText}>
+                {unreadNotifications > 99 ? '99+' : unreadNotifications}
+              </Text>
+            </View>
+          )}
         </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Tin nhắn</Text>
       </View>
 
       {/* List */}
@@ -159,5 +185,41 @@ const styles = StyleSheet.create({
   emptyText: {
     fontFamily: Typography.fontFamily.medium,
     fontSize: Typography.fontSize.base,
+  },
+  unreadBadge: {
+    backgroundColor: '#FF3B30',
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 6,
+    paddingHorizontal: 4,
+  },
+  unreadText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontFamily: Typography.fontFamily.bold,
+  },
+  bellBtn: {
+    padding: 8,
+    position: 'relative',
+  },
+  headerBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: '#FF3B30',
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+  },
+  headerBadgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontFamily: Typography.fontFamily.bold,
   }
 });

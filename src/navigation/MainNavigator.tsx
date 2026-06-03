@@ -6,7 +6,7 @@ import React from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Camera, Image as ImageIcon, Users, CalendarHeart, UserCircle, Heart } from 'lucide-react-native';
+import { Camera, Image as ImageIcon, Users, CalendarHeart, UserCircle, Heart, Bell } from 'lucide-react-native';
 import { MainTabParamList } from '../types';
 import { Colors } from '../constants/theme';
 import HomeScreen from '../screens/main/HomeScreen';
@@ -14,6 +14,8 @@ import InboxScreen from '../screens/main/InboxScreen';
 import FriendsScreen from '../screens/main/FriendsScreen';
 import HistoryScreen from '../screens/main/HistoryScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
+import NotificationsScreen from '../screens/main/NotificationsScreen';
+import { useUnreadData } from '../hooks/useUnreadData';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
@@ -53,9 +55,11 @@ const TabIcon = ({
 
 export function MainNavigator() {
   const insets = useSafeAreaInsets();
+  const { unreadNotifications } = useUnreadData();
 
   return (
     <Tab.Navigator
+      initialRouteName="Home"
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
@@ -71,20 +75,20 @@ export function MainNavigator() {
       }}
     >
       <Tab.Screen
-        name="Inbox"
-        component={InboxScreen}
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon IconComponent={ImageIcon} focused={focused} label="Gallery" />
-          ),
-        }}
-      />
-      <Tab.Screen
         name="Home"
         component={HomeScreen}
         options={{
           tabBarIcon: ({ focused }) => (
             <TabIcon IconComponent={Camera} focused={focused} label="Camera" withHeart />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Inbox"
+        component={InboxScreen}
+        options={{
+          tabBarIcon: ({ focused }) => (
+            <TabIcon IconComponent={ImageIcon} focused={focused} label="Gallery" />
           ),
         }}
       />
@@ -115,6 +119,24 @@ export function MainNavigator() {
           ),
         }}
       />
+      <Tab.Screen
+        name="Notifications"
+        component={NotificationsScreen}
+        options={{
+          tabBarIcon: ({ focused }) => (
+            <View style={{ position: 'relative' }}>
+              <TabIcon IconComponent={Bell} focused={focused} label="Thông báo" />
+              {unreadNotifications > 0 && (
+                <View style={styles.notifBadge}>
+                  <Text style={styles.notifBadgeText}>
+                    {unreadNotifications > 99 ? '99+' : unreadNotifications}
+                  </Text>
+                </View>
+              )}
+            </View>
+          ),
+        }}
+      />
     </Tab.Navigator>
   );
 }
@@ -141,5 +163,22 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primaryLight,
     position: 'absolute',
     bottom: 2,
+  },
+  notifBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: '#FF3B30',
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+  },
+  notifBadgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
 });

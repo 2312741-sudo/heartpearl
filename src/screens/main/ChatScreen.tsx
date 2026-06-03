@@ -58,8 +58,20 @@ export default function ChatScreen() {
       setMessages(msgs);
     });
     
+    // Mark as read when opening chat
+    const markAsRead = async () => {
+      try {
+        await setDoc(doc(db, `chats/${chatId}`), {
+          [`unreadCount.${userProfile.uid}`]: 0
+        }, { merge: true });
+      } catch (e) {
+        console.warn('Cannot mark chat as read:', e);
+      }
+    };
+    markAsRead();
+
     return unsubscribe;
-  }, [chatId]);
+  }, [chatId, userProfile?.uid]);
 
   const sendMessage = async () => {
     if (!inputText.trim()) return;
@@ -74,7 +86,7 @@ export default function ChatScreen() {
     });
 
     // Update chat document metadata
-    await setDoc(doc(db, `chats/${chatId}`), {
+    const chatUpdate: any = {
       participants: [userProfile?.uid, friendId],
       participantsInfo: {
         [userProfile!.uid]: { name: userProfile?.displayName, avatar: userProfile?.avatarUrl || '' },
@@ -82,7 +94,32 @@ export default function ChatScreen() {
       },
       lastMessage: text,
       updatedAt: serverTimestamp(),
-    }, { merge: true });
+    };
+    
+    try {
+      const { increment } = require('firebase/firestore');
+      chatUpdate[`unreadCount.${friendId}`] = increment(1);
+    } catch(e) {}
+
+    await setDoc(doc(db, `chats/${chatId}`), chatUpdate, { merge: true });
+
+    // Send Push Notification
+    try {
+      const friendSnap = await getDoc(doc(db, 'users', friendId as string));
+      if (friendSnap.exists()) {
+        const token = friendSnap.data().fcmToken;
+        if (token) {
+          const { sendPushNotification } = require('../../services/notification.service');
+          await sendPushNotification(
+            [token],
+            'HeartPearl',
+            `💬 ${userProfile?.displayName || 'Ai đó'}: ${text}`
+          );
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
 
   };
 

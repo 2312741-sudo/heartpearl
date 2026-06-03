@@ -38,6 +38,7 @@ import { getFriendsList } from '../../services/friend.service';
 import { useTranslation } from 'react-i18next';
 import { useAppTheme, AppColors, Typography, Spacing, BorderRadius } from '../../constants/theme';
 import { User } from '../../types';
+import { useUnreadData } from '../../hooks/useUnreadData';
 
 let Camera: any = null;
 let useCameraDevice: any = null;
@@ -46,17 +47,31 @@ let useMicrophonePermission: any = null;
 let useSkiaFrameProcessor: any = null;
 let useCameraDevices: any = null;
 
-let isExpoGo = false;
-try {
-  const VisionCamera = require('react-native-vision-camera');
-  Camera = VisionCamera.Camera;
-  useCameraDevice = VisionCamera.useCameraDevice;
-  useCameraPermission = VisionCamera.useCameraPermission;
-  useMicrophonePermission = VisionCamera.useMicrophonePermission;
-  useSkiaFrameProcessor = VisionCamera.useSkiaFrameProcessor;
-  useCameraDevices = VisionCamera.useCameraDevices;
-} catch (e) {
-  isExpoGo = true;
+import Constants from 'expo-constants';
+import { NativeModules } from 'react-native';
+
+// Phát hiện Expo Go:
+// Kiểm tra NativeModules của Vision Camera có thực sự tồn tại không.
+// Trong Expo Go, module JS load được nhưng NativeModule.CameraView sẽ là undefined.
+const hasVisionCameraNative = !!NativeModules.CameraView || !!NativeModules.VisionCameraModule;
+const isExpoGoEnv =
+  Constants.executionEnvironment === 'storeClient' ||
+  (Constants as any).appOwnership === 'expo' ||
+  !hasVisionCameraNative;
+
+let isExpoGo = isExpoGoEnv;
+if (!isExpoGo) {
+  try {
+    const VisionCamera = require('react-native-vision-camera');
+    Camera = VisionCamera.Camera;
+    useCameraDevice = VisionCamera.useCameraDevice;
+    useCameraPermission = VisionCamera.useCameraPermission;
+    useMicrophonePermission = VisionCamera.useMicrophonePermission;
+    useSkiaFrameProcessor = VisionCamera.useSkiaFrameProcessor;
+    useCameraDevices = VisionCamera.useCameraDevices;
+  } catch (e) {
+    isExpoGo = true;
+  }
 }
 
 const useMockPermission = () => {
@@ -64,7 +79,7 @@ const useMockPermission = () => {
 };
 const useCameraPermissionHook = !isExpoGo && useCameraPermission ? useCameraPermission : useMockPermission;
 const useMicrophonePermissionHook = !isExpoGo && useMicrophonePermission ? useMicrophonePermission : useMockPermission;
-const useCameraDeviceHook = !isExpoGo && useCameraDevice ? useCameraDevice : (facing: any, options: any) => ({ minZoom: 1, maxZoom: 8 });
+const useCameraDeviceHook = !isExpoGo && useCameraDevice ? useCameraDevice : (facing: any, options: any) => ({ minZoom: 0.5, maxZoom: 8 });
 const useCameraDevicesHook = !isExpoGo && useCameraDevices ? useCameraDevices : () => [];
 const useMockFrameProcessor = (cb: any, deps: any) => null;
 const useSkiaFrameProcessorHook = !isExpoGo && useSkiaFrameProcessor ? useSkiaFrameProcessor : useMockFrameProcessor;
@@ -85,6 +100,7 @@ export default function HomeScreen() {
   const { t } = useTranslation();
   const { colors, theme } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const { totalUnread } = useUnreadData();
 
   const [expoCamPermission, requestExpoCamPermission] = useExpoCameraPermissions();
   const [expoMicPermission, requestExpoMicPermission] = useExpoMicrophonePermissions();
@@ -210,6 +226,7 @@ export default function HomeScreen() {
   const cameraRef = useRef<any>(null);
   const expoCameraRef = useRef<any>(null);
   const captureScale = useRef(new Animated.Value(1)).current;
+  const isCameraReadyRef = useRef(false); // dùng ref để tránh stale closure trong useCallback
   const { userProfile, firebaseUser } = useAuthStore();
   const { isUploading, uploadProgress, setUploading, setUploadProgress } = usePhotoStore();
 
@@ -221,6 +238,13 @@ export default function HomeScreen() {
       setFriends([]);
     }
   }, [userProfile?.uid, JSON.stringify(userProfile?.friends)]);
+
+  // Fallback: đánh dấu camera sẵn sàng sau 2s phòng onCameraReady không bắn
+  useEffect(() => {
+    if (!isExpoGo) return;
+    const t = setTimeout(() => { isCameraReadyRef.current = true; }, 2000);
+    return () => clearTimeout(t);
+  }, [facing]);
 
   // ── Capture animation ──────────────────────
   const animateCapture = () => {
@@ -250,7 +274,9 @@ export default function HomeScreen() {
           if (photo) setCapturedImage('file://' + photo.path);
         }
       }
-    } catch (err) {
+    } catch (err: any) {
+      // Im lặng nếu camera chưa sẵn sàng, hiện alert cho các lỗi khác
+      if (err?.message?.includes('not ready') || err?.message?.includes('onCameraReady')) return;
       console.error(err);
       Alert.alert(t('home.err.title'), t('home.err.cannotCapture'));
     }
@@ -293,6 +319,16 @@ export default function HomeScreen() {
       }
     }
 
+    // Đợi camera sẵn sàng (tối đa 3 giây)
+    if (isExpoGo && !isCameraReadyRef.current) {
+      let waited = 0;
+      while (!isCameraReadyRef.current && waited < 3000) {
+        await new Promise(res => setTimeout(res, 100));
+        waited += 100;
+      }
+      if (!isCameraReadyRef.current) return; // vẫn chưa sẵn sàng → bỏ qua
+    }
+
     isRecordingRef.current = true;
     setIsRecording(true);
     setRecordProgress(0);
@@ -315,16 +351,24 @@ export default function HomeScreen() {
     try {
       if (isExpoGo) {
         if (expoCameraRef.current) {
-          const promise = expoCameraRef.current.recordAsync({
-            maxDuration: MAX_VIDEO_DURATION,
-          });
-          if (promise) {
-            promise.then((video: any) => {
-              if (!pressingRef.current) {
-                setCapturedVideo(video.uri);
-              }
-            }).catch((err: any) => console.error(err));
-          }
+          // Retry qua Promise chain để xử lý async rejection từ recordAsync
+          const attemptRecord = (retriesLeft: number): void => {
+            if (!isRecordingRef.current || !expoCameraRef.current) return;
+            expoCameraRef.current.recordAsync({ maxDuration: MAX_VIDEO_DURATION })
+              .then((video: any) => {
+                if (video?.uri) setCapturedVideo(video.uri);
+              })
+              .catch((err: any) => {
+                const notReady = err?.message?.includes('not ready') || err?.message?.includes('onCameraReady');
+                if (notReady && retriesLeft > 0 && isRecordingRef.current) {
+                  // Camera chưa sẵn sàng → đợi 300ms rồi thử lại
+                  setTimeout(() => attemptRecord(retriesLeft - 1), 300);
+                } else if (!notReady && !err?.message?.includes('stopped') && !err?.message?.includes('cancelled')) {
+                  console.error(err);
+                }
+              });
+          };
+          attemptRecord(15); // thử tối đa 15 lần (~4.5 giây)
         }
       } else {
         if (cameraRef.current) {
@@ -339,8 +383,20 @@ export default function HomeScreen() {
           });
         }
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      // Reset trạng thái nếu record thất bại
+      isRecordingRef.current = false;
+      setIsRecording(false);
+      setRecordProgress(0);
+      if (recordTimerRef.current) {
+        clearInterval(recordTimerRef.current);
+        recordTimerRef.current = null;
+      }
+      captureRingAnim.stopAnimation();
+      Animated.timing(captureRingAnim, { toValue: 0, duration: 150, useNativeDriver: true }).start();
+      if (!err?.message?.includes('not ready') && !err?.message?.includes('onCameraReady')) {
+        console.error(err);
+      }
     }
   }, [hasMic, requestMicPermission, stopRecordingInternal, isExpoGo, flash]);
 
@@ -375,6 +431,7 @@ export default function HomeScreen() {
 
   const toggleFacing = () => {
     Haptics.selectionAsync();
+    isCameraReadyRef.current = false;
     setFacing((prev) => (prev === 'back' ? 'front' : 'back'));
   };
 
@@ -440,7 +497,7 @@ export default function HomeScreen() {
         caption || undefined,
         capturedVideo ? 'video' : 'photo',
         capturedVideo ? mediaUrl : undefined, // videoUrl
-        !isExpoGo && facing === 'front', // isMirrored
+        facing === 'front', // isMirrored
         true // filter applied globally in HeartPearl
       );
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -497,12 +554,12 @@ export default function HomeScreen() {
           {capturedImage ? (
             <Image 
               source={{ uri: capturedImage }} 
-              style={[styles.preview, { transform: [{ scaleX: (!isExpoGo && facing === 'front') ? -1 : 1 }] }]} 
+              style={[styles.preview, { transform: [{ scaleX: facing === 'front' ? -1 : 1 }] }]} 
             />
           ) : (
             <Video
               source={{ uri: capturedVideo! }}
-              style={[styles.preview, { transform: [{ scaleX: (!isExpoGo && facing === 'front') ? -1 : 1 }] }]}
+              style={[styles.preview, { transform: [{ scaleX: facing === 'front' ? -1 : 1 }] }]}
               resizeMode={ResizeMode.COVER}
               shouldPlay
               isLooping
@@ -667,6 +724,8 @@ export default function HomeScreen() {
           ref={expoCameraRef}
           mode={isRecording ? 'video' : 'picture'}
           mute={!hasMic}
+          onCameraReady={() => { isCameraReadyRef.current = true; }}
+          onMountError={() => { isCameraReadyRef.current = true; }}
         />
       ) : (
         (device != null) && <Camera
@@ -705,10 +764,17 @@ export default function HomeScreen() {
         <View style={styles.topRightControls}>
 
           <Pressable
-            style={[styles.controlBtn, { marginRight: 15 }]}
+            style={[styles.controlBtn, { marginRight: 15, position: 'relative' }]}
             onPress={() => navigation.navigate('ChatList')}
           >
             <MessageCircle color={colors.textPrimary} size={28} />
+            {totalUnread > 0 && (
+              <View style={{ position: 'absolute', top: 2, right: 2, backgroundColor: '#FF3B30', minWidth: 16, height: 16, borderRadius: 8, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3 }}>
+                <Text style={{ color: '#FFF', fontSize: 10, fontWeight: 'bold' }}>
+                  {totalUnread > 99 ? '99+' : totalUnread}
+                </Text>
+              </View>
+            )}
           </Pressable>
 
           {/* Flash toggle */}
@@ -753,11 +819,19 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Zoom indicator */}
-      {zoom > 0.02 && !isRecording && (
-        <View style={styles.zoomIndicator}>
+      {/* Zoom indicator / toggle button */}
+      {!isRecording && (
+        <Pressable 
+          style={styles.zoomIndicator}
+          onPress={() => {
+            const nextZoom = zoom <= minZoom + 0.1 ? 1.0 : minZoom;
+            setZoom(nextZoom);
+            setZoomDisplay(parseFloat(nextZoom.toFixed(1)));
+            Haptics.selectionAsync();
+          }}
+        >
           <Text style={styles.zoomText}>{zoomDisplay}x</Text>
-        </View>
+        </Pressable>
       )}
 
       {/* Hint text */}
@@ -771,7 +845,7 @@ export default function HomeScreen() {
       {!isRecording && (
         <View style={styles.zoomSliderContainer}>
           <Slider
-            style={{ width: 160, height: 40 }}
+            style={{ width: 180, height: 40, transform: [{ rotate: '-90deg' }] }}
             minimumValue={0}
             maximumValue={1}
             value={(zoom - minZoom) / (maxZoom - minZoom || 1)}

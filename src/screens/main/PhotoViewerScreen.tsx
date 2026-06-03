@@ -140,8 +140,7 @@ export default function PhotoViewerScreen() {
       setReactionMode('none');
       Alert.alert('✅', t('photo.react.selfieSuccess'));
     } catch (err) {
-      console.error('Selfie reaction sync error:', err);
-      Alert.alert(t('home.err.title'), t('photo.react.errSend'));
+      Alert.alert(t('home.err.title'), `${t('photo.react.errSend')} - ${err instanceof Error ? err.message : JSON.stringify(err)}`);
     } finally {
       setIsReacting(false);
     }
@@ -206,8 +205,7 @@ export default function PhotoViewerScreen() {
       setTextMessage('');
       Alert.alert('✅', t('photo.react.msgSuccess'));
     } catch (err) {
-      console.error('Text reaction sync error:', err);
-      Alert.alert(t('home.err.title'), t('photo.react.errSend'));
+      Alert.alert(t('home.err.title'), `${t('photo.react.errSend')} - ${err instanceof Error ? err.message : JSON.stringify(err)}`);
     } finally {
       setIsReacting(false);
     }

@@ -15,7 +15,9 @@ import {
   Unsubscribe,
   getDocs,
   limit,
+  getDoc,
 } from 'firebase/firestore';
+import { sendPushNotification } from './notification.service';
 import {
   ref,
   uploadBytesResumable,
@@ -106,6 +108,48 @@ export const sendPhoto = async (
     reactions: {},
     seen: {},
   });
+
+  // Trigger Push Notification
+  try {
+    const senderSnap = await getDoc(doc(db, 'users', senderId));
+    const senderName = senderSnap.exists() ? senderSnap.data().displayName || 'Bạn bè' : 'Bạn bè';
+    
+    const tokens: string[] = [];
+    for (const uid of recipientIds) {
+      const snap = await getDoc(doc(db, 'users', uid));
+      if (snap.exists()) {
+        const token = snap.data().fcmToken;
+        if (token) tokens.push(token);
+      }
+    }
+    
+    if (tokens.length > 0) {
+      // Add in-app notification records
+      for (const uid of recipientIds) {
+        try {
+          await addDoc(collection(db, 'notifications'), {
+            userId: uid,
+            senderId,
+            type: 'photo',
+            title: 'HeartPearl',
+            body: `📸 ${senderName} vừa chia sẻ một ảnh mới với bạn!`,
+            read: false,
+            createdAt: serverTimestamp(),
+            photoId: docRef.id
+          });
+        } catch(e){}
+      }
+
+      await sendPushNotification(
+        tokens,
+        'HeartPearl',
+        `📸 ${senderName} vừa chia sẻ một ảnh mới với bạn!`
+      );
+    }
+  } catch (error) {
+    console.error('Error sending push notification for photo:', error);
+  }
+
   return docRef.id;
 };
 
@@ -163,6 +207,44 @@ export const reactToPhoto = async (
   await updateDoc(photoRef, {
     [`reactions.${userId}`]: reactionImageUrl,
   });
+
+  try {
+    const photoSnap = await getDoc(photoRef);
+    if (!photoSnap.exists()) return;
+    const photoOwnerId = photoSnap.data().senderId;
+    if (photoOwnerId === userId) return;
+
+    const senderSnap = await getDoc(doc(db, 'users', userId));
+    const senderName = senderSnap.exists() ? senderSnap.data().displayName || 'Ai đó' : 'Ai đó';
+
+    const ownerSnap = await getDoc(doc(db, 'users', photoOwnerId));
+    if (ownerSnap.exists()) {
+      // Add in-app notification
+      try {
+        await addDoc(collection(db, 'notifications'), {
+          userId: photoOwnerId,
+          senderId: userId,
+          type: 'reaction',
+          title: 'HeartPearl',
+          body: `❤️ ${senderName} vừa thả một ảnh selfie vào ảnh của bạn!`,
+          read: false,
+          createdAt: serverTimestamp(),
+          photoId
+        });
+      } catch(e){}
+
+      const token = ownerSnap.data().fcmToken;
+      if (token) {
+        await sendPushNotification(
+          [token],
+          'HeartPearl',
+          `❤️ ${senderName} vừa thả một ảnh selfie vào ảnh của bạn!`
+        );
+      }
+    }
+  } catch (e) {
+    console.error(e);
+  }
 };
 
 // ── Mark as Seen ─────────────────────────────
@@ -186,4 +268,42 @@ export const textReactToPhoto = async (
   await updateDoc(photoRef, {
     [`textReactions.${userId}`]: message,
   });
+
+  try {
+    const photoSnap = await getDoc(photoRef);
+    if (!photoSnap.exists()) return;
+    const photoOwnerId = photoSnap.data().senderId;
+    if (photoOwnerId === userId) return;
+
+    const senderSnap = await getDoc(doc(db, 'users', userId));
+    const senderName = senderSnap.exists() ? senderSnap.data().displayName || 'Ai đó' : 'Ai đó';
+
+    const ownerSnap = await getDoc(doc(db, 'users', photoOwnerId));
+    if (ownerSnap.exists()) {
+      // Add in-app notification
+      try {
+        await addDoc(collection(db, 'notifications'), {
+          userId: photoOwnerId,
+          senderId: userId,
+          type: 'message',
+          title: 'HeartPearl',
+          body: `💬 ${senderName}: ${message}`,
+          read: false,
+          createdAt: serverTimestamp(),
+          photoId
+        });
+      } catch(e){}
+
+      const token = ownerSnap.data().fcmToken;
+      if (token) {
+        await sendPushNotification(
+          [token],
+          'HeartPearl',
+          `💬 ${senderName}: ${message}`
+        );
+      }
+    }
+  } catch (e) {
+    console.error(e);
+  }
 };

@@ -14,6 +14,7 @@ import { RootStackParamList } from '../types';
 import PhotoViewerScreen from '../screens/main/PhotoViewerScreen';
 import ChatScreen from '../screens/main/ChatScreen';
 import ChatListScreen from '../screens/main/ChatListScreen';
+import NotificationsScreen from '../screens/main/NotificationsScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -70,6 +71,7 @@ export default function RootNavigator() {
             />
             <Stack.Screen name="Chat" component={ChatScreen} />
             <Stack.Screen name="ChatList" component={ChatListScreen} />
+            <Stack.Screen name="Notifications" component={NotificationsScreen} />
           </>
         ) : (
           <Stack.Screen name="Auth" component={AuthNavigator} />

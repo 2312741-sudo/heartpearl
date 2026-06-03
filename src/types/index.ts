@@ -73,6 +73,7 @@ export type MainTabParamList = {
   Friends: undefined;
   History: undefined;
   Profile: undefined;
+  Notifications: undefined;
 };
 
 export type RootStackParamList = {
@@ -82,4 +83,5 @@ export type RootStackParamList = {
   Camera: undefined;
   Chat: { friendId: string; friendName: string; friendAvatar?: string };
   ChatList: undefined;
+  Notifications: undefined;
 };

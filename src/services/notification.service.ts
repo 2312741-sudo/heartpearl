@@ -51,3 +51,34 @@ export async function registerForPushNotificationsAsync(): Promise<string | unde
 
   return token;
 }
+
+export async function sendPushNotification(
+  expoPushTokens: string[],
+  title: string,
+  body: string,
+  data: any = {}
+) {
+  if (!expoPushTokens || expoPushTokens.length === 0) return;
+
+  const messages = expoPushTokens.map((token) => ({
+    to: token,
+    sound: 'default',
+    title,
+    body,
+    data,
+  }));
+
+  try {
+    await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Accept-encoding': 'gzip, deflate',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(messages),
+    });
+  } catch (error) {
+    console.error('Error sending push notification:', error);
+  }
+}
