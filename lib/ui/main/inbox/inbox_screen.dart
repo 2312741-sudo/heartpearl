@@ -46,6 +46,8 @@ class InboxScreen extends ConsumerWidget {
               senderName: latest.senderUser?.displayName ?? latest.senderUser?.username ?? 'Bạn bè',
               isMirrored: latest.isMirrored,
             );
+          } else {
+            WidgetService.clearWidget();
           }
           if (photos.isEmpty) {
             return Center(

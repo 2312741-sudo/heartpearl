@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:video_player/video_player.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'selfie_reaction_modal.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_dimens.dart';
 import '../../../core/constants/app_typography.dart';
@@ -30,7 +30,6 @@ class PhotoViewerScreen extends ConsumerStatefulWidget {
 
 class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
   VideoPlayerController? _videoController;
-  final _picker = ImagePicker();
   final _textReactionController = TextEditingController();
 
   bool _isPlaying = true;
@@ -44,18 +43,19 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.photo.isVideo) {
-      _initVideo();
+    if (widget.photo.isVideo && widget.photo.videoUrl != null) {
+      _initVideo(widget.photo.videoUrl!);
     }
   }
 
-  Future<void> _initVideo() async {
-    final url = widget.photo.videoUrl ?? widget.photo.imageUrl;
+  Future<void> _initVideo(String url) async {
     _videoController = VideoPlayerController.networkUrl(Uri.parse(url));
-    await _videoController!.initialize();
-    _videoController!.setLooping(true);
-    _videoController!.play();
-    if (mounted) setState(() {});
+    try {
+      await _videoController!.initialize();
+      await _videoController!.setLooping(true);
+      await _videoController!.play();
+      if (mounted) setState(() {});
+    } catch (_) {}
   }
 
   @override
@@ -65,28 +65,27 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
     super.dispose();
   }
 
-  // Handle Selfie Reaction
+  // Handle Selfie Reaction with HeartPearl native camera algorithm
   Future<void> _handleSelfieReact() async {
     final user = ref.read(userProfileProvider).value;
     if (user == null) return;
 
     HapticHelper.medium();
-    final picked = await _picker.pickImage(
-      source: ImageSource.camera,
-      preferredCameraDevice: CameraDevice.front,
-      maxWidth: 500,
-      maxHeight: 500,
-      imageQuality: 80,
+    final capturedPath = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const SelfieReactionModal(),
     );
 
-    if (picked == null) return;
+    if (capturedPath == null) return;
 
     setState(() => _isReacting = true);
     final photoService = ref.read(photoServiceProvider);
 
     try {
       final selfieUrl = await photoService.uploadPhoto(
-        file: File(picked.path),
+        file: File(capturedPath),
         userId: user.uid,
       );
 

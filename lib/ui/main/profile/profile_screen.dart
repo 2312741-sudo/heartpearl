@@ -687,7 +687,7 @@ class ProfileScreen extends ConsumerWidget {
               Text('• Quyền làm chủ dữ liệu: Bạn có thể cập nhật hoặc xóa vĩnh viễn tài khoản bất kỳ lúc nào.'),
               SizedBox(height: 14),
               Text(
-                'Xem chi tiết chính sách trực tuyến:\nhttps://2312741-sudo.github.io/heartpearl/privacy-policy.html',
+                'Xem chi tiết chính sách trực tuyến:\nhttps://tamchau-865f3.web.app/privacy-policy.html',
                 style: TextStyle(fontSize: 12, color: AppColors.primaryLight, height: 1.4),
               ),
             ],

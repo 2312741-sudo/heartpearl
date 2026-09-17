@@ -56,8 +56,21 @@ class WidgetService {
         name: androidWidgetName,
         iOSName: iOSWidgetName,
       );
-    } catch (e) {
-      // Non-critical, ignore on environments without widget configured
-    }
+    } catch (_) {}
+  }
+
+  /// Clear widget so it never shows old/own photos when no friends photos are present
+  static Future<void> clearWidget() async {
+    try {
+      await HomeWidget.saveWidgetData<String>('latestPhotoUrl', '');
+      await HomeWidget.saveWidgetData<String>('latestPhoto', '');
+      await HomeWidget.saveWidgetData<String>('senderName', 'HeartPearl');
+      await HomeWidget.saveWidgetData<String>('caption', '');
+      await HomeWidget.saveWidgetData<int>('updatedAt', 0);
+      await HomeWidget.updateWidget(
+        name: androidWidgetName,
+        iOSName: iOSWidgetName,
+      );
+    } catch (_) {}
   }
 }

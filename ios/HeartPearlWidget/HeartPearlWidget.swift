@@ -39,7 +39,7 @@ struct HeartPearlTimelineProvider: TimelineProvider {
         let updatedDate = updatedMillis > 0 ? Date(timeIntervalSince1970: updatedMillis / 1000) : Date()
 
         // 1. Try loading from local App Group shared storage (Fastest & Zero Latency)
-        if !localPath.isEmpty && FileManager.default.fileExists(atPath: localPath),
+        if !photoUrlString.isEmpty && !localPath.isEmpty && FileManager.default.fileExists(atPath: localPath),
            let localImage = UIImage(contentsOfFile: localPath) {
             let entry = HeartPearlEntry(
                 date: Date(),

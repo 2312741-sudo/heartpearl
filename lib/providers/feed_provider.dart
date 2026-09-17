@@ -28,6 +28,8 @@ final inboxPhotosProvider = StreamProvider<List<PhotoModel>>((ref) {
         senderName: latest.senderUser?.displayName ?? latest.senderUser?.username ?? 'Bạn bè',
         isMirrored: latest.isMirrored,
       );
+    } else {
+      WidgetService.clearWidget();
     }
     return photos;
   });
