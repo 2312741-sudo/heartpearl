@@ -10,6 +10,9 @@ import AVFoundation
   ) -> Bool {
     let result = super.application(application, didFinishLaunchingWithOptions: launchOptions)
 
+    // Register for remote notifications to enable silent APNs token for seamless Phone Auth
+    application.registerForRemoteNotifications()
+
     if let controller = window?.rootViewController as? FlutterViewController {
       // 1. Auth Config Channel
       let authChannel = FlutterMethodChannel(name: "com.heartpearl.app/auth_config", binaryMessenger: controller.binaryMessenger)

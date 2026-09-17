@@ -1,6 +1,4 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -111,22 +109,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _handleGoogleSignIn() async {
-    // Check if Google Sign-In is configured on iOS to prevent native SDK abort
-    if (Platform.isIOS) {
-      const channel = MethodChannel('com.heartpearl.app/auth_config');
-      try {
-        final isConfigured = await channel.invokeMethod<bool>('isGoogleSignInConfigured');
-        if (isConfigured == false) {
-          if (!mounted) return;
-          _showConfigRequiredDialog(
-            title: 'Cần kích hoạt Google Sign-In',
-            message: 'Firebase chưa có cấu hình Google Sign-In (CLIENT_ID) cho phiên bản iOS.\n\n👉 Vui lòng vào Firebase Console > Authentication > Sign-in method và bật Google provider, sau đó tải GoogleService-Info.plist mới nhất.',
-          );
-          return;
-        }
-      } catch (_) {}
-    }
-
     setState(() => _isLoading = true);
     final authService = ref.read(authServiceProvider);
     try {

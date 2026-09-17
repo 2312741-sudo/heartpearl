@@ -33,8 +33,13 @@
 			<array>
 				<string>com.heartpearl.heartpearl</string>
 				<string>app-1-592218033486-ios-e1ccfe85d2433b5a60a21f</string>
+				<string>com.googleusercontent.apps.592218033486-8j6s0j3h9acvep29p70m56chb0dcfqtr</string>
 			</array>
 		</dict>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>

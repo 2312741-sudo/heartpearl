@@ -135,7 +135,10 @@ class AuthService {
   // ==========================================
 
   Future<UserCredential?> signInWithGoogle() async {
-    final GoogleSignIn googleSignIn = GoogleSignIn(scopes: ['email']);
+    final GoogleSignIn googleSignIn = GoogleSignIn(
+      scopes: ['email'],
+      clientId: '592218033486-8j6s0j3h9acvep29p70m56chb0dcfqtr.apps.googleusercontent.com',
+    );
     final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
     if (googleUser == null) {
       // User cancelled
