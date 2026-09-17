@@ -17,6 +17,7 @@ import '../../../providers/feed_provider.dart';
 import '../../../providers/settings_provider.dart';
 import '../../common/frosted_container.dart';
 import '../../common/gradient_button.dart';
+import '../../common/media_thumbnail.dart';
 import '../../common/user_avatar.dart';
 
 class PhotoViewerScreen extends ConsumerStatefulWidget {
@@ -326,33 +327,50 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
           // Full Screen Media
           Positioned.fill(
             child: widget.photo.isVideo
-                ? (_videoController != null && _videoController!.value.isInitialized
-                    ? GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _isPlaying = !_isPlaying;
-                            if (_isPlaying) {
-                              _videoController!.play();
-                            } else {
-                              _videoController!.pause();
-                            }
-                          });
-                        },
-                        child: Transform.scale(
-                          scaleX: widget.photo.isMirrored ? -1.0 : 1.0,
-                          child: FittedBox(
-                            fit: BoxFit.cover,
-                            child: SizedBox(
-                              width: _videoController!.value.size.width,
-                              height: _videoController!.value.size.height,
-                              child: VideoPlayer(_videoController!),
+                ? Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // Instant thumbnail background while video loads
+                      MediaThumbnail(
+                        photo: widget.photo,
+                        fit: BoxFit.cover,
+                        showPlayBadge: false,
+                        memCacheWidth: 1080,
+                      ),
+
+                      if (_videoController != null && _videoController!.value.isInitialized)
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _isPlaying = !_isPlaying;
+                              if (_isPlaying) {
+                                _videoController!.play();
+                              } else {
+                                _videoController!.pause();
+                              }
+                            });
+                          },
+                          child: Transform.scale(
+                            scaleX: widget.photo.isMirrored ? -1.0 : 1.0,
+                            child: FittedBox(
+                              fit: BoxFit.cover,
+                              child: SizedBox(
+                                width: _videoController!.value.size.width,
+                                height: _videoController!.value.size.height,
+                                child: VideoPlayer(_videoController!),
+                              ),
                             ),
                           ),
+                        )
+                      else
+                        const Center(
+                          child: CircularProgressIndicator(
+                            color: AppColors.primary,
+                            strokeWidth: 2.5,
+                          ),
                         ),
-                      )
-                    : const Center(
-                        child: CircularProgressIndicator(color: AppColors.primary),
-                      ))
+                    ],
+                  )
                 : Transform.scale(
                     scaleX: widget.photo.isMirrored ? -1.0 : 1.0,
                     child: CachedNetworkImage(

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_dimens.dart';
@@ -11,6 +10,7 @@ import '../../../core/utils/haptic_helper.dart';
 import '../../../models/photo_model.dart';
 import '../../../providers/feed_provider.dart';
 import '../../../providers/settings_provider.dart';
+import '../../common/media_thumbnail.dart';
 import '../viewer/photo_viewer_screen.dart';
 
 class HistoryScreen extends ConsumerWidget {
@@ -120,12 +120,10 @@ class HistoryScreen extends ConsumerWidget {
                             child: Stack(
                               fit: StackFit.expand,
                               children: [
-                                Transform.scale(
-                                  scaleX: photo.isMirrored ? -1.0 : 1.0,
-                                  child: CachedNetworkImage(
-                                    imageUrl: photo.imageUrl,
-                                    fit: BoxFit.cover,
-                                  ),
+                                MediaThumbnail(
+                                  photo: photo,
+                                  fit: BoxFit.cover,
+                                  showPlayBadge: true,
                                 ),
                                 if (reactionCount > 0)
                                   Positioned(

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_dimens.dart';
@@ -13,6 +12,7 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/feed_provider.dart';
 import '../../../providers/settings_provider.dart';
 import '../../../services/widget_service.dart';
+import '../../common/media_thumbnail.dart';
 import '../viewer/photo_viewer_screen.dart';
 
 class InboxScreen extends ConsumerWidget {
@@ -163,20 +163,11 @@ class _PhotoCard extends ConsumerWidget {
             fit: StackFit.expand,
             children: [
               // Photo or Video Thumbnail
-              Transform.scale(
-                scaleX: photo.isMirrored ? -1.0 : 1.0,
-                child: CachedNetworkImage(
-                  imageUrl: photo.imageUrl,
-                  fit: BoxFit.cover,
-                  memCacheWidth: 400,
-                  fadeInDuration: const Duration(milliseconds: 80),
-                  placeholder: (context, url) => Container(
-                    color: isDark ? AppColors.darkSurfaceLight : AppColors.lightSurfaceLight,
-                  ),
-                  errorWidget: (context, url, error) => const Center(
-                    child: Icon(LucideIcons.image, color: Colors.white30),
-                  ),
-                ),
+              MediaThumbnail(
+                photo: photo,
+                fit: BoxFit.cover,
+                showPlayBadge: false,
+                memCacheWidth: 400,
               ),
 
               // Filter color overlay if enabled

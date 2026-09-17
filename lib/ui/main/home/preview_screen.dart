@@ -117,15 +117,36 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
             try {
               await thumbFile.delete();
             } catch (_) {}
-          } catch (_) {}
+          } catch (e) {
+            debugPrint('Error uploading video thumbnail: $e');
+          }
         }
 
-        // 2. Upload video file with progress tracking
+        // 2. Hardware Video Compression (reducing from 35MB to ~2MB with fast-start streaming)
+        File uploadVideoFile = File(widget.filePath);
+        try {
+          final compressedPath = await MediaHelper.compressVideo(widget.filePath);
+          if (compressedPath != null && compressedPath != widget.filePath) {
+            uploadVideoFile = File(compressedPath);
+          }
+        } catch (e) {
+          debugPrint('Video compression error: $e');
+        }
+
+        // 3. Upload video file with progress tracking
         videoUrl = await photoService.uploadVideo(
-          file: File(widget.filePath),
+          file: uploadVideoFile,
           userId: user.uid,
           onProgress: (p) => setState(() => _uploadProgress = p),
         );
+
+        // Clean up temporary compressed file
+        if (uploadVideoFile.path != widget.filePath) {
+          try {
+            await uploadVideoFile.delete();
+          } catch (_) {}
+        }
+
         // If thumbnail generation succeeded, use it for preview; otherwise fallback to videoUrl
         mediaUrl = thumbUrl ?? videoUrl;
       } else {

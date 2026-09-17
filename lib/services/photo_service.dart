@@ -63,7 +63,10 @@ class PhotoService {
 
     final uploadTask = ref.putFile(
       file,
-      SettableMetadata(contentType: 'video/mp4'),
+      SettableMetadata(
+        contentType: 'video/mp4',
+        cacheControl: 'public, max-age=31536000, immutable',
+      ),
     );
 
     if (onProgress != null) {
