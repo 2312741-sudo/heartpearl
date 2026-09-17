@@ -95,15 +95,18 @@ class WelcomeScreen extends ConsumerWidget {
                 children: [
                   // Logo icon
                   Container(
-                    width: 64,
-                    height: 64,
+                    width: 72,
+                    height: 72,
                     decoration: BoxDecoration(
-                      gradient: AppColors.primaryGradient,
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(22),
                       boxShadow: AppDimens.glowShadow(AppColors.primary, opacity: 0.5),
                     ),
-                    child: const Center(
-                      child: Text('📸', style: TextStyle(fontSize: 32)),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(22),
+                      child: Image.asset(
+                        'assets/icon/app_icon.png',
+                        fit: BoxFit.cover,
+                      ),
                     ),
                   ).animate().scale(delay: 200.ms, duration: 400.ms),
 

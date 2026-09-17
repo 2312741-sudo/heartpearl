@@ -26,6 +26,12 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>HeartPearl cần quyền truy cập máy ảnh để chụp và gửi ảnh khoảnh khắc cho bạn bè.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>HeartPearl cần quyền micrô để quay video với âm thanh.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>HeartPearl cần quyền truy cập thư viện ảnh để bạn chọn ảnh đại diện và lưu ảnh.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -66,11 +72,5 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>NSCameraUsageDescription</key>
-	<string>HeartPearl cần quyền truy cập máy ảnh để chụp và gửi ảnh khoảnh khắc cho bạn bè.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>HeartPearl cần quyền micrô để quay video với âm thanh.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>HeartPearl cần quyền truy cập thư viện ảnh để bạn chọn ảnh đại diện và lưu ảnh.</string>
 </dict>
 </plist>
