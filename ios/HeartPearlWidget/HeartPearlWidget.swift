@@ -208,8 +208,13 @@ struct HeartPearlWidget: Widget {
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: HeartPearlTimelineProvider()) { entry in
-            HeartPearlWidgetEntryView(entry: entry)
-                .containerBackground(Color(red: 18/255, green: 7/255, blue: 22/255), for: .widget)
+            if #available(iOS 17.0, *) {
+                HeartPearlWidgetEntryView(entry: entry)
+                    .containerBackground(Color(red: 18/255, green: 7/255, blue: 22/255), for: .widget)
+            } else {
+                HeartPearlWidgetEntryView(entry: entry)
+                    .background(Color(red: 18/255, green: 7/255, blue: 22/255))
+            }
         }
         .configurationDisplayName("HeartPearl")
         .description("Xem ảnh và khoảnh khắc tức thì từ bạn bè ngay trên màn hình chính.")
