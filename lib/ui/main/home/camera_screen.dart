@@ -12,6 +12,7 @@ import '../../../core/utils/camera_filters.dart';
 import '../../../core/utils/haptic_helper.dart';
 import '../../../providers/chat_provider.dart';
 import '../../common/app_badge.dart';
+import '../../../core/utils/media_helper.dart';
 import '../../common/frosted_container.dart';
 import '../chat/chat_list_screen.dart';
 import 'preview_screen.dart';
@@ -35,6 +36,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   double _maxZoom = 4.0;
   double _baseScale = 1.0;
   bool _isFlashOn = false;
+  bool _isScreenFlashing = false;
 
   // Beauty Filter
   BeautyFilter _selectedFilter = BeautyFilter.all.first;
@@ -238,8 +240,13 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
     final isCurrentlyFront =
         _controller?.description.lensDirection == CameraLensDirection.front;
-    final targetCamera = isCurrentlyFront ? _mainBackCamera : _frontCamera;
+    if (!isCurrentlyFront && _isFlashOn) {
+      try {
+        await _controller?.setFlashMode(FlashMode.off);
+      } catch (_) {}
+    }
 
+    final targetCamera = isCurrentlyFront ? _mainBackCamera : _frontCamera;
     await _initCameraController(targetCamera);
   }
 
@@ -331,12 +338,31 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     if (_controller == null || !_controller!.value.isInitialized) return;
     HapticHelper.selection();
     final nextFlash = !_isFlashOn;
+    final isFront =
+        _controller?.description.lensDirection == CameraLensDirection.front;
+
+    if (isFront) {
+      // Front camera Retina Screen Flash toggle
+      setState(() => _isFlashOn = nextFlash);
+      return;
+    }
+
+    // Back camera hardware torch / flash
     try {
       await _controller!.setFlashMode(
         nextFlash ? FlashMode.torch : FlashMode.off,
       );
       setState(() => _isFlashOn = nextFlash);
-    } catch (_) {}
+    } catch (_) {
+      try {
+        await _controller!.setFlashMode(
+          nextFlash ? FlashMode.always : FlashMode.off,
+        );
+        setState(() => _isFlashOn = nextFlash);
+      } catch (_) {
+        setState(() => _isFlashOn = nextFlash);
+      }
+    }
   }
 
   // Unified Pointer Gestures (Anti-stuck, zero lag)
@@ -392,19 +418,38 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       return;
     }
     _isProcessing = true;
+    final isFront =
+        _controller?.description.lensDirection == CameraLensDirection.front;
 
     try {
       HapticHelper.medium();
       _shutterAnimController
           .forward()
           .then((_) => _shutterAnimController.reverse());
+
+      // Retina Screen Flash for front camera selfie in the dark
+      if (_isFlashOn && isFront) {
+        setState(() => _isScreenFlashing = true);
+        await Future.delayed(const Duration(milliseconds: 180));
+      }
+
       final xFile = await _controller!.takePicture();
+
+      if (_isScreenFlashing) {
+        setState(() => _isScreenFlashing = false);
+      }
+
+      // Mirror front camera photo file on disk so saved image matches live mirror preview 100%
+      String finalPath = xFile.path;
+      if (isFront) {
+        finalPath = await MediaHelper.mirrorFrontCameraPhoto(xFile.path);
+      }
 
       if (mounted) {
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (context) => PreviewScreen(
-              filePath: xFile.path,
+              filePath: finalPath,
               isVideo: false,
               isMirrored: false,
               filter: _selectedFilter,
@@ -414,6 +459,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       }
     } catch (e) {
       debugPrint('Take picture error: $e');
+      if (_isScreenFlashing && mounted) {
+        setState(() => _isScreenFlashing = false);
+      }
     } finally {
       _isProcessing = false;
     }
@@ -534,6 +582,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   @override
   Widget build(BuildContext context) {
     final unreadChats = ref.watch(totalUnreadChatsProvider);
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    final navBarClearance = 80.0 + bottomInset + 16.0;
 
     if (_controller == null || !_controller!.value.isInitialized) {
       return Container(
@@ -546,11 +596,13 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
     return Scaffold(
       backgroundColor: AppColors.black,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            // 1. Top App Bar Controls
+      body: Stack(
+        children: [
+          SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                // 1. Top App Bar Controls
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: AppDimens.spaceLg,
@@ -998,11 +1050,21 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             ),
 
             // Bottom clearance for floating MainScaffold bottom nav bar
-            const SizedBox(height: 88),
+            SizedBox(height: navBarClearance),
           ],
         ),
       ),
-    );
+
+      // Screen Flash Overlay for front camera
+      if (_isScreenFlashing)
+        Positioned.fill(
+          child: Container(
+            color: const Color(0xFFFFFBEA),
+          ),
+        ),
+    ],
+  ),
+);
   }
 
   Widget _buildZoomOption({

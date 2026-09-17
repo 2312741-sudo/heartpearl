@@ -182,101 +182,11 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.black,
-      body: Stack(
-        children: [
-          // Media Preview
-          Positioned.fill(
-            child: widget.isVideo
-                ? (_videoController != null && _videoController!.value.isInitialized
-                    ? Transform.scale(
-                        scaleX: widget.isMirrored ? -1.0 : 1.0,
-                        child: FittedBox(
-                          fit: BoxFit.cover,
-                          child: SizedBox(
-                            width: _videoController!.value.size.width,
-                            height: _videoController!.value.size.height,
-                            child: widget.filter.colorFilter != null
-                                ? ColorFiltered(
-                                    colorFilter: widget.filter.colorFilter!,
-                                    child: VideoPlayer(_videoController!),
-                                  )
-                                : VideoPlayer(_videoController!),
-                          ),
-                        ),
-                      )
-                    : const Center(
-                        child: CircularProgressIndicator(color: AppColors.primary),
-                      ))
-                : Transform.scale(
-                    scaleX: widget.isMirrored ? -1.0 : 1.0,
-                    child: widget.filter.colorFilter != null
-                        ? ColorFiltered(
-                            colorFilter: widget.filter.colorFilter!,
-                            child: Image.file(
-                              File(widget.filePath),
-                              fit: BoxFit.cover,
-                            ),
-                          )
-                        : Image.file(
-                            File(widget.filePath),
-                            fit: BoxFit.cover,
-                          ),
-                  ),
-          ),
-
-          // TikTok Skin-Smoothing & Blemish Softening Diffusion Layer
-          if (widget.filter.blurSigma > 0)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Opacity(
-                  opacity: widget.filter.blurOpacity,
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(
-                      sigmaX: widget.filter.blurSigma,
-                      sigmaY: widget.filter.blurSigma,
-                    ),
-                    child: Container(
-                      color: widget.filter.overlayColor != Colors.transparent
-                          ? widget.filter.overlayColor
-                          : Colors.transparent,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-          // Beauty Filter Color Overlay (when blur is 0 and overlay color is set)
-          if (widget.filter.blurSigma == 0 &&
-              widget.filter.overlayColor != Colors.transparent)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Container(color: widget.filter.overlayColor),
-              ),
-            ),
-
-          // Dark Gradient Vignette
-          Positioned.fill(
-            child: IgnorePointer(
-              child: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Color(0x99000000),
-                      Colors.transparent,
-                      Color(0xCC000000),
-                    ],
-                    stops: [0.0, 0.4, 1.0],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          // Top Cancel Button
-          SafeArea(
-            child: Padding(
+      body: SafeArea(
+        child: Column(
+          children: [
+            // 1. Top Cancel Button & Video Badge
+            Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: AppDimens.spaceLg,
                 vertical: AppDimens.spaceSm,
@@ -320,17 +230,111 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                 ],
               ),
             ),
-          ),
 
-          // Bottom Controls & Captions
-          SafeArea(
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppDimens.spaceLg),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
+            const SizedBox(height: 4),
+
+            // 2. Center 3:4 Media Card (Matches Camera Viewfinder 1:1)
+            Expanded(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: AspectRatio(
+                    aspectRatio: 3 / 4,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(28),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black,
+                          borderRadius: BorderRadius.circular(28),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.15),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            // 2.1 Media (Photo / Video)
+                            widget.isVideo
+                                ? (_videoController != null &&
+                                        _videoController!.value.isInitialized
+                                    ? FittedBox(
+                                        fit: BoxFit.cover,
+                                        child: SizedBox(
+                                          width: _videoController!.value.size.width,
+                                          height: _videoController!.value.size.height,
+                                          child: widget.filter.colorFilter != null
+                                              ? ColorFiltered(
+                                                  colorFilter: widget.filter.colorFilter!,
+                                                  child: VideoPlayer(_videoController!),
+                                                )
+                                              : VideoPlayer(_videoController!),
+                                        ),
+                                      )
+                                    : const Center(
+                                        child: CircularProgressIndicator(
+                                          color: AppColors.primary,
+                                        ),
+                                      ))
+                                : (widget.filter.colorFilter != null
+                                    ? ColorFiltered(
+                                        colorFilter: widget.filter.colorFilter!,
+                                        child: Image.file(
+                                          File(widget.filePath),
+                                          fit: BoxFit.cover,
+                                        ),
+                                      )
+                                    : Image.file(
+                                        File(widget.filePath),
+                                        fit: BoxFit.cover,
+                                      )),
+
+                            // 2.2 TikTok Skin-Smoothing & Blemish Softening Diffusion Layer
+                            if (widget.filter.blurSigma > 0)
+                              Positioned.fill(
+                                child: IgnorePointer(
+                                  child: Opacity(
+                                    opacity: widget.filter.blurOpacity,
+                                    child: BackdropFilter(
+                                      filter: ImageFilter.blur(
+                                        sigmaX: widget.filter.blurSigma,
+                                        sigmaY: widget.filter.blurSigma,
+                                      ),
+                                      child: Container(
+                                        color: widget.filter.overlayColor != Colors.transparent
+                                            ? widget.filter.overlayColor
+                                            : Colors.transparent,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                            // 2.3 Beauty Filter Color Overlay
+                            if (widget.filter.blurSigma == 0 &&
+                                widget.filter.overlayColor != Colors.transparent)
+                              Positioned.fill(
+                                child: IgnorePointer(
+                                  child: Container(color: widget.filter.overlayColor),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // 3. Bottom Controls & Captions
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppDimens.spaceLg),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                     // Caption Field
                     FrostedContainer(
                       borderRadius: AppDimens.radiusXl,
@@ -502,9 +506,9 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                   ],
                 ),
               ),
-            ),
-          ),
-        ],
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
