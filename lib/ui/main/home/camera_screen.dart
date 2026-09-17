@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:camera/camera.dart';
@@ -134,8 +135,11 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     if (_controller == null) return false;
     final isBack =
         _controller!.description.lensDirection == CameraLensDirection.back;
-    if (!isBack) return false;
-    return _minZoom <= 0.7 || _ultraWideCamera != null;
+    if (isBack) {
+      return _minZoom <= 0.7 || _ultraWideCamera != null;
+    } else {
+      return _minZoom < 0.95;
+    }
   }
 
   Future<void> _initCameras() async {
@@ -152,7 +156,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     final prevController = _controller;
     final newController = CameraController(
       description,
-      ResolutionPreset.high,
+      ResolutionPreset.veryHigh,
       enableAudio: true,
     );
 
@@ -169,7 +173,14 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       _minZoom = await newController.getMinZoomLevel();
       final deviceMaxZoom = await newController.getMaxZoomLevel();
       _maxZoom = deviceMaxZoom.clamp(1.0, 4.0);
-      _currentZoom = _minZoom < 1.0 ? 1.0 : _minZoom;
+
+      final isFront = description.lensDirection == CameraLensDirection.front;
+      // On front camera: default to wide selfie (_minZoom, e.g. 0.7x) to avoid zoomed-in face
+      final initialZoom = isFront ? _minZoom : (_minZoom < 1.0 ? 1.0 : _minZoom);
+      try {
+        await newController.setZoomLevel(initialZoom);
+      } catch (_) {}
+      _currentZoom = initialZoom;
       if (mounted) setState(() {});
     } catch (_) {}
   }
@@ -186,12 +197,22 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     await _initCameraController(targetCamera);
   }
 
-  // Set Zoom Level with support for 0.5x Ultra-Wide lens
+  // Set Zoom Level with support for 0.5x / 0.7x Ultra-Wide and Selfie Wide lens
   Future<void> _setZoom(double targetZoom) async {
     if (_controller == null || !_controller!.value.isInitialized) return;
 
     final isBack =
         _controller!.description.lensDirection == CameraLensDirection.back;
+
+    if (!isBack) {
+      // Front camera wide/standard toggle
+      final target = targetZoom <= 0.85 ? _minZoom : 1.0;
+      try {
+        await _controller!.setZoomLevel(target);
+        setState(() => _currentZoom = target);
+      } catch (_) {}
+      return;
+    }
 
     if (targetZoom <= 0.7 && isBack) {
       if (_minZoom <= 0.7) {
@@ -324,6 +345,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
           .forward()
           .then((_) => _shutterAnimController.reverse());
       final xFile = await _controller!.takePicture();
+      final isFront =
+          _controller?.description.lensDirection == CameraLensDirection.front;
 
       if (mounted) {
         Navigator.of(context).push(
@@ -331,7 +354,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             builder: (context) => PreviewScreen(
               filePath: xFile.path,
               isVideo: false,
-              isMirrored: false,
+              isMirrored: isFront,
               filter: _selectedFilter,
             ),
           ),
@@ -428,13 +451,16 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       }
       HapticHelper.success();
 
+      final isFront =
+          _controller?.description.lensDirection == CameraLensDirection.front;
+
       if (mounted) {
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (context) => PreviewScreen(
               filePath: xFile.path,
               isVideo: true,
-              isMirrored: false,
+              isMirrored: isFront,
               filter: _selectedFilter,
             ),
           ),
@@ -500,7 +526,12 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                     child: SizedBox(
                       width: previewW,
                       height: previewH,
-                      child: CameraPreview(_controller!),
+                      child: _selectedFilter.colorFilter != null
+                          ? ColorFiltered(
+                              colorFilter: _selectedFilter.colorFilter!,
+                              child: CameraPreview(_controller!),
+                            )
+                          : CameraPreview(_controller!),
                     ),
                   ),
                 ),
@@ -508,8 +539,30 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             ),
           ),
 
-          // 2. Beauty Filter Color Overlay
-          if (_selectedFilter.overlayColor != Colors.transparent)
+          // 2. TikTok Skin-Smoothing & Blemish Softening Diffusion Layer
+          if (_selectedFilter.blurSigma > 0)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Opacity(
+                  opacity: _selectedFilter.blurOpacity,
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(
+                      sigmaX: _selectedFilter.blurSigma,
+                      sigmaY: _selectedFilter.blurSigma,
+                    ),
+                    child: Container(
+                      color: _selectedFilter.overlayColor != Colors.transparent
+                          ? _selectedFilter.overlayColor
+                          : Colors.transparent,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+          // 3. Beauty Filter Color Overlay (for filters with pure color wash)
+          if (_selectedFilter.blurSigma == 0 &&
+              _selectedFilter.overlayColor != Colors.transparent)
             Positioned.fill(
               child: IgnorePointer(
                 child: Container(color: _selectedFilter.overlayColor),
@@ -623,26 +676,50 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                   borderRadius: AppDimens.radiusFull,
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                   backgroundColor: const Color(0x66000000),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (_hasUltraWide)
-                        _buildZoomOption(
-                          label: '.5',
-                          isSelected: _currentZoom <= 0.7,
-                          onTap: () => _setZoom(0.5),
-                        ),
-                      _buildZoomOption(
-                        label: '1x',
-                        isSelected: _currentZoom > 0.7 && _currentZoom < 1.8,
-                        onTap: () => _setZoom(1.0),
-                      ),
-                      _buildZoomOption(
-                        label: '2x',
-                        isSelected: _currentZoom >= 1.8,
-                        onTap: () => _setZoom(2.0),
-                      ),
-                    ],
+                  child: Builder(
+                    builder: (context) {
+                      final isFront = _controller?.description.lensDirection ==
+                          CameraLensDirection.front;
+                      if (isFront) {
+                        return Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_minZoom < 0.95)
+                              _buildZoomOption(
+                                label: _minZoom <= 0.6 ? '.5' : '.7',
+                                isSelected: _currentZoom <= 0.85,
+                                onTap: () => _setZoom(_minZoom),
+                              ),
+                            _buildZoomOption(
+                              label: '1x',
+                              isSelected: _currentZoom > 0.85,
+                              onTap: () => _setZoom(1.0),
+                            ),
+                          ],
+                        );
+                      }
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_hasUltraWide)
+                            _buildZoomOption(
+                              label: '.5',
+                              isSelected: _currentZoom <= 0.7,
+                              onTap: () => _setZoom(0.5),
+                            ),
+                          _buildZoomOption(
+                            label: '1x',
+                            isSelected: _currentZoom > 0.7 && _currentZoom < 1.8,
+                            onTap: () => _setZoom(1.0),
+                          ),
+                          _buildZoomOption(
+                            label: '2x',
+                            isSelected: _currentZoom >= 1.8,
+                            onTap: () => _setZoom(2.0),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ),
@@ -680,12 +757,25 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                         width: isSelected ? 1.5 : 1,
                       ),
                       child: Center(
-                        child: Text(
-                          filter.name,
-                          style: AppTypography.medium.copyWith(
-                            color: AppColors.white,
-                            fontSize: 13,
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              filter.icon,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              filter.name,
+                              style: AppTypography.medium.copyWith(
+                                color: AppColors.white,
+                                fontSize: 13,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),

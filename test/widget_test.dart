@@ -91,9 +91,11 @@ void main() {
     });
 
     test('BeautyFilter configuration check', () {
-      expect(BeautyFilter.all.length, 4);
+      expect(BeautyFilter.all.length, 6);
       expect(BeautyFilter.all.first.type, BeautyFilterType.normal);
-      expect(BeautyFilter.all[1].type, BeautyFilterType.softGlow);
+      expect(BeautyFilter.all[1].type, BeautyFilterType.smoothSkin);
+      expect(BeautyFilter.all[1].name, 'Cà Mụn');
+      expect(BeautyFilter.all[1].blurSigma > 0, true);
     });
   });
 }

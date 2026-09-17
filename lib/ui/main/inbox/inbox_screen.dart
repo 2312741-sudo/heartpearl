@@ -12,6 +12,7 @@ import '../../../models/photo_model.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/feed_provider.dart';
 import '../../../providers/settings_provider.dart';
+import '../../../services/widget_service.dart';
 import '../viewer/photo_viewer_screen.dart';
 
 class InboxScreen extends ConsumerWidget {
@@ -35,6 +36,12 @@ class InboxScreen extends ConsumerWidget {
       ),
       body: inboxAsync.when(
         data: (photos) {
+          if (photos.isNotEmpty) {
+            WidgetService.updateLatestPhoto(
+              photos.first.imageUrl,
+              caption: photos.first.caption,
+            );
+          }
           if (photos.isEmpty) {
             return Center(
               child: Column(

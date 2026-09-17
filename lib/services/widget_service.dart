@@ -18,12 +18,38 @@ class WidgetService {
   }
 
   /// Update home screen widget with latest received/sent photo
-  static Future<void> updateLatestPhoto(String imageUrl) async {
-    if (imageUrl.isEmpty) return;
+  static Future<void> updateLatestPhoto(
+    String imageUrl, {
+    File? localFile,
+    String? senderName,
+    String? caption,
+    bool isMirrored = false,
+  }) async {
+    if (imageUrl.isEmpty && localFile == null) return;
 
     try {
-      // Save data for widgets
-      await HomeWidget.saveWidgetData<String>('latestPhotoUrl', imageUrl);
+      if (imageUrl.isNotEmpty) {
+        await HomeWidget.saveWidgetData<String>('latestPhotoUrl', imageUrl);
+      }
+      if (senderName != null && senderName.isNotEmpty) {
+        await HomeWidget.saveWidgetData<String>('senderName', senderName);
+      }
+      if (caption != null && caption.isNotEmpty) {
+        await HomeWidget.saveWidgetData<String>('caption', caption);
+      }
+      await HomeWidget.saveWidgetData<bool>('isMirrored', isMirrored);
+      await HomeWidget.saveWidgetData<int>(
+        'updatedAt',
+        DateTime.now().millisecondsSinceEpoch,
+      );
+
+      // Save local file directly into App Group Shared Container if available
+      if (localFile != null && await localFile.exists()) {
+        try {
+          final bytes = await localFile.readAsBytes();
+          await HomeWidget.saveFile('latestPhoto', bytes, extension: 'jpg');
+        } catch (_) {}
+      }
 
       // Trigger widget update for iOS & Android
       await HomeWidget.updateWidget(

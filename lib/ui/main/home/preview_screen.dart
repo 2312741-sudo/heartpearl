@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
@@ -14,6 +15,7 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/feed_provider.dart';
 import '../../../providers/friends_provider.dart';
 import '../../../providers/settings_provider.dart';
+import '../../../services/widget_service.dart';
 import '../../common/frosted_container.dart';
 import '../../common/gradient_button.dart';
 import '../../common/user_avatar.dart';
@@ -129,6 +131,18 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
         filter: widget.filter.type != BeautyFilterType.normal,
       );
 
+      // Save to Home Screen Widget directly
+      if (!widget.isVideo) {
+        WidgetService.updateLatestPhoto(
+          mediaUrl,
+          localFile: File(widget.filePath),
+          caption: _captionController.text.trim().isNotEmpty
+              ? _captionController.text.trim()
+              : null,
+          isMirrored: widget.isMirrored,
+        );
+      }
+
       HapticHelper.success();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -181,7 +195,12 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                           child: SizedBox(
                             width: _videoController!.value.size.width,
                             height: _videoController!.value.size.height,
-                            child: VideoPlayer(_videoController!),
+                            child: widget.filter.colorFilter != null
+                                ? ColorFiltered(
+                                    colorFilter: widget.filter.colorFilter!,
+                                    child: VideoPlayer(_videoController!),
+                                  )
+                                : VideoPlayer(_videoController!),
                           ),
                         ),
                       )
@@ -190,15 +209,45 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                       ))
                 : Transform.scale(
                     scaleX: widget.isMirrored ? -1.0 : 1.0,
-                    child: Image.file(
-                      File(widget.filePath),
-                      fit: BoxFit.cover,
-                    ),
+                    child: widget.filter.colorFilter != null
+                        ? ColorFiltered(
+                            colorFilter: widget.filter.colorFilter!,
+                            child: Image.file(
+                              File(widget.filePath),
+                              fit: BoxFit.cover,
+                            ),
+                          )
+                        : Image.file(
+                            File(widget.filePath),
+                            fit: BoxFit.cover,
+                          ),
                   ),
           ),
 
-          // Beauty Filter Overlay
-          if (widget.filter.overlayColor != Colors.transparent)
+          // TikTok Skin-Smoothing & Blemish Softening Diffusion Layer
+          if (widget.filter.blurSigma > 0)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Opacity(
+                  opacity: widget.filter.blurOpacity,
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(
+                      sigmaX: widget.filter.blurSigma,
+                      sigmaY: widget.filter.blurSigma,
+                    ),
+                    child: Container(
+                      color: widget.filter.overlayColor != Colors.transparent
+                          ? widget.filter.overlayColor
+                          : Colors.transparent,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+          // Beauty Filter Color Overlay (when blur is 0 and overlay color is set)
+          if (widget.filter.blurSigma == 0 &&
+              widget.filter.overlayColor != Colors.transparent)
             Positioned.fill(
               child: IgnorePointer(
                 child: Container(color: widget.filter.overlayColor),
