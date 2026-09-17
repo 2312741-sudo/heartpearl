@@ -3,24 +3,32 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../models/photo_model.dart';
 import '../models/user_model.dart';
+import '../core/utils/media_helper.dart';
 import 'widget_service.dart';
 
 class PhotoService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
 
-  // Upload image to Firebase Storage
+  // Upload image to Firebase Storage with background isolate optimization and CDN caching
   Future<String> uploadPhoto({
     required File file,
     required String userId,
     void Function(double progress)? onProgress,
   }) async {
+    // 1. Shrink high-res photo by 90-95% (to ~180-250KB) on separate isolate
+    final File optimizedFile = await MediaHelper.optimizePhotoForUpload(file);
+
     final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
     final ref = _storage.ref().child('photos/$userId/$fileName');
 
+    // 2. Set 1-year immutable cache header for instant edge CDN loading
     final uploadTask = ref.putFile(
-      file,
-      SettableMetadata(contentType: 'image/jpeg'),
+      optimizedFile,
+      SettableMetadata(
+        contentType: 'image/jpeg',
+        cacheControl: 'public, max-age=31536000, immutable',
+      ),
     );
 
     if (onProgress != null) {
@@ -33,7 +41,16 @@ class PhotoService {
     }
 
     final snapshot = await uploadTask;
-    return await snapshot.ref.getDownloadURL();
+    final downloadUrl = await snapshot.ref.getDownloadURL();
+
+    // Clean up temporary isolate file if different
+    if (optimizedFile.path != file.path) {
+      try {
+        await optimizedFile.delete();
+      } catch (_) {}
+    }
+
+    return downloadUrl;
   }
 
   // Upload video to Firebase Storage

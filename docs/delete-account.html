@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Yêu cầu Xóa tài khoản | Account Deletion Request - HeartPearl</title>
+  <style>
+    :root {
+      --primary: #C42E5C;
+      --primary-light: #E55080;
+      --error: #E74C3C;
+      --bg: #0F0814;
+      --card-bg: #1B0E24;
+      --text: #F6EEFF;
+      --text-muted: #A88AA3;
+      --border: rgba(255, 255, 255, 0.1);
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.6;
+      padding: 32px 16px;
+    }
+    .container {
+      max-width: 840px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border-radius: 24px;
+      border: 1px solid var(--border);
+      padding: 40px 32px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 36px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo {
+      font-size: 38px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      background: linear-gradient(135deg, #FF80A0, #C42E5C);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(231, 76, 60, 0.2);
+      color: #FF7675;
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 6px;
+    }
+    .lang-toggle {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin: 20px 0;
+    }
+    .lang-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 18px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+    .lang-btn.active {
+      background: var(--primary);
+      border-color: var(--primary-light);
+      color: #fff;
+    }
+    h2 {
+      color: #fff;
+      font-size: 22px;
+      margin: 28px 0 14px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    h3 {
+      color: var(--primary-light);
+      font-size: 17px;
+      margin: 18px 0 8px 0;
+    }
+    p, li {
+      color: var(--text-muted);
+      font-size: 15px;
+      margin-bottom: 12px;
+    }
+    ul, ol {
+      padding-left: 24px;
+      margin-bottom: 16px;
+    }
+    li {
+      margin-bottom: 8px;
+    }
+    .steps-box {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      padding: 20px;
+      border-radius: 16px;
+      margin: 20px 0;
+    }
+    .step-item {
+      display: flex;
+      gap: 14px;
+      margin-bottom: 14px;
+      align-items: flex-start;
+    }
+    .step-item:last-child { margin-bottom: 0; }
+    .step-number {
+      background: var(--primary);
+      color: #fff;
+      font-weight: bold;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .step-text {
+      color: var(--text);
+      font-size: 15px;
+    }
+    .warning-box {
+      background: rgba(231, 76, 60, 0.12);
+      border: 1px solid rgba(231, 76, 60, 0.35);
+      padding: 18px 22px;
+      border-radius: 16px;
+      margin: 24px 0;
+    }
+    .warning-box strong {
+      color: #FF7675;
+      display: block;
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+    .form-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      padding: 24px;
+      border-radius: 18px;
+      margin: 24px 0;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group label {
+      display: block;
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+    .form-group input, .form-group textarea {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      color: #fff;
+      font-size: 15px;
+      outline: none;
+      font-family: inherit;
+    }
+    .form-group input:focus, .form-group textarea:focus {
+      border-color: var(--primary-light);
+    }
+    .submit-btn {
+      display: inline-block;
+      width: 100%;
+      background: linear-gradient(135deg, var(--error), #C0392B);
+      color: #fff;
+      border: none;
+      padding: 14px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 16px;
+      cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+      transition: opacity 0.2s;
+    }
+    .submit-btn:hover { opacity: 0.9; }
+    .footer {
+      text-align: center;
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+    .footer a {
+      color: var(--primary-light);
+      text-decoration: none;
+    }
+    .footer a:hover {
+      text-decoration: underline;
+    }
+    @media (max-width: 600px) {
+      .container { padding: 24px 18px; }
+      .logo { font-size: 30px; }
+      h2 { font-size: 19px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">HeartPearl</div>
+      <div class="badge">Apple App Store Guideline 5.1.1(v) - Account Deletion</div>
+      <div class="lang-toggle">
+        <button class="lang-btn active" onclick="switchLang('vi')">🇻🇳 Tiếng Việt</button>
+        <button class="lang-btn" onclick="switchLang('en')">🇺🇸 English</button>
+      </div>
+    </div>
+
+    <!-- PHIÊN BẢN TIẾNG VIỆT -->
+    <div id="content-vi">
+      <p>Trang web này cung cấp hướng dẫn và tiếp nhận yêu cầu xóa tài khoản HeartPearl theo đúng tiêu chuẩn bắt buộc của <strong>Apple App Store Review Guidelines (Điều khoản 5.1.1(v))</strong>.</p>
+
+      <div class="warning-box">
+        <strong>⚠️ Cảnh báo quan trọng: Hành động xóa tài khoản không thể hoàn tác!</strong>
+        Khi tài khoản của bạn bị xóa, toàn bộ dữ liệu sau đây sẽ bị xóa vĩnh viễn khỏi toàn bộ hệ thống máy chủ HeartPearl và không thể khôi phục:
+        <ul style="margin-top: 8px; margin-bottom: 0;">
+          <li>Tất cả ảnh và video khoảnh khắc bạn đã đăng và lưu trữ.</li>
+          <li>Hồ sơ cá nhân, tên người dùng (@username), số điện thoại, email và ảnh đại diện.</li>
+          <li>Danh sách bạn bè và mọi lời mời kết bạn (đã gửi hoặc nhận).</li>
+          <li>Lịch sử tin nhắn trò chuyện và ảnh selfie cảm xúc.</li>
+          <li>Thông tin xác thực tài khoản trên Firebase Authentication và dữ liệu widget trên thiết bị.</li>
+        </ul>
+      </div>
+
+      <h2>Cách 1: Xóa trực tiếp trong Ứng dụng (Nhanh chóng & Tức thì)</h2>
+      <p>Nếu bạn vẫn đang cài đặt ứng dụng HeartPearl trên điện thoại, bạn có thể tự xóa tài khoản ngay lập tức với 4 bước đơn giản:</p>
+      
+      <div class="steps-box">
+        <div class="step-item">
+          <div class="step-number">1</div>
+          <div class="step-text">Mở ứng dụng <strong>HeartPearl</strong> và chuyển sang tab <strong>Hồ sơ (Profile)</strong> ở góc dưới bên phải.</div>
+        </div>
+        <div class="step-item">
+          <div class="step-number">2</div>
+          <div class="step-text">Cuộn xuống phần quản lý tài khoản và bấm vào <strong>"Xóa tài khoản"</strong> (có biểu tượng thùng rác màu đỏ).</div>
+        </div>
+        <div class="step-item">
+          <div class="step-number">3</div>
+          <div class="step-text">Đọc kỹ các cảnh báo về dữ liệu và bấm <strong>"Xác nhận xóa"</strong>.</div>
+        </div>
+        <div class="step-item">
+          <div class="step-number">4</div>
+          <div class="step-text">Hệ thống sẽ ngay lập tức dọn sạch dữ liệu và đưa bạn trở về màn hình ban đầu.</div>
+        </div>
+      </div>
+
+      <h2>Cách 2: Gửi Yêu cầu Xóa Trực tuyến (Khi không còn cài app)</h2>
+      <p>Nếu bạn đã gỡ ứng dụng, mất thiết bị hoặc không thể đăng nhập, vui lòng điền thông tin dưới đây để gửi yêu cầu xóa tài khoản cho đội ngũ quản trị. Yêu cầu của bạn sẽ được xử lý hoàn tất trong vòng <strong>24 đến 48 giờ làm việc</strong>.</p>
+
+      <div class="form-card">
+        <form onsubmit="handleWebSubmit(event, 'vi')">
+          <div class="form-group">
+            <label for="username_vi">Tên người dùng (@username):</label>
+            <input type="text" id="username_vi" placeholder="ví dụ: @tamchau" required>
+          </div>
+          <div class="form-group">
+            <label for="identifier_vi">Số điện thoại hoặc Email đã đăng ký:</label>
+            <input type="text" id="identifier_vi" placeholder="ví dụ: +84912345678 hoặc email@example.com" required>
+          </div>
+          <div class="form-group">
+            <label for="reason_vi">Lý do yêu cầu xóa (không bắt buộc):</label>
+            <textarea id="reason_vi" rows="3" placeholder="Nhập lý do hoặc thông tin xác minh bổ sung nếu có"></textarea>
+          </div>
+          <button type="submit" class="submit-btn">Gửi Yêu Cầu Xóa Tài Khoản Vĩnh Viễn</button>
+        </form>
+      </div>
+
+      <p style="text-align: center; margin-top: 16px;">
+        Hoặc gửi email trực tiếp tới: <a href="mailto:contact.heartpearl@gmail.com?subject=[HeartPearl]%20Yeu%20cau%20xoa%20tai%20khoan" style="color: var(--primary-light); font-weight: bold;">contact.heartpearl@gmail.com</a>
+      </p>
+    </div>
+
+    <!-- PHIÊN BẢN TIẾNG ANH (ENGLISH) -->
+    <div id="content-en" style="display: none;">
+      <p>This page provides instructions and processes account deletion requests in full compliance with <strong>Apple App Store Review Guidelines (Guideline 5.1.1(v))</strong>.</p>
+
+      <div class="warning-box">
+        <strong>⚠️ Critical Warning: Account deletion is permanent and cannot be undone!</strong>
+        Once your account is deleted, all of the following data will be permanently purged from HeartPearl servers and cannot be recovered:
+        <ul style="margin-top: 8px; margin-bottom: 0;">
+          <li>All uploaded moments, photos, and videos in Cloud Storage.</li>
+          <li>Your profile, username (@username), phone number, email address, and avatar.</li>
+          <li>Friends list and all incoming/outgoing friend requests.</li>
+          <li>Chat history, direct messages, and selfie reactions.</li>
+          <li>Authentication records in Firebase Authentication and shared Home Widget cache.</li>
+        </ul>
+      </div>
+
+      <h2>Method 1: In-App Deletion (Instant & Automated)</h2>
+      <p>If you currently have HeartPearl installed on your device, you can delete your account in 4 simple steps:</p>
+      
+      <div class="steps-box">
+        <div class="step-item">
+          <div class="step-number">1</div>
+          <div class="step-text">Open <strong>HeartPearl</strong> and navigate to your <strong>Profile</strong> tab in the bottom navigation.</div>
+        </div>
+        <div class="step-item">
+          <div class="step-number">2</div>
+          <div class="step-text">Scroll down to the account actions section and tap <strong>"Delete Account"</strong> (red trash icon).</div>
+        </div>
+        <div class="step-item">
+          <div class="step-number">3</div>
+          <div class="step-text">Review the permanent data deletion notice and tap <strong>"Confirm Deletion"</strong>.</div>
+        </div>
+        <div class="step-item">
+          <div class="step-number">4</div>
+          <div class="step-text">Your account and all associated data are purged immediately, returning you to the welcome screen.</div>
+        </div>
+      </div>
+
+      <h2>Method 2: Submit an Online Deletion Request</h2>
+      <p>If you uninstalled the application, lost your device, or cannot log in, please submit your account details below. Our team will verify and permanently delete your account within <strong>24 to 48 hours</strong>.</p>
+
+      <div class="form-card">
+        <form onsubmit="handleWebSubmit(event, 'en')">
+          <div class="form-group">
+            <label for="username_en">Username (@username):</label>
+            <input type="text" id="username_en" placeholder="e.g. @tamchau" required>
+          </div>
+          <div class="form-group">
+            <label for="identifier_en">Registered Phone Number or Email:</label>
+            <input type="text" id="identifier_en" placeholder="e.g. +84912345678 or email@example.com" required>
+          </div>
+          <div class="form-group">
+            <label for="reason_en">Reason for deletion (optional):</label>
+            <textarea id="reason_en" rows="3" placeholder="Additional verification details if needed"></textarea>
+          </div>
+          <button type="submit" class="submit-btn">Submit Permanent Deletion Request</button>
+        </form>
+      </div>
+
+      <p style="text-align: center; margin-top: 16px;">
+        Or email us directly at: <a href="mailto:contact.heartpearl@gmail.com?subject=[HeartPearl]%20Account%20Deletion%20Request" style="color: var(--primary-light); font-weight: bold;">contact.heartpearl@gmail.com</a>
+      </p>
+    </div>
+
+    <div class="footer">
+      <p>&copy; 2026 HeartPearl. All rights reserved.</p>
+      <p style="margin-top: 6px;">
+        <a href="index.html">Trang chủ</a> &bull; 
+        <a href="privacy-policy.html">Chính sách quyền riêng tư</a> &bull; 
+        <a href="delete-account.html">Yêu cầu xóa tài khoản</a>
+      </p>
+    </div>
+  </div>
+
+  <script>
+    function switchLang(lang) {
+      const vi = document.getElementById('content-vi');
+      const en = document.getElementById('content-en');
+      const btns = document.querySelectorAll('.lang-btn');
+      
+      if (lang === 'vi') {
+        vi.style.display = 'block';
+        en.style.display = 'none';
+        btns[0].classList.add('active');
+        btns[1].classList.remove('active');
+      } else {
+        vi.style.display = 'none';
+        en.style.display = 'block';
+        btns[0].classList.remove('active');
+        btns[1].classList.add('active');
+      }
+    }
+
+    function handleWebSubmit(e, lang) {
+      e.preventDefault();
+      const username = document.getElementById('username_' + lang).value;
+      const id = document.getElementById('identifier_' + lang).value;
+      const reason = document.getElementById('reason_' + lang).value;
+      
+      const subject = encodeURIComponent('[HeartPearl] Yêu cầu xóa tài khoản / Account Deletion Request - ' + username);
+      const body = encodeURIComponent(
+        'Xin chào HeartPearl Team,\n\nTôi yêu cầu xóa vĩnh viễn tài khoản và toàn bộ dữ liệu của tôi:\n' +
+        '- Username: ' + username + '\n' +
+        '- SĐT/Email đăng ký: ' + id + '\n' +
+        '- Lý do/Ghi chú: ' + reason + '\n\n' +
+        'Tôi xác nhận đồng ý xóa toàn bộ dữ liệu vĩnh viễn.'
+      );
+      
+      window.location.href = 'mailto:contact.heartpearl@gmail.com?subject=' + subject + '&body=' + body;
+    }
+  </script>
+</body>
+</html>

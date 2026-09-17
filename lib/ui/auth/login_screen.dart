@@ -12,6 +12,7 @@ import '../../providers/settings_provider.dart';
 import '../common/app_text_field.dart';
 import '../common/gradient_button.dart';
 import 'create_profile_screen.dart';
+import 'phone_login_sheet.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -107,6 +108,123 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  Future<void> _handleGoogleSignIn() async {
+    setState(() => _isLoading = true);
+    final authService = ref.read(authServiceProvider);
+    try {
+      final userCred = await authService.signInWithGoogle();
+      if (userCred != null && mounted) {
+        HapticHelper.success();
+        final user = userCred.user;
+        if (user != null) {
+          final userDoc = await authService.getUserDocument(user.uid);
+          if (!mounted) return;
+          if (userDoc == null || userDoc.username.startsWith('user_')) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (context) => const CreateProfileScreen()),
+            );
+            return;
+          }
+        }
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi đăng nhập Google: ${e.toString()}'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _handleAppleSignIn() async {
+    setState(() => _isLoading = true);
+    final authService = ref.read(authServiceProvider);
+    try {
+      final userCred = await authService.signInWithApple();
+      if (userCred != null && mounted) {
+        HapticHelper.success();
+        final user = userCred.user;
+        if (user != null) {
+          final userDoc = await authService.getUserDocument(user.uid);
+          if (!mounted) return;
+          if (userDoc == null || userDoc.username.startsWith('user_')) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (context) => const CreateProfileScreen()),
+            );
+            return;
+          }
+        }
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi đăng nhập Apple: ${e.toString()}'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _openPhoneLogin() {
+    HapticHelper.light();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const PhoneLoginSheet(),
+    );
+  }
+
+  Widget _buildSocialButton({
+    required Widget icon,
+    required String label,
+    required VoidCallback onTap,
+    required bool isDark,
+    Color? backgroundColor,
+    Color? textColor,
+    Border? border,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _isLoading ? null : onTap,
+        borderRadius: BorderRadius.circular(AppDimens.radiusLg),
+        child: Container(
+          height: 52,
+          decoration: BoxDecoration(
+            color: backgroundColor ?? (isDark ? AppColors.darkSurfaceLight : AppColors.lightSurfaceLight),
+            borderRadius: BorderRadius.circular(AppDimens.radiusLg),
+            border: border ?? Border.all(color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              icon,
+              const SizedBox(width: 12),
+              Text(
+                label,
+                style: AppTypography.bodyBold(
+                  color: textColor ?? (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final lang = ref.watch(settingsProvider).language;
@@ -170,7 +288,82 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ),
 
-                const SizedBox(height: AppDimens.space2Xl),
+                const SizedBox(height: AppDimens.spaceXl),
+
+                // 1. Social & Phone Sign In Buttons
+                _buildSocialButton(
+                  icon: const Icon(Icons.apple, color: Colors.white, size: 24),
+                  label: 'Tiếp tục với Apple',
+                  onTap: _handleAppleSignIn,
+                  isDark: isDark,
+                  backgroundColor: Colors.black,
+                  textColor: Colors.white,
+                  border: Border.all(color: Colors.white24),
+                ),
+
+                const SizedBox(height: AppDimens.spaceSm),
+
+                _buildSocialButton(
+                  icon: Container(
+                    width: 22,
+                    height: 22,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white,
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'G',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF4285F4),
+                        ),
+                      ),
+                    ),
+                  ),
+                  label: 'Tiếp tục với Google',
+                  onTap: _handleGoogleSignIn,
+                  isDark: isDark,
+                ),
+
+                const SizedBox(height: AppDimens.spaceSm),
+
+                _buildSocialButton(
+                  icon: const Icon(LucideIcons.phone, color: AppColors.primaryLight, size: 20),
+                  label: 'Đăng nhập bằng Số điện thoại',
+                  onTap: _openPhoneLogin,
+                  isDark: isDark,
+                ),
+
+                const SizedBox(height: AppDimens.spaceXl),
+
+                // Divider
+                Row(
+                  children: [
+                    Expanded(
+                      child: Divider(
+                        color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      child: Text(
+                        'hoặc sử dụng email',
+                        style: AppTypography.caption(
+                          color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Divider(
+                        color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: AppDimens.spaceLg),
 
                 // Email input
                 AppTextField(

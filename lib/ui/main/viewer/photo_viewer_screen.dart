@@ -310,8 +310,13 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
                     child: CachedNetworkImage(
                       imageUrl: widget.photo.imageUrl,
                       fit: BoxFit.cover,
+                      memCacheWidth: 1080,
+                      fadeInDuration: const Duration(milliseconds: 100),
                       placeholder: (context, url) => const Center(
-                        child: CircularProgressIndicator(color: AppColors.primary),
+                        child: CircularProgressIndicator(
+                          color: AppColors.primary,
+                          strokeWidth: 2,
+                        ),
                       ),
                       errorWidget: (context, url, error) => const Center(
                         child: Icon(LucideIcons.image, size: 48, color: Colors.white24),

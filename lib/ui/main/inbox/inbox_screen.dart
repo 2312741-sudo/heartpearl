@@ -161,6 +161,8 @@ class _PhotoCard extends ConsumerWidget {
                 child: CachedNetworkImage(
                   imageUrl: photo.imageUrl,
                   fit: BoxFit.cover,
+                  memCacheWidth: 400,
+                  fadeInDuration: const Duration(milliseconds: 80),
                   placeholder: (context, url) => Container(
                     color: isDark ? AppColors.darkSurfaceLight : AppColors.lightSurfaceLight,
                   ),

@@ -10,6 +10,8 @@ import '../../../core/utils/haptic_helper.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/feed_provider.dart';
 import '../../../providers/settings_provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../auth/welcome_screen.dart';
 import '../../common/user_avatar.dart';
 import 'edit_profile_sheet.dart';
 
@@ -91,6 +93,57 @@ class ProfileScreen extends ConsumerWidget {
                             user.email!,
                             style: AppTypography.caption(
                               color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                            ),
+                          ),
+                        ],
+                        if (user.phone != null && user.phone!.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(LucideIcons.phone, size: 12, color: AppColors.primaryLight),
+                              const SizedBox(width: 4),
+                              Text(
+                                user.phone!,
+                                style: AppTypography.caption(
+                                  color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ] else ...[
+                          const SizedBox(height: 6),
+                          InkWell(
+                            onTap: () {
+                              HapticHelper.light();
+                              showModalBottomSheet(
+                                context: context,
+                                isScrollControlled: true,
+                                backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+                                shape: const RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.vertical(top: Radius.circular(AppDimens.radius2Xl)),
+                                ),
+                                builder: (context) => EditProfileSheet(user: user),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(AppDimens.radiusFull),
+                                border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(LucideIcons.phone, size: 12, color: AppColors.primaryLight),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Thêm số điện thoại',
+                                    style: AppTypography.caption(color: AppColors.primaryLight).copyWith(fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ],
@@ -212,6 +265,44 @@ class ProfileScreen extends ConsumerWidget {
 
                         Divider(color: isDark ? AppColors.darkBorder : AppColors.lightBorder, height: 1),
 
+                        // Phone Number
+                        ListTile(
+                          leading: const Icon(LucideIcons.phone, color: AppColors.primaryLight),
+                          title: Text(
+                            'Số điện thoại',
+                            style: AppTypography.bodyBold(
+                              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                            ),
+                          ),
+                          subtitle: Text(
+                            user.phone != null && user.phone!.isNotEmpty
+                                ? user.phone!
+                                : 'Chưa liên kết (Bấm để thêm)',
+                            style: AppTypography.caption(
+                              color: user.phone != null && user.phone!.isNotEmpty
+                                  ? (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted)
+                                  : AppColors.primaryLight,
+                            ),
+                          ),
+                          trailing: const Icon(LucideIcons.edit2, size: 16),
+                          onTap: () {
+                            HapticHelper.light();
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.vertical(
+                                  top: Radius.circular(AppDimens.radius2Xl),
+                                ),
+                              ),
+                              builder: (context) => EditProfileSheet(user: user),
+                            );
+                          },
+                        ),
+
+                        Divider(color: isDark ? AppColors.darkBorder : AppColors.lightBorder, height: 1),
+
                         // Dark Mode Toggle
                         SwitchListTile(
                           secondary: Icon(
@@ -261,56 +352,105 @@ class ProfileScreen extends ConsumerWidget {
                                 .setLanguage(lang == 'vi' ? 'en' : 'vi');
                           },
                         ),
+
+                        Divider(color: isDark ? AppColors.darkBorder : AppColors.lightBorder, height: 1),
+
+                        // Privacy Policy
+                        ListTile(
+                          leading: const Icon(LucideIcons.shieldCheck, color: AppColors.primaryLight),
+                          title: Text(
+                            'Quyền riêng tư & Bảo mật',
+                            style: AppTypography.bodyBold(
+                              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                            ),
+                          ),
+                          subtitle: Text(
+                            'Tiêu chuẩn bảo mật Apple & HeartPearl',
+                            style: AppTypography.caption(
+                              color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                            ),
+                          ),
+                          trailing: const Icon(LucideIcons.chevronRight, size: 18),
+                          onTap: () => _showPrivacyPolicyDialog(context, isDark),
+                        ),
                       ],
                     ),
                   ),
 
                   const SizedBox(height: AppDimens.spaceLg),
 
-                  // Logout Button
+                  // Account Actions Card (Logout & Delete Account)
                   Container(
                     decoration: BoxDecoration(
                       color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
                       borderRadius: BorderRadius.circular(AppDimens.radiusXl),
                       border: Border.all(
-                        color: AppColors.error.withValues(alpha: 0.3),
+                        color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
                       ),
                     ),
-                    child: ListTile(
-                      leading: const Icon(LucideIcons.logOut, color: AppColors.error),
-                      title: Text(
-                        AppStrings.tr('profile_logout', lang: lang),
-                        style: AppTypography.bodyBold(color: AppColors.error),
-                      ),
-                      onTap: () {
-                        HapticHelper.medium();
-                        showDialog(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            backgroundColor: isDark
-                                ? AppColors.darkSurface
-                                : AppColors.lightSurface,
-                            title: Text(AppStrings.tr('profile_logout', lang: lang)),
-                            content: Text(AppStrings.tr('profile_confirm_logout', lang: lang)),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctx),
-                                child: const Text('Hủy'),
-                              ),
-                              TextButton(
-                                onPressed: () {
-                                  Navigator.pop(ctx);
-                                  ref.read(authServiceProvider).signOut();
-                                },
-                                child: const Text(
-                                  'Đăng xuất',
-                                  style: TextStyle(color: AppColors.error),
-                                ),
-                              ),
-                            ],
+                    child: Column(
+                      children: [
+                        // Logout
+                        ListTile(
+                          leading: const Icon(LucideIcons.logOut, color: AppColors.primaryLight),
+                          title: Text(
+                            AppStrings.tr('profile_logout', lang: lang),
+                            style: AppTypography.bodyBold(
+                              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                            ),
                           ),
-                        );
-                      },
+                          onTap: () {
+                            HapticHelper.medium();
+                            showDialog(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                backgroundColor: isDark
+                                    ? AppColors.darkSurface
+                                    : AppColors.lightSurface,
+                                title: Text(AppStrings.tr('profile_logout', lang: lang)),
+                                content: Text(AppStrings.tr('profile_confirm_logout', lang: lang)),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx),
+                                    child: const Text('Hủy'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () {
+                                      Navigator.pop(ctx);
+                                      ref.read(authServiceProvider).signOut();
+                                    },
+                                    child: const Text(
+                                      'Đăng xuất',
+                                      style: TextStyle(color: AppColors.primary),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+
+                        Divider(color: isDark ? AppColors.darkBorder : AppColors.lightBorder, height: 1),
+
+                        // Delete Account (Apple Guideline 5.1.1(v) Standard)
+                        ListTile(
+                          leading: const Icon(LucideIcons.trash2, color: AppColors.error),
+                          title: const Text(
+                            'Xóa tài khoản',
+                            style: TextStyle(
+                              color: AppColors.error,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          subtitle: Text(
+                            'Xóa vĩnh viễn tài khoản và toàn bộ dữ liệu',
+                            style: AppTypography.caption(
+                              color: AppColors.error.withValues(alpha: 0.7),
+                            ),
+                          ),
+                          onTap: () => _showDeleteAccountDialog(context, ref, lang, isDark),
+                        ),
+                      ],
                     ),
                   ),
 
@@ -325,6 +465,238 @@ class ProfileScreen extends ConsumerWidget {
                 ],
               ),
             ),
+    );
+  }
+
+  void _showDeleteAccountDialog(
+    BuildContext context,
+    WidgetRef ref,
+    String lang,
+    bool isDark,
+  ) {
+    HapticHelper.heavy();
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        bool isDeleting = false;
+        String? errorText;
+
+        return StatefulBuilder(
+          builder: (dialogContext, setState) {
+            return AlertDialog(
+              backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppDimens.radius2Xl),
+                side: const BorderSide(color: AppColors.error, width: 1.5),
+              ),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(LucideIcons.alertTriangle, color: AppColors.error, size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Xóa tài khoản vĩnh viễn',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.error,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Theo tiêu chuẩn quyền riêng tư của Apple, toàn bộ dữ liệu của bạn sẽ bị xóa hoàn toàn khỏi hệ thống HeartPearl và không thể hoàn tác:',
+                      style: TextStyle(fontSize: 14, height: 1.4),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildDeleteWarningItem('Toàn bộ ảnh và video khoảnh khắc bạn đã đăng.'),
+                    _buildDeleteWarningItem('Hồ sơ cá nhân, tên người dùng và ảnh đại diện.'),
+                    _buildDeleteWarningItem('Danh sách bạn bè và mọi lời mời kết bạn.'),
+                    _buildDeleteWarningItem('Toàn bộ tin nhắn và lịch sử trò chuyện.'),
+                    _buildDeleteWarningItem('Tài khoản đăng nhập và dữ liệu tiện ích Home Widget.'),
+                    if (errorText != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.error.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+                        ),
+                        child: Text(
+                          errorText!,
+                          style: const TextStyle(color: AppColors.error, fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                if (!isDeleting)
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('Hủy bỏ'),
+                  ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.error,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppDimens.radiusMd),
+                    ),
+                  ),
+                  onPressed: isDeleting
+                      ? null
+                      : () async {
+                          setState(() {
+                            isDeleting = true;
+                            errorText = null;
+                          });
+                          HapticHelper.heavy();
+
+                          try {
+                            final authService = ref.read(authServiceProvider);
+                            await authService.deleteAccount();
+
+                            if (ctx.mounted) {
+                              Navigator.of(ctx).pop();
+                            }
+                            if (context.mounted) {
+                              Navigator.of(context).pushAndRemoveUntil(
+                                MaterialPageRoute(builder: (context) => const WelcomeScreen()),
+                                (route) => false,
+                              );
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Tài khoản và toàn bộ dữ liệu của bạn đã được xóa hoàn tất.'),
+                                  backgroundColor: AppColors.success,
+                                ),
+                              );
+                            }
+                          } on FirebaseAuthException catch (e) {
+                            if (ctx.mounted) {
+                              setState(() {
+                                isDeleting = false;
+                                if (e.code == 'requires-recent-login') {
+                                  errorText = 'Để bảo vệ tài khoản, Apple & Firebase yêu cầu bạn phải vừa đăng nhập mới có thể xóa. Vui lòng đăng xuất, đăng nhập lại và thực hiện lại thao tác xóa này.';
+                                } else {
+                                  errorText = 'Lỗi: ${e.message ?? e.code}';
+                                }
+                              });
+                            }
+                          } catch (e) {
+                            if (ctx.mounted) {
+                              setState(() {
+                                isDeleting = false;
+                                errorText = 'Lỗi xóa tài khoản: ${e.toString()}';
+                              });
+                            }
+                          }
+                        },
+                  child: isDeleting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          'Xác nhận xóa',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildDeleteWarningItem(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('• ', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.bold)),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 13, height: 1.3),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPrivacyPolicyDialog(BuildContext context, bool isDark) {
+    HapticHelper.light();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppDimens.radius2Xl),
+          side: BorderSide(color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
+        ),
+        title: Row(
+          children: [
+            const Icon(LucideIcons.shieldCheck, color: AppColors.primaryLight),
+            const SizedBox(width: 10),
+            const Text('Quyền riêng tư'),
+          ],
+        ),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'HeartPearl cam kết bảo vệ dữ liệu cá nhân theo tiêu chuẩn của Apple:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 10),
+              Text('• Ảnh & Video: Chỉ chia sẻ trực tiếp với bạn bè mà bạn kết nối.'),
+              SizedBox(height: 6),
+              Text('• Máy ảnh & Micrô: Chỉ hoạt động khi bạn chủ động chụp ảnh hoặc quay video.'),
+              SizedBox(height: 6),
+              Text('• Widget màn hình chính: Cập nhật tự động những khoảnh khắc mới nhất từ người thân.'),
+              SizedBox(height: 6),
+              Text('• Quyền làm chủ dữ liệu: Bạn có thể cập nhật hoặc xóa vĩnh viễn tài khoản bất kỳ lúc nào.'),
+              SizedBox(height: 14),
+              Text(
+                'Xem chi tiết chính sách trực tuyến:\nhttps://2312741-sudo.github.io/heartpearl/privacy-policy.html',
+                style: TextStyle(fontSize: 12, color: AppColors.primaryLight, height: 1.4),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Đã hiểu'),
+          ),
+        ],
+      ),
     );
   }
 

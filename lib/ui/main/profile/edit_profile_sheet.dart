@@ -25,6 +25,7 @@ class EditProfileSheet extends ConsumerStatefulWidget {
 class _EditProfileSheetState extends ConsumerState<EditProfileSheet> {
   late TextEditingController _nameController;
   late TextEditingController _usernameController;
+  late TextEditingController _phoneController;
   final _picker = ImagePicker();
 
   File? _newAvatarFile;
@@ -35,12 +36,14 @@ class _EditProfileSheetState extends ConsumerState<EditProfileSheet> {
     super.initState();
     _nameController = TextEditingController(text: widget.user.displayName);
     _usernameController = TextEditingController(text: widget.user.username);
+    _phoneController = TextEditingController(text: widget.user.phone ?? '');
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _usernameController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
@@ -102,10 +105,25 @@ class _EditProfileSheetState extends ConsumerState<EditProfileSheet> {
         );
       }
 
+      String? phoneToSave = _phoneController.text.trim();
+      if (phoneToSave.isNotEmpty) {
+        String clean = phoneToSave.replaceAll(RegExp(r'[\s\-\(\)]'), '');
+        if (clean.startsWith('0')) {
+          phoneToSave = '+84${clean.substring(1)}';
+        } else if (!clean.startsWith('+')) {
+          phoneToSave = '+84$clean';
+        } else {
+          phoneToSave = clean;
+        }
+      } else {
+        phoneToSave = null;
+      }
+
       await authService.updateUserDocument(widget.user.uid, {
         'displayName': name,
         'username': username,
         'avatarUrl': ?avatarUrl,
+        'phone': phoneToSave,
       });
 
       HapticHelper.success();
@@ -222,6 +240,20 @@ class _EditProfileSheetState extends ConsumerState<EditProfileSheet> {
                 '@',
                 style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryLight),
               ),
+            ),
+          ),
+
+          const SizedBox(height: AppDimens.spaceBase),
+
+          AppTextField(
+            controller: _phoneController,
+            label: 'Số điện thoại',
+            hintText: '0912 345 678',
+            keyboardType: TextInputType.phone,
+            prefixIcon: Icon(
+              LucideIcons.phone,
+              size: 18,
+              color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
             ),
           ),
 
