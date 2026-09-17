@@ -97,7 +97,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		E2CA7A8B305B8EBC0009E02C /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+		E2CA7A8B305B8EBC0009E02C /* Exceptions for "HeartPearlWidget" folder in "HeartPearlWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -107,7 +107,18 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		E2CA7A7A305B8EBB0009E02C /* HeartPearlWidget */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (E2CA7A8B305B8EBC0009E02C /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = HeartPearlWidget; sourceTree = "<group>"; };
+		E2CA7A7A305B8EBB0009E02C /* HeartPearlWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				E2CA7A8B305B8EBC0009E02C /* Exceptions for "HeartPearlWidget" folder in "HeartPearlWidgetExtension" target */,
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = HeartPearlWidget;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -286,8 +297,6 @@
 				E2CA7A7A305B8EBB0009E02C /* HeartPearlWidget */,
 			);
 			name = HeartPearlWidgetExtension;
-			packageProductDependencies = (
-			);
 			productName = HeartPearlWidgetExtension;
 			productReference = E2CA7A75305B8EBB0009E02C /* HeartPearlWidgetExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -396,13 +405,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -433,13 +438,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
