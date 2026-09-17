@@ -55,6 +55,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   static const Duration _longPressThreshold = Duration(milliseconds: 320);
 
   late AnimationController _shutterAnimController;
+  late AnimationController _flipAnimController;
+  bool _isFlippingCamera = false;
+  CameraDescription? _currentCameraDescription;
 
   @override
   void initState() {
@@ -63,6 +66,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     _shutterAnimController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 150),
+    );
+    _flipAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
     );
     _initCameras();
   }
@@ -74,20 +81,22 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     _recordTimer?.cancel();
     _controller?.dispose();
     _shutterAnimController.dispose();
+    _flipAnimController.dispose();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    final CameraController? cameraController = _controller;
-    if (cameraController == null || !cameraController.value.isInitialized) {
-      return;
-    }
-
-    if (state == AppLifecycleState.inactive) {
-      cameraController.dispose();
+    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+      // Free native camera session when going to background
+      _controller?.dispose();
+      _controller = null;
     } else if (state == AppLifecycleState.resumed) {
-      _initCameraController(cameraController.description);
+      // When resuming from background, widget tap, or unlock: ensure camera is cleanly re-initialized
+      if (_controller == null || !_controller!.value.isInitialized) {
+        final targetCamera = _currentCameraDescription ?? _mainBackCamera;
+        _initCameraController(targetCamera);
+      }
     }
   }
 
@@ -193,20 +202,13 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   }
 
   Future<void> _initCameraController(CameraDescription description) async {
+    _currentCameraDescription = description;
     final prevController = _controller;
     final newController = CameraController(
       description,
       ResolutionPreset.high,
       enableAudio: true,
     );
-
-    await prevController?.dispose();
-
-    if (mounted) {
-      setState(() {
-        _controller = newController;
-      });
-    }
 
     try {
       await newController.initialize();
@@ -229,13 +231,24 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         _currentZoom = initialZoom;
       }
 
-      if (mounted) setState(() {});
-    } catch (_) {}
+      if (mounted) {
+        setState(() {
+          _controller = newController;
+        });
+      }
+
+      // Dispose previous controller only after new one is successfully active
+      await prevController?.dispose();
+    } catch (_) {
+      try {
+        await newController.dispose();
+      } catch (_) {}
+    }
   }
 
-  // Toggle Camera Facing strictly between Front and Back
+  // Toggle Camera Facing strictly between Front and Back with smooth 3D flip animation
   void _toggleCameraFacing() async {
-    if (_cameras.length < 2 || _isRecording || _isStartingRecording) return;
+    if (_cameras.length < 2 || _isRecording || _isStartingRecording || _isFlippingCamera) return;
     HapticHelper.selection();
 
     final isCurrentlyFront =
@@ -247,7 +260,17 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     }
 
     final targetCamera = isCurrentlyFront ? _mainBackCamera : _frontCamera;
+
+    if (mounted) {
+      setState(() => _isFlippingCamera = true);
+      _flipAnimController.forward(from: 0.0);
+    }
+
     await _initCameraController(targetCamera);
+
+    if (mounted) {
+      setState(() => _isFlippingCamera = false);
+    }
   }
 
   // Set Zoom Level with support for .5, 1x, 2x, 3x
@@ -585,15 +608,6 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     final bottomInset = MediaQuery.of(context).padding.bottom;
     final navBarClearance = 80.0 + bottomInset + 16.0;
 
-    if (_controller == null || !_controller!.value.isInitialized) {
-      return Container(
-        color: AppColors.black,
-        child: const Center(
-          child: CircularProgressIndicator(color: AppColors.primary),
-        ),
-      );
-    }
-
     return Scaffold(
       backgroundColor: AppColors.black,
       body: Stack(
@@ -710,9 +724,36 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                             width: 1.5,
                           ),
                         ),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
+                        child: (_controller == null || !_controller!.value.isInitialized)
+                            ? const Center(
+                                child: CircularProgressIndicator(
+                                  color: AppColors.primary,
+                                  strokeWidth: 2.5,
+                                ),
+                              )
+                            : AnimatedBuilder(
+                                animation: _flipAnimController,
+                                builder: (context, child) {
+                                  final angle = _flipAnimController.value * 3.141592653589793;
+                                  final isBackHalf = _flipAnimController.value > 0.5;
+                                  return Transform(
+                                    alignment: Alignment.center,
+                                    transform: Matrix4.identity()
+                                      ..setEntry(3, 2, 0.001)
+                                      ..rotateY(angle),
+                                    child: isBackHalf
+                                        ? Transform(
+                                            alignment: Alignment.center,
+                                            transform: Matrix4.identity()
+                                              ..rotateY(3.141592653589793),
+                                            child: child,
+                                          )
+                                        : child,
+                                  );
+                                },
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
                             // 2.1 Viewfinder with Pinch-to-zoom
                             GestureDetector(
                               onScaleStart: (details) {
@@ -858,6 +899,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                           ],
                         ),
                       ),
+                    ),
                     ),
                   ),
                 ),

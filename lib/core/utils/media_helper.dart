@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:isolate';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 
 class MediaHelper {
@@ -72,5 +73,28 @@ class MediaHelper {
       debugPrint('MediaHelper optimizePhotoForUpload error: $e');
     }
     return originalFile;
+  }
+
+  /// Generate a high-quality video thumbnail using native AVAssetImageGenerator on iOS.
+  /// Returns a temporary File containing the crisp JPEG preview frame.
+  static Future<File?> generateVideoThumbnail(String videoPath) async {
+    try {
+      if (Platform.isIOS) {
+        const channel = MethodChannel('com.heartpearl.app/media');
+        final String? thumbPath = await channel.invokeMethod<String>(
+          'generateVideoThumbnail',
+          {'videoPath': videoPath},
+        );
+        if (thumbPath != null && thumbPath.isNotEmpty) {
+          final file = File(thumbPath);
+          if (await file.exists()) {
+            return file;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('MediaHelper generateVideoThumbnail error: $e');
+    }
+    return null;
   }
 }

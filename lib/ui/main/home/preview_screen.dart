@@ -10,6 +10,7 @@ import '../../../core/constants/app_typography.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/utils/camera_filters.dart';
 import '../../../core/utils/haptic_helper.dart';
+import '../../../core/utils/media_helper.dart';
 import '../../../models/user_model.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/feed_provider.dart';
@@ -103,12 +104,30 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
       String? videoUrl;
 
       if (widget.isVideo) {
+        // 1. Generate video review thumbnail frame using native AVAssetImageGenerator
+        final thumbFile = await MediaHelper.generateVideoThumbnail(widget.filePath);
+        String? thumbUrl;
+        if (thumbFile != null) {
+          try {
+            thumbUrl = await photoService.uploadPhoto(
+              file: thumbFile,
+              userId: user.uid,
+            );
+            // Clean up temporary thumbnail
+            try {
+              await thumbFile.delete();
+            } catch (_) {}
+          } catch (_) {}
+        }
+
+        // 2. Upload video file with progress tracking
         videoUrl = await photoService.uploadVideo(
           file: File(widget.filePath),
           userId: user.uid,
           onProgress: (p) => setState(() => _uploadProgress = p),
         );
-        mediaUrl = videoUrl; // Using video url or first frame thumbnail
+        // If thumbnail generation succeeded, use it for preview; otherwise fallback to videoUrl
+        mediaUrl = thumbUrl ?? videoUrl;
       } else {
         mediaUrl = await photoService.uploadPhoto(
           file: File(widget.filePath),

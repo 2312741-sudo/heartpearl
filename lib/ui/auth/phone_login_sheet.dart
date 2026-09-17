@@ -174,7 +174,7 @@ class _PhoneLoginSheetState extends ConsumerState<PhoneLoginSheet> {
             return;
           }
         }
-        Navigator.of(context).pop();
+        Navigator.of(context).popUntil((route) => route.isFirst);
       }
     } on FirebaseAuthException catch (e) {
       HapticHelper.heavy();

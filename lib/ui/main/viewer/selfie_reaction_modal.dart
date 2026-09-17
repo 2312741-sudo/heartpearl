@@ -50,13 +50,13 @@ class _SelfieReactionModalState extends State<SelfieReactionModal>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    final cam = _controller;
-    if (cam == null || !cam.value.isInitialized) return;
-
-    if (state == AppLifecycleState.inactive) {
-      cam.dispose();
+    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+      _controller?.dispose();
+      _controller = null;
     } else if (state == AppLifecycleState.resumed) {
-      _initCameraController(cam.description);
+      if (_controller == null && _cameras.isNotEmpty) {
+        _initCameraController(_cameras[_currentCameraIndex]);
+      }
     }
   }
 

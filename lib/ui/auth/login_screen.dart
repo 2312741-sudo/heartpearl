@@ -70,7 +70,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           password: _passwordController.text,
         );
         if (mounted) {
-          Navigator.of(context).pop();
+          Navigator.of(context).popUntil((route) => route.isFirst);
         }
       }
     } on FirebaseAuthException catch (e) {
@@ -144,7 +144,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             return;
           }
         }
-        Navigator.of(context).pop();
+        Navigator.of(context).popUntil((route) => route.isFirst);
       }
     } catch (e) {
       if (mounted) {
@@ -182,7 +182,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             return;
           }
         }
-        Navigator.of(context).pop();
+        Navigator.of(context).popUntil((route) => route.isFirst);
       }
     } on FirebaseAuthException catch (e) {
       if (mounted) {
