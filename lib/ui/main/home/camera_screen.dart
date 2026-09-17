@@ -57,6 +57,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   late AnimationController _shutterAnimController;
   late AnimationController _flipAnimController;
   bool _isFlippingCamera = false;
+  bool _isSwitchingCamera = false;
+  bool _isTransitioningLens = false;
+  Future<void>? _pendingDispose;
   CameraDescription? _currentCameraDescription;
 
   @override
@@ -86,16 +89,25 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
-      // Free native camera session when going to background
-      _controller?.dispose();
+  void didChangeAppLifecycleState(AppLifecycleState state) async {
+    if (state == AppLifecycleState.paused) {
+      // Free native camera session only when truly paused in background
+      final c = _controller;
       _controller = null;
+      if (c != null) {
+        _pendingDispose = c.dispose();
+      }
     } else if (state == AppLifecycleState.resumed) {
-      // When resuming from background, widget tap, or unlock: ensure camera is cleanly re-initialized
+      // When resuming from background, widget tap, or unlock: wait for any pending dispose to finish
+      if (_pendingDispose != null) {
+        try {
+          await _pendingDispose;
+        } catch (_) {}
+        _pendingDispose = null;
+      }
       if (_controller == null || !_controller!.value.isInitialized) {
         final targetCamera = _currentCameraDescription ?? _mainBackCamera;
-        _initCameraController(targetCamera);
+        await _switchCamera(targetCamera);
       }
     }
   }
@@ -196,16 +208,35 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       _cameras = await availableCameras();
       if (_cameras.isNotEmpty) {
         final initialCamera = _mainBackCamera;
-        await _initCameraController(initialCamera);
+        await _switchCamera(initialCamera);
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Error init availableCameras: $e');
+    }
   }
 
-  Future<void> _initCameraController(CameraDescription description) async {
-    _currentCameraDescription = description;
-    final prevController = _controller;
+  Future<void> _switchCamera(CameraDescription targetCamera) async {
+    if (_isSwitchingCamera) return;
+    _isSwitchingCamera = true;
+    _currentCameraDescription = targetCamera;
+
+    if (mounted) {
+      setState(() => _isTransitioningLens = true);
+    }
+
+    // 1. Cleanly dispose previous controller FIRST to prevent iOS AVCaptureSession collisions
+    final oldController = _controller;
+    if (oldController != null) {
+      try {
+        await oldController.dispose();
+      } catch (e) {
+        debugPrint('Error disposing old controller: $e');
+      }
+    }
+
+    // 2. Initialize new controller
     final newController = CameraController(
-      description,
+      targetCamera,
       ResolutionPreset.high,
       enableAudio: true,
     );
@@ -216,17 +247,15 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       final deviceMaxZoom = await newController.getMaxZoomLevel();
       _maxZoom = deviceMaxZoom.clamp(1.0, 5.0);
 
-      final isFront = description.lensDirection == CameraLensDirection.front;
+      final isFront = targetCamera.lensDirection == CameraLensDirection.front;
       // On front camera: default to wide selfie (_minZoom, e.g. 0.7x) to avoid zoomed-in face
       final initialZoom = isFront ? _minZoom : (_minZoom < 1.0 ? 1.0 : _minZoom);
       try {
         await newController.setZoomLevel(initialZoom);
       } catch (_) {}
 
-      if (description == _ultraWideCamera) {
+      if (targetCamera == _ultraWideCamera) {
         _currentZoom = 0.5;
-      } else if (description == _telephotoCamera) {
-        _currentZoom = 3.0;
       } else {
         _currentZoom = initialZoom;
       }
@@ -236,19 +265,22 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
           _controller = newController;
         });
       }
-
-      // Dispose previous controller only after new one is successfully active
-      await prevController?.dispose();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Error initializing camera controller: $e');
       try {
         await newController.dispose();
       } catch (_) {}
+    } finally {
+      if (mounted) {
+        setState(() => _isTransitioningLens = false);
+      }
+      _isSwitchingCamera = false;
     }
   }
 
   // Toggle Camera Facing strictly between Front and Back with smooth 3D flip animation
   void _toggleCameraFacing() async {
-    if (_cameras.length < 2 || _isRecording || _isStartingRecording || _isFlippingCamera) return;
+    if (_cameras.length < 2 || _isRecording || _isStartingRecording || _isSwitchingCamera || _isFlippingCamera) return;
     HapticHelper.selection();
 
     final isCurrentlyFront =
@@ -266,22 +298,26 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       _flipAnimController.forward(from: 0.0);
     }
 
-    await _initCameraController(targetCamera);
+    await _switchCamera(targetCamera);
 
     if (mounted) {
+      if (_flipAnimController.isAnimating) {
+        await _flipAnimController.forward();
+      }
+      _flipAnimController.reset();
       setState(() => _isFlippingCamera = false);
     }
   }
 
   // Set Zoom Level with support for .5, 1x, 2x, 3x
   Future<void> _setZoom(double targetZoom) async {
-    if (_controller == null || !_controller!.value.isInitialized) return;
+    if (_controller == null || !_controller!.value.isInitialized || _isSwitchingCamera) return;
 
     final isBack =
         _controller!.description.lensDirection == CameraLensDirection.back;
 
     if (!isBack) {
-      // Front camera wide/standard toggle
+      // Front camera wide/standard toggle: direct zoom without camera switch
       final target = targetZoom <= 0.85 ? _minZoom : 1.0;
       try {
         await _controller!.setZoomLevel(target);
@@ -292,36 +328,35 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
     // Back Camera Zoom Logic
     if (targetZoom <= 0.7) {
+      // Ultra-Wide (.5)
       if (_ultraWideCamera != null) {
         if (_controller!.description != _ultraWideCamera) {
-          await _initCameraController(_ultraWideCamera!);
+          await _switchCamera(_ultraWideCamera!);
         }
         setState(() => _currentZoom = 0.5);
       } else if (_minZoom <= 0.7) {
-        await _controller!.setZoomLevel(_minZoom);
+        try {
+          await _controller!.setZoomLevel(_minZoom);
+        } catch (_) {}
         setState(() => _currentZoom = 0.5);
       }
       return;
     }
 
-    if (targetZoom >= 2.8 && _telephotoCamera != null) {
-      if (_controller!.description != _telephotoCamera) {
-        await _initCameraController(_telephotoCamera!);
-      }
-      setState(() => _currentZoom = 3.0);
-      return;
-    }
-
-    // Standard 1x or 2x: ensure on _mainBackCamera
+    // Standard 1x, 2x, 3x:
+    // If currently on Ultra-Wide, switch back to main back camera first
     if (_controller!.description != _mainBackCamera) {
-      await _initCameraController(_mainBackCamera);
+      await _switchCamera(_mainBackCamera);
     }
 
+    // Direct hardware/digital zoom on main camera (smooth, zero tear-down, no black screen)
     final clampedZoom = targetZoom.clamp(_minZoom, _maxZoom);
     try {
       await _controller!.setZoomLevel(clampedZoom);
       setState(() => _currentZoom = clampedZoom);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Set zoom level error: $e');
+    }
   }
 
   // Pick Media (photo/video) from Gallery
@@ -724,73 +759,85 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                             width: 1.5,
                           ),
                         ),
-                        child: (_controller == null || !_controller!.value.isInitialized)
-                            ? const Center(
-                                child: CircularProgressIndicator(
-                                  color: AppColors.primary,
-                                  strokeWidth: 2.5,
-                                ),
-                              )
-                            : AnimatedBuilder(
-                                animation: _flipAnimController,
-                                builder: (context, child) {
-                                  final angle = _flipAnimController.value * 3.141592653589793;
-                                  final isBackHalf = _flipAnimController.value > 0.5;
-                                  return Transform(
-                                    alignment: Alignment.center,
-                                    transform: Matrix4.identity()
-                                      ..setEntry(3, 2, 0.001)
-                                      ..rotateY(angle),
-                                    child: isBackHalf
-                                        ? Transform(
-                                            alignment: Alignment.center,
-                                            transform: Matrix4.identity()
-                                              ..rotateY(3.141592653589793),
-                                            child: child,
-                                          )
-                                        : child,
-                                  );
-                                },
-                                child: Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                            // 2.1 Viewfinder with Pinch-to-zoom
-                            GestureDetector(
-                              onScaleStart: (details) {
-                                _baseScale = _currentZoom;
-                              },
-                              onScaleUpdate: (details) {
-                                final newZoom = (_baseScale * details.scale)
-                                    .clamp(_minZoom, _maxZoom);
-                                _controller!.setZoomLevel(newZoom);
-                                setState(() => _currentZoom = newZoom);
-                              },
-                              child: Builder(
-                                builder: (context) {
-                                  final previewSize = _controller?.value.previewSize;
-                                  final double previewW =
-                                      previewSize != null ? previewSize.height : 720.0;
-                                  final double previewH =
-                                      previewSize != null ? previewSize.width : 1280.0;
+                        child: AnimatedBuilder(
+                          animation: _flipAnimController,
+                          builder: (context, child) {
+                            final angle = _flipAnimController.value * 3.141592653589793;
+                            final isBackHalf = _flipAnimController.value > 0.5;
+                            return Transform(
+                              alignment: Alignment.center,
+                              transform: Matrix4.identity()
+                                ..setEntry(3, 2, 0.001)
+                                ..rotateY(angle),
+                              child: isBackHalf
+                                  ? Transform(
+                                      alignment: Alignment.center,
+                                      transform: Matrix4.identity()
+                                        ..rotateY(3.141592653589793),
+                                      child: child,
+                                    )
+                                  : child,
+                            );
+                          },
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              // 2.1 Viewfinder with Pinch-to-zoom
+                              if (_controller != null && _controller!.value.isInitialized)
+                                GestureDetector(
+                                  onScaleStart: (details) {
+                                    _baseScale = _currentZoom;
+                                  },
+                                  onScaleUpdate: (details) {
+                                    final newZoom = (_baseScale * details.scale)
+                                        .clamp(_minZoom, _maxZoom);
+                                    _controller!.setZoomLevel(newZoom);
+                                    setState(() => _currentZoom = newZoom);
+                                  },
+                                  child: Builder(
+                                    builder: (context) {
+                                      final previewSize = _controller?.value.previewSize;
+                                      final double previewW =
+                                          previewSize != null ? previewSize.height : 720.0;
+                                      final double previewH =
+                                          previewSize != null ? previewSize.width : 1280.0;
 
-                                  return FittedBox(
-                                    fit: BoxFit.cover,
-                                    clipBehavior: Clip.hardEdge,
-                                    child: SizedBox(
-                                      width: previewW,
-                                      height: previewH,
-                                      child: _selectedFilter.colorFilter != null
-                                          ? ColorFiltered(
-                                              colorFilter:
-                                                  _selectedFilter.colorFilter!,
-                                              child: CameraPreview(_controller!),
-                                            )
-                                          : CameraPreview(_controller!),
+                                      return FittedBox(
+                                        fit: BoxFit.cover,
+                                        clipBehavior: Clip.hardEdge,
+                                        child: SizedBox(
+                                          width: previewW,
+                                          height: previewH,
+                                          child: _selectedFilter.colorFilter != null
+                                              ? ColorFiltered(
+                                                  colorFilter:
+                                                      _selectedFilter.colorFilter!,
+                                                  child: CameraPreview(_controller!),
+                                                )
+                                              : CameraPreview(_controller!),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                )
+                              else
+                                const Center(
+                                  child: CircularProgressIndicator(
+                                    color: AppColors.primary,
+                                    strokeWidth: 2.5,
+                                  ),
+                                ),
+
+                              // 2.2 Lens Switch Smooth Transition Blur (during .5 <-> 1x)
+                              if (_isTransitioningLens && !_isFlippingCamera)
+                                Positioned.fill(
+                                  child: BackdropFilter(
+                                    filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                                    child: Container(
+                                      color: Colors.black.withValues(alpha: 0.3),
                                     ),
-                                  );
-                                },
-                              ),
-                            ),
+                                  ),
+                                ),
 
                             // 2.2 TikTok Skin-Smoothing & Blemish Softening Diffusion Layer
                             if (_selectedFilter.blurSigma > 0)
