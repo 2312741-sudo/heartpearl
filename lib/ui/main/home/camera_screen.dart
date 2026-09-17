@@ -37,11 +37,18 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   // Beauty Filter
   BeautyFilter _selectedFilter = BeautyFilter.all.first;
 
-  // Video Recording State
+  // Video & Photo State
   bool _isRecording = false;
-  int _recordSeconds = 0;
+  bool _isStartingRecording = false;
+  bool _stopRequestedWhileStarting = false;
+  bool _isProcessing = false;
+  bool _isButtonPressed = false;
+  DateTime? _pressStartTime;
+  Timer? _longPressTimer;
   Timer? _recordTimer;
+  int _recordSeconds = 0;
   static const int maxVideoDuration = 15;
+  static const Duration _longPressThreshold = Duration(milliseconds: 320);
 
   late AnimationController _shutterAnimController;
 
@@ -59,6 +66,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _longPressTimer?.cancel();
     _recordTimer?.cancel();
     _controller?.dispose();
     _shutterAnimController.dispose();
@@ -138,18 +146,69 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     } catch (_) {}
   }
 
+  // Unified Pointer Gestures (Anti-stuck, zero lag)
+  void _handlePointerDown() {
+    if (_isProcessing || _isRecording || _isStartingRecording) return;
+    if (_controller == null || !_controller!.value.isInitialized) return;
+
+    _pressStartTime = DateTime.now();
+    _isButtonPressed = true;
+    _stopRequestedWhileStarting = false;
+    HapticHelper.selection();
+    setState(() {});
+
+    _longPressTimer?.cancel();
+    _longPressTimer = Timer(_longPressThreshold, () {
+      if (_isButtonPressed && mounted) {
+        _handleStartRecording();
+      }
+    });
+  }
+
+  void _handlePointerUp() {
+    if (!_isButtonPressed && !_isRecording && !_isStartingRecording) return;
+
+    _isButtonPressed = false;
+    setState(() {});
+
+    if (_longPressTimer?.isActive ?? false) {
+      // Finger lifted before threshold -> TAP (Take Photo)
+      _longPressTimer?.cancel();
+      _longPressTimer = null;
+      _takePicture();
+    } else if (_isStartingRecording) {
+      // User lifted while native video hardware was still spinning up
+      _stopRequestedWhileStarting = true;
+    } else if (_isRecording) {
+      // User was recording video and released -> Stop recording
+      _handleStopRecording();
+    }
+  }
+
+  void _handlePointerCancel() {
+    _handlePointerUp();
+  }
+
   // Take Picture
   Future<void> _takePicture() async {
-    if (_controller == null || !_controller!.value.isInitialized || _isRecording) {
+    if (_isProcessing ||
+        _isRecording ||
+        _isStartingRecording ||
+        _controller == null ||
+        !_controller!.value.isInitialized) {
       return;
     }
+    _isProcessing = true;
 
     try {
       HapticHelper.medium();
-      _shutterAnimController.forward().then((_) => _shutterAnimController.reverse());
+      _shutterAnimController
+          .forward()
+          .then((_) => _shutterAnimController.reverse());
       final xFile = await _controller!.takePicture();
 
-      final isFront = _controller!.description.lensDirection == CameraLensDirection.front;
+      final isFront =
+          _controller!.description.lensDirection == CameraLensDirection.front;
 
       if (mounted) {
         Navigator.of(context).push(
@@ -163,44 +222,97 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
           ),
         );
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Take picture error: $e');
+    } finally {
+      _isProcessing = false;
+    }
   }
 
-  // Start Video Recording
-  Future<void> _startRecording() async {
-    if (_controller == null || !_controller!.value.isInitialized || _isRecording) {
-      return;
-    }
+  // Start Video Recording with Hardware Mutex
+  Future<void> _handleStartRecording() async {
+    if (_isRecording || _isStartingRecording || _isProcessing) return;
+    if (_controller == null || !_controller!.value.isInitialized) return;
+
+    _isStartingRecording = true;
+    _stopRequestedWhileStarting = false;
 
     try {
       HapticHelper.heavy();
       await _controller!.startVideoRecording();
+
+      if (!mounted) return;
+
       setState(() {
         _isRecording = true;
         _recordSeconds = 0;
       });
 
+      // If user released finger during the await of startVideoRecording:
+      if (_stopRequestedWhileStarting || !_isButtonPressed) {
+        await _handleStopRecording();
+        return;
+      }
+
+      _recordTimer?.cancel();
       _recordTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
         if (_recordSeconds >= maxVideoDuration) {
-          _stopRecording();
+          _handleStopRecording();
         } else {
           setState(() => _recordSeconds++);
         }
       });
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Start video error: $e');
+      if (mounted) {
+        setState(() {
+          _isRecording = false;
+        });
+      }
+    } finally {
+      _isStartingRecording = false;
+    }
   }
 
-  // Stop Video Recording
-  Future<void> _stopRecording() async {
-    if (!_isRecording || _controller == null) return;
+  // Stop Video Recording safely
+  Future<void> _handleStopRecording() async {
+    if (!_isRecording && !_isStartingRecording) return;
+
+    if (_isStartingRecording) {
+      _stopRequestedWhileStarting = true;
+      return;
+    }
+
+    if (_isProcessing) return;
+    _isProcessing = true;
+
     _recordTimer?.cancel();
     _recordTimer = null;
 
     try {
-      final xFile = await _controller!.stopVideoRecording();
-      final isFront = _controller!.description.lensDirection == CameraLensDirection.front;
+      // Ensure at least 600ms of recording to avoid corrupt 0-byte video
+      final elapsed = _pressStartTime != null
+          ? DateTime.now().difference(_pressStartTime!).inMilliseconds
+          : 1000;
+      if (elapsed < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsed));
+      }
 
-      setState(() => _isRecording = false);
+      final xFile = await _controller!.stopVideoRecording();
+      final isFront =
+          _controller!.description.lensDirection == CameraLensDirection.front;
+
+      if (mounted) {
+        setState(() {
+          _isRecording = false;
+          _recordSeconds = 0;
+          _isButtonPressed = false;
+        });
+      }
       HapticHelper.success();
 
       if (mounted) {
@@ -215,8 +327,19 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
           ),
         );
       }
-    } catch (_) {
-      setState(() => _isRecording = false);
+    } catch (e) {
+      debugPrint('Stop video error: $e');
+      if (mounted) {
+        setState(() {
+          _isRecording = false;
+          _recordSeconds = 0;
+          _isButtonPressed = false;
+        });
+      }
+    } finally {
+      _isProcessing = false;
+      _isStartingRecording = false;
+      _stopRequestedWhileStarting = false;
     }
   }
 
@@ -468,56 +591,80 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                 // Empty spacer for visual balance with flip button
                 const SizedBox(width: 56),
 
-                // Shutter Button (Tap: Photo, Long Press: Video)
-                GestureDetector(
-                  onTap: _takePicture,
-                  onLongPressStart: (_) => _startRecording(),
-                  onLongPressEnd: (_) => _stopRecording(),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Outer Progress Circle for Recording
-                      SizedBox(
-                        width: 86,
-                        height: 86,
-                        child: CircularProgressIndicator(
-                          value: _isRecording
-                              ? (_recordSeconds / maxVideoDuration)
-                              : 0.0,
-                          strokeWidth: 4,
-                          valueColor: const AlwaysStoppedAnimation<Color>(
-                            AppColors.primaryLight,
+                // Shutter Button (Tap: Photo, Press & Hold: Video - Anti-Stuck)
+                Listener(
+                  behavior: HitTestBehavior.opaque,
+                  onPointerDown: (_) => _handlePointerDown(),
+                  onPointerUp: (_) => _handlePointerUp(),
+                  onPointerCancel: (_) => _handlePointerCancel(),
+                  child: AnimatedScale(
+                    scale: (_isButtonPressed || _isRecording) ? 0.92 : 1.0,
+                    duration: const Duration(milliseconds: 120),
+                    curve: Curves.easeOutCubic,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        // Outer Progress Ring for Recording
+                        SizedBox(
+                          width: 86,
+                          height: 86,
+                          child: CircularProgressIndicator(
+                            value: _isRecording
+                                ? (_recordSeconds / maxVideoDuration)
+                                : 0.0,
+                            strokeWidth: 4,
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                              AppColors.primaryLight,
+                            ),
+                            backgroundColor:
+                                _isRecording ? Colors.white24 : Colors.transparent,
                           ),
-                          backgroundColor: Colors.white24,
                         ),
-                      ),
 
-                      // Inner Shutter Button
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        width: _isRecording ? 60 : 72,
-                        height: _isRecording ? 60 : 72,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: AppColors.primaryGradient,
-                          boxShadow: AppDimens.glowShadow(
-                            AppColors.primary,
-                            opacity: _isRecording ? 0.7 : 0.4,
+                        // Outer ring border
+                        Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: (_isRecording || _isButtonPressed)
+                                  ? AppColors.primaryLight
+                                  : Colors.white.withValues(alpha: 0.8),
+                              width: 3.5,
+                            ),
                           ),
                         ),
-                        child: _isRecording
-                            ? Center(
-                                child: Text(
-                                  '${maxVideoDuration - _recordSeconds}s',
-                                  style: AppTypography.bold.copyWith(
-                                    color: AppColors.white,
-                                    fontSize: 14,
+
+                        // Inner Shutter Button
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          width: _isRecording ? 48 : 64,
+                          height: _isRecording ? 48 : 64,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: AppColors.primaryGradient,
+                            boxShadow: AppDimens.glowShadow(
+                              AppColors.primary,
+                              opacity: (_isRecording || _isButtonPressed)
+                                  ? 0.8
+                                  : 0.4,
+                            ),
+                          ),
+                          child: _isRecording
+                              ? Center(
+                                  child: Text(
+                                    '${maxVideoDuration - _recordSeconds}s',
+                                    style: AppTypography.bold.copyWith(
+                                      color: AppColors.white,
+                                      fontSize: 13,
+                                    ),
                                   ),
-                                ),
-                              )
-                            : null,
-                      ),
-                    ],
+                                )
+                              : null,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
 
