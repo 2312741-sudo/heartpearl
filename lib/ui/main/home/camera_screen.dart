@@ -226,9 +226,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     final size = MediaQuery.of(context).size;
 
     if (_controller == null || !_controller!.value.isInitialized) {
-      return const Scaffold(
-        backgroundColor: AppColors.black,
-        body: Center(
+      return Container(
+        color: AppColors.black,
+        child: const Center(
           child: CircularProgressIndicator(color: AppColors.primary),
         ),
       );
@@ -236,12 +236,15 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
     final isFrontCamera =
         _controller!.description.lensDirection == CameraLensDirection.front;
+    final previewSize = _controller!.value.previewSize;
+    final double previewW = previewSize != null ? previewSize.height : size.width;
+    final double previewH = previewSize != null ? previewSize.width : size.height;
 
-    return Scaffold(
-      backgroundColor: AppColors.black,
-      body: Stack(
+    return SizedBox.expand(
+      child: Stack(
+        fit: StackFit.expand,
         children: [
-          // Camera Viewfinder with Pinch-to-zoom
+          // 1. Full-screen Camera Viewfinder with Pinch-to-zoom
           Positioned.fill(
             child: GestureDetector(
               onScaleStart: (details) {
@@ -253,19 +256,28 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                 _controller!.setZoomLevel(newZoom);
                 setState(() => _currentZoom = newZoom);
               },
-              child: Transform.scale(
-                scaleX: isFrontCamera ? -1.0 : 1.0,
-                child: Center(
-                  child: AspectRatio(
-                    aspectRatio: 1 / _controller!.value.aspectRatio,
-                    child: CameraPreview(_controller!),
+              child: ClipRect(
+                child: OverflowBox(
+                  maxWidth: double.infinity,
+                  maxHeight: double.infinity,
+                  alignment: Alignment.center,
+                  child: FittedBox(
+                    fit: BoxFit.cover,
+                    child: SizedBox(
+                      width: previewW,
+                      height: previewH,
+                      child: Transform.scale(
+                        scaleX: isFrontCamera ? -1.0 : 1.0,
+                        child: CameraPreview(_controller!),
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
           ),
 
-          // Filter Color Overlay
+          // 2. Beauty Filter Color Overlay
           if (_selectedFilter.overlayColor != Colors.transparent)
             Positioned.fill(
               child: IgnorePointer(
@@ -273,114 +285,138 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
               ),
             ),
 
-          // Top App Bar Controls
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppDimens.spaceLg,
-                vertical: AppDimens.spaceSm,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  // App Title
-                  Row(
-                    children: [
-                      Text('Heart', style: AppTypography.h2(color: AppColors.primaryLight)),
-                      Text('Pearl', style: AppTypography.h2(color: AppColors.pearl)),
-                    ],
-                  ),
-
-                  // Actions: Messages & Flash
-                  Row(
-                    children: [
-                      // Chat icon with unread badge
-                      GestureDetector(
-                        onTap: () {
-                          HapticHelper.selection();
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => const ChatListScreen(),
-                            ),
-                          );
-                        },
-                        child: Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            FrostedContainer(
-                              borderRadius: AppDimens.radiusFull,
-                              padding: const EdgeInsets.all(10),
-                              child: const Icon(
-                                LucideIcons.messageCircle,
-                                color: AppColors.white,
-                                size: 22,
-                              ),
-                            ),
-                            if (unreadChats > 0)
-                              Positioned(
-                                top: -2,
-                                right: -2,
-                                child: AppBadge(count: unreadChats),
-                              ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(width: AppDimens.spaceMd),
-
-                      // Flash Toggle
-                      GestureDetector(
-                        onTap: _toggleFlash,
-                        child: FrostedContainer(
-                          borderRadius: AppDimens.radiusFull,
-                          padding: const EdgeInsets.all(10),
-                          child: Icon(
-                            _isFlashOn ? LucideIcons.zap : LucideIcons.zapOff,
-                            color: _isFlashOn ? AppColors.warning : AppColors.white,
-                            size: 22,
+          // 3. Top App Bar Controls
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppDimens.spaceLg,
+                  vertical: AppDimens.spaceMd,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Brand Logo + Title
+                    Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.asset(
+                            'assets/icon/app_icon.png',
+                            width: 28,
+                            height: 28,
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                        const SizedBox(width: 8),
+                        Text(
+                          'Heart',
+                          style: AppTypography.h2(color: AppColors.primaryLight),
+                        ),
+                        Text(
+                          'Pearl',
+                          style: AppTypography.h2(color: AppColors.pearl),
+                        ),
+                      ],
+                    ),
+
+                    // Actions: Messages & Flash
+                    Row(
+                      children: [
+                        // Chat icon with unread badge
+                        GestureDetector(
+                          onTap: () {
+                            HapticHelper.selection();
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => const ChatListScreen(),
+                              ),
+                            );
+                          },
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              FrostedContainer(
+                                borderRadius: AppDimens.radiusFull,
+                                padding: const EdgeInsets.all(10),
+                                child: const Icon(
+                                  LucideIcons.messageCircle,
+                                  color: AppColors.white,
+                                  size: 22,
+                                ),
+                              ),
+                              if (unreadChats > 0)
+                                Positioned(
+                                  top: -2,
+                                  right: -2,
+                                  child: AppBadge(count: unreadChats),
+                                ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(width: AppDimens.spaceMd),
+
+                        // Flash Toggle
+                        GestureDetector(
+                          onTap: _toggleFlash,
+                          child: FrostedContainer(
+                            borderRadius: AppDimens.radiusFull,
+                            padding: const EdgeInsets.all(10),
+                            child: Icon(
+                              _isFlashOn ? LucideIcons.zap : LucideIcons.zapOff,
+                              color: _isFlashOn ? AppColors.warning : AppColors.white,
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
 
-          // Zoom Level Pill
+          // 4. Zoom Level Pill
           if (!_isRecording)
             Positioned(
-              bottom: 250,
-              left: size.width / 2 - 28,
-              child: GestureDetector(
-                onTap: () {
-                  HapticHelper.selection();
-                  final nextZoom = _currentZoom >= 2.0 ? 1.0 : 2.0;
-                  _controller!.setZoomLevel(nextZoom);
-                  setState(() => _currentZoom = nextZoom);
-                },
-                child: FrostedContainer(
-                  borderRadius: AppDimens.radiusFull,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  child: Text(
-                    '${_currentZoom.toStringAsFixed(1)}x',
-                    style: AppTypography.bold.copyWith(
-                      color: AppColors.white,
-                      fontSize: 13,
+              bottom: 275,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: GestureDetector(
+                  onTap: () {
+                    HapticHelper.selection();
+                    final nextZoom = _currentZoom >= 2.0 ? 1.0 : 2.0;
+                    _controller!.setZoomLevel(nextZoom);
+                    setState(() => _currentZoom = nextZoom);
+                  },
+                  child: FrostedContainer(
+                    borderRadius: AppDimens.radiusFull,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    child: Text(
+                      '${_currentZoom.toStringAsFixed(1)}x',
+                      style: AppTypography.bold.copyWith(
+                        color: AppColors.white,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
 
-          // Beauty Filter Selector
+          // 5. Beauty Filter Selector
           if (!_isRecording)
             Positioned(
-              bottom: 180,
+              bottom: 215,
               left: 0,
               right: 0,
-              height: 48,
+              height: 44,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: AppDimens.spaceLg),
@@ -420,17 +456,17 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
               ),
             ),
 
-          // Bottom Shutter & Controls
+          // 6. Bottom Shutter & Controls (positioned above bottom navigation bar)
           Positioned(
-            bottom: 40,
+            bottom: 115,
             left: 0,
             right: 0,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Empty spacer for balance
-                const SizedBox(width: 48),
+                // Empty spacer for visual balance with flip button
+                const SizedBox(width: 56),
 
                 // Shutter Button (Tap: Photo, Long Press: Video)
                 GestureDetector(
