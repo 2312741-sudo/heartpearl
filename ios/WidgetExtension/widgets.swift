@@ -1,0 +1,82 @@
+import WidgetKit
+import SwiftUI
+
+struct Provider: TimelineProvider {
+    func placeholder(in context: Context) -> SimpleEntry {
+        SimpleEntry(date: Date(), image: nil)
+    }
+
+    func getSnapshot(in context: Context, completion: @escaping (SimpleEntry) -> ()) {
+        let entry = SimpleEntry(date: Date(), image: nil)
+        completion(entry)
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<SimpleEntry>) -> ()) {
+        // Read image URL from App Group UserDefaults
+        let sharedDefaults = UserDefaults(suiteName: "group.com.tamchau.app")
+        let photoUrlString = sharedDefaults?.string(forKey: "latestPhotoUrl") ?? ""
+        
+        Task {
+            var image: UIImage? = nil
+            if !photoUrlString.isEmpty,
+               let url = URL(string: photoUrlString) {
+                do {
+                    let (data, _) = try await URLSession.shared.data(from: url)
+                    image = UIImage(data: data)
+                } catch {
+                    print("Failed to download widget image: \(error)")
+                }
+            }
+            
+            let entry = SimpleEntry(date: Date(), image: image)
+            let timeline = Timeline(entries: [entry], policy: .never)
+            completion(timeline)
+        }
+    }
+}
+
+struct SimpleEntry: TimelineEntry {
+    let date: Date
+    let image: UIImage?
+}
+
+struct WidgetEntryView : View {
+    var entry: Provider.Entry
+
+    var body: some View {
+        GeometryReader { geometry in
+            if let image = entry.image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .clipped()
+            } else {
+                VStack(spacing: 8) {
+                    Text("HeartPearl")
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                    Text("Chưa có ảnh mới")
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundColor(.gray)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(red: 18/255, green: 7/255, blue: 22/255))
+            }
+        }
+    }
+}
+
+struct HeartPearlWidget: Widget {
+    let kind: String = "widget"
+
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: Provider()) { entry in
+            WidgetEntryView(entry: entry)
+                .containerBackground(Color(red: 18/255, green: 7/255, blue: 22/255), for: .widget)
+        }
+        .configurationDisplayName("HeartPearl Widget")
+        .description("Hiển thị ảnh mới nhất từ bạn bè.")
+        .supportedFamilies([.systemSmall, .systemMedium])
+    }
+}
