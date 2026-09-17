@@ -4,7 +4,6 @@ import 'package:firebase_storage/firebase_storage.dart';
 import '../models/photo_model.dart';
 import '../models/user_model.dart';
 import '../core/utils/media_helper.dart';
-import 'widget_service.dart';
 
 class PhotoService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -106,8 +105,7 @@ class PhotoService {
       'seen': {},
     });
 
-    // Update Home Screen Widget
-    await WidgetService.updateLatestPhoto(imageUrl);
+    // Note: User's own sent photos are not synced to their own widget (widget only shows friends' photos)
 
     // Create in-app notifications for each recipient
     try {
@@ -170,11 +168,18 @@ class PhotoService {
         .orderBy('createdAt', descending: true)
         .limit(100)
         .snapshots()
-        .map((snapshot) {
+        .asyncMap((snapshot) async {
+      final userDoc = await _db.collection('users').doc(userId).get();
+      final currentUser = userDoc.exists ? UserModel.fromFirestore(userDoc) : null;
       return snapshot.docs
-          .map((doc) => PhotoModel.fromFirestore(doc))
+          .map((doc) => PhotoModel.fromFirestore(doc, senderUser: currentUser))
           .toList();
     });
+  }
+
+  // Delete a single photo/moment
+  Future<void> deletePhoto(String photoId) async {
+    await _db.collection('photos').doc(photoId).delete();
   }
 
   // Mark photo as seen

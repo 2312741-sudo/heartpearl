@@ -462,6 +462,9 @@ class ProfileScreen extends ConsumerWidget {
                       color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
                     ),
                   ),
+
+                  // Bottom padding to clear floating navigation bar
+                  const SizedBox(height: 120),
                 ],
               ),
             ),

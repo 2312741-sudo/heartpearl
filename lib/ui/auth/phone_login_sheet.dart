@@ -107,9 +107,21 @@ class _PhoneLoginSheetState extends ConsumerState<PhoneLoginSheet> {
         onVerificationFailed: (e) {
           if (!mounted) return;
           HapticHelper.heavy();
+          String msg = e.message ?? 'Không thể gửi mã OTP. Vui lòng thử lại.';
+          if (e.code == 'operation-not-allowed') {
+            msg = 'Chưa bật phương thức Số điện thoại trong Firebase Console.\nVui lòng vào Authentication > Sign-in method và bật Phone.';
+          } else if (e.code == 'invalid-phone-number') {
+            msg = 'Số điện thoại không đúng định dạng. Vui lòng kiểm tra lại.';
+          } else if (e.code == 'too-many-requests') {
+            msg = 'Bạn đã yêu cầu quá nhiều lần. Vui lòng chờ ít phút rồi thử lại.';
+          } else if (e.code == 'quota-exceeded') {
+            msg = 'Đã đạt giới hạn gửi SMS hàng ngày của Firebase.';
+          } else if (e.code == 'captcha-check-failed') {
+            msg = 'Xác minh an toàn reCAPTCHA không thành công.';
+          }
           setState(() {
             _isLoading = false;
-            _errorMessage = e.message ?? 'Không thể gửi mã OTP. Vui lòng thử lại.';
+            _errorMessage = msg;
           });
         },
         onCodeAutoRetrievalTimeout: (verificationId) {

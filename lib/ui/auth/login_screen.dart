@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -109,6 +111,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _handleGoogleSignIn() async {
+    // Check if Google Sign-In is configured on iOS to prevent native SDK abort
+    if (Platform.isIOS) {
+      const channel = MethodChannel('com.heartpearl.app/auth_config');
+      try {
+        final isConfigured = await channel.invokeMethod<bool>('isGoogleSignInConfigured');
+        if (isConfigured == false) {
+          if (!mounted) return;
+          _showConfigRequiredDialog(
+            title: 'Cần kích hoạt Google Sign-In',
+            message: 'Firebase chưa có cấu hình Google Sign-In (CLIENT_ID) cho phiên bản iOS.\n\n👉 Vui lòng vào Firebase Console > Authentication > Sign-in method và bật Google provider, sau đó tải GoogleService-Info.plist mới nhất.',
+          );
+          return;
+        }
+      } catch (_) {}
+    }
+
     setState(() => _isLoading = true);
     final authService = ref.read(authServiceProvider);
     try {
@@ -130,9 +148,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
+        String msg = 'Lỗi đăng nhập Google: ${e.toString()}';
+        if (e.toString().contains('operation-not-allowed')) {
+          msg = 'Chưa bật Google Provider trong Firebase Console. Vui lòng vào Authentication > Sign-in method để kích hoạt.';
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Lỗi đăng nhập Google: ${e.toString()}'),
+            content: Text(msg),
             backgroundColor: AppColors.error,
           ),
         );
@@ -162,18 +184,60 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         }
         Navigator.of(context).pop();
       }
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        if (e.code == 'operation-not-allowed') {
+          _showConfigRequiredDialog(
+            title: 'Cần kích hoạt Apple Sign-In',
+            message: 'Firebase chưa được kích hoạt tính năng Đăng nhập Apple.\n\n👉 Vui lòng vào Firebase Console > Authentication > Sign-in method và chọn Bật (Enable) Apple.',
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Lỗi đăng nhập Apple: ${e.message ?? e.code}'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+      }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Lỗi đăng nhập Apple: ${e.toString()}'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        final errStr = e.toString();
+        if (errStr.contains('operation-not-allowed')) {
+          _showConfigRequiredDialog(
+            title: 'Cần kích hoạt Apple Sign-In',
+            message: 'Firebase chưa được kích hoạt tính năng Đăng nhập Apple.\n\n👉 Vui lòng vào Firebase Console > Authentication > Sign-in method và chọn Bật (Enable) Apple.',
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Lỗi đăng nhập Apple: $errStr'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _showConfigRequiredDialog({required String title, required String message}) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.darkSurface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(title, style: const TextStyle(color: AppColors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+        content: Text(message, style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Đã hiểu', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _openPhoneLogin() {

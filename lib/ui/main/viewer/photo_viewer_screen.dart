@@ -265,11 +265,60 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
     } catch (_) {}
   }
 
+  Future<void> _handleDeletePhoto() async {
+    HapticHelper.heavy();
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.darkSurface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Xóa khoảnh khắc?', style: TextStyle(color: AppColors.white, fontWeight: FontWeight.bold)),
+        content: const Text(
+          'Khoảnh khắc này sẽ bị xóa khỏi lịch sử của bạn vĩnh viễn.',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Hủy', style: TextStyle(color: Colors.white60)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Xóa', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      try {
+        await ref.read(photoServiceProvider).deletePhoto(widget.photo.id);
+        HapticHelper.success();
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Lỗi khi xóa ảnh: $e'), backgroundColor: AppColors.error),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final lang = ref.watch(settingsProvider).language;
-    final senderName = widget.photo.senderUser?.displayName ?? 'Bạn bè';
-    final senderAvatar = widget.photo.senderUser?.avatarUrl;
+    final currentUser = ref.watch(userProfileProvider).value;
+    final isMine = widget.photo.senderId == currentUser?.uid;
+
+    final senderName = isMine
+        ? (currentUser?.displayName ?? 'Tôi')
+        : (widget.photo.senderUser?.displayName ?? 'Bạn bè');
+    final senderAvatar = isMine
+        ? currentUser?.avatarUrl
+        : widget.photo.senderUser?.avatarUrl;
 
     return Scaffold(
       backgroundColor: AppColors.black,
@@ -501,44 +550,73 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
                   horizontal: AppDimens.spaceLg,
                   vertical: AppDimens.spaceBase,
                 ),
-                child: Row(
-                  children: [
-                    // Selfie React Button
-                    Expanded(
-                      child: GradientButton(
-                        text: AppStrings.tr('photo_selfie_react', lang: lang),
-                        isLoading: _isReacting,
-                        icon: const Icon(LucideIcons.camera, color: AppColors.white, size: 18),
-                        onPressed: _handleSelfieReact,
-                      ),
-                    ),
-
-                    const SizedBox(width: AppDimens.spaceMd),
-
-                    // Text React Button
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: _showTextReactionSheet,
-                        child: FrostedContainer(
-                          height: 54,
-                          borderRadius: AppDimens.radiusFull,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(LucideIcons.messageSquare, color: AppColors.white, size: 18),
-                              const SizedBox(width: AppDimens.spaceSm),
-                              Text(
-                                AppStrings.tr('photo_text_react', lang: lang),
-                                style: AppTypography.button(color: AppColors.white),
+                child: isMine
+                    ? Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          GestureDetector(
+                            onTap: _handleDeletePhoto,
+                            child: FrostedContainer(
+                              height: 52,
+                              borderRadius: AppDimens.radiusFull,
+                              padding: const EdgeInsets.symmetric(horizontal: 24),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(LucideIcons.trash2, color: AppColors.error, size: 20),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Xóa khoảnh khắc này',
+                                    style: TextStyle(
+                                      color: AppColors.error,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
-                        ),
+                        ],
+                      )
+                    : Row(
+                        children: [
+                          // Selfie React Button
+                          Expanded(
+                            child: GradientButton(
+                              text: AppStrings.tr('photo_selfie_react', lang: lang),
+                              isLoading: _isReacting,
+                              icon: const Icon(LucideIcons.camera, color: AppColors.white, size: 18),
+                              onPressed: _handleSelfieReact,
+                            ),
+                          ),
+
+                          const SizedBox(width: AppDimens.spaceMd),
+
+                          // Text React Button
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: _showTextReactionSheet,
+                              child: FrostedContainer(
+                                height: 54,
+                                borderRadius: AppDimens.radiusFull,
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(LucideIcons.messageSquare, color: AppColors.white, size: 18),
+                                    const SizedBox(width: AppDimens.spaceSm),
+                                    Text(
+                                      AppStrings.tr('photo_text_react', lang: lang),
+                                      style: AppTypography.button(color: AppColors.white),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
               ),
             ),
           ),

@@ -15,7 +15,6 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/feed_provider.dart';
 import '../../../providers/friends_provider.dart';
 import '../../../providers/settings_provider.dart';
-import '../../../services/widget_service.dart';
 import '../../common/frosted_container.dart';
 import '../../common/gradient_button.dart';
 import '../../common/user_avatar.dart';
@@ -131,17 +130,7 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
         filter: widget.filter.type != BeautyFilterType.normal,
       );
 
-      // Save to Home Screen Widget directly
-      if (!widget.isVideo) {
-        WidgetService.updateLatestPhoto(
-          mediaUrl,
-          localFile: File(widget.filePath),
-          caption: _captionController.text.trim().isNotEmpty
-              ? _captionController.text.trim()
-              : null,
-          isMirrored: widget.isMirrored,
-        );
-      }
+      // Note: User's own sent photos are not saved to their own home widget (widgets only show photos from friends)
 
       HapticHelper.success();
       if (mounted) {

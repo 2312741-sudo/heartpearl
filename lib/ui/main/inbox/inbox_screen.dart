@@ -36,10 +36,15 @@ class InboxScreen extends ConsumerWidget {
       ),
       body: inboxAsync.when(
         data: (photos) {
-          if (photos.isNotEmpty) {
+          // Only update widget with photos from FRIENDS (never from current user)
+          final friendPhotos = photos.where((p) => p.senderId != user?.uid).toList();
+          if (friendPhotos.isNotEmpty) {
+            final latest = friendPhotos.first;
             WidgetService.updateLatestPhoto(
-              photos.first.imageUrl,
-              caption: photos.first.caption,
+              latest.imageUrl,
+              caption: latest.caption,
+              senderName: latest.senderUser?.displayName ?? latest.senderUser?.username ?? 'Bạn bè',
+              isMirrored: latest.isMirrored,
             );
           }
           if (photos.isEmpty) {
