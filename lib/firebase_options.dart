@@ -52,8 +52,8 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyDgny9xP_riIlp-w80zn0q5VR7ix8SYwdE',
-    appId: '1:592218033486:ios:b83446b376d092f160a21f',
+    apiKey: 'AIzaSyCVwBX-jDtWcNDwznrfyWG4dFbX_GAxbWo',
+    appId: '1:592218033486:ios:e1ccfe85d2433b5a60a21f',
     messagingSenderId: '592218033486',
     projectId: 'tamchau-865f3',
     databaseURL: 'https://tamchau-865f3-default-rtdb.firebaseio.com',
