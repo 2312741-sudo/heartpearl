@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:camera/camera.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_dimens.dart';
@@ -23,9 +24,9 @@ class CameraScreen extends ConsumerStatefulWidget {
 
 class _CameraScreenState extends ConsumerState<CameraScreen>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+  final ImagePicker _imagePicker = ImagePicker();
   List<CameraDescription> _cameras = [];
   CameraController? _controller;
-  int _selectedCameraIndex = 0;
 
   // Zoom & Flash
   double _currentZoom = 1.0;
@@ -87,16 +88,62 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     }
   }
 
+  // Camera Getters
+  CameraDescription get _frontCamera {
+    return _cameras.firstWhere(
+      (c) => c.lensDirection == CameraLensDirection.front,
+      orElse: () => _cameras.first,
+    );
+  }
+
+  CameraDescription get _mainBackCamera {
+    return _cameras.firstWhere(
+      (c) =>
+          c.lensDirection == CameraLensDirection.back &&
+          (c.lensType == CameraLensType.wide ||
+              c.lensType == CameraLensType.unknown),
+      orElse: () => _cameras.firstWhere(
+        (c) => c.lensDirection == CameraLensDirection.back,
+        orElse: () => _cameras.first,
+      ),
+    );
+  }
+
+  CameraDescription? get _ultraWideCamera {
+    for (final c in _cameras) {
+      if (c.lensDirection == CameraLensDirection.back) {
+        if (c.lensType == CameraLensType.ultraWide ||
+            c.name.toLowerCase().contains('ultra') ||
+            c.name.toLowerCase().contains('0.5')) {
+          return c;
+        }
+      }
+    }
+    final backCameras =
+        _cameras.where((c) => c.lensDirection == CameraLensDirection.back).toList();
+    if (backCameras.length >= 2) {
+      return backCameras.firstWhere(
+        (c) => c.lensType == CameraLensType.ultraWide,
+        orElse: () => backCameras.last,
+      );
+    }
+    return null;
+  }
+
+  bool get _hasUltraWide {
+    if (_controller == null) return false;
+    final isBack =
+        _controller!.description.lensDirection == CameraLensDirection.back;
+    if (!isBack) return false;
+    return _minZoom <= 0.7 || _ultraWideCamera != null;
+  }
+
   Future<void> _initCameras() async {
     try {
       _cameras = await availableCameras();
       if (_cameras.isNotEmpty) {
-        // Default to back camera
-        _selectedCameraIndex = _cameras.indexWhere(
-          (c) => c.lensDirection == CameraLensDirection.back,
-        );
-        if (_selectedCameraIndex == -1) _selectedCameraIndex = 0;
-        await _initCameraController(_cameras[_selectedCameraIndex]);
+        final initialCamera = _mainBackCamera;
+        await _initCameraController(initialCamera);
       }
     } catch (_) {}
   }
@@ -122,16 +169,87 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       _minZoom = await newController.getMinZoomLevel();
       final deviceMaxZoom = await newController.getMaxZoomLevel();
       _maxZoom = deviceMaxZoom.clamp(1.0, 4.0);
-      _currentZoom = _minZoom;
+      _currentZoom = _minZoom < 1.0 ? 1.0 : _minZoom;
       if (mounted) setState(() {});
     } catch (_) {}
   }
 
+  // Toggle Camera Facing strictly between Front and Back
   void _toggleCameraFacing() async {
-    if (_cameras.length < 2 || _isRecording) return;
+    if (_cameras.length < 2 || _isRecording || _isStartingRecording) return;
     HapticHelper.selection();
-    _selectedCameraIndex = (_selectedCameraIndex + 1) % _cameras.length;
-    await _initCameraController(_cameras[_selectedCameraIndex]);
+
+    final isCurrentlyFront =
+        _controller?.description.lensDirection == CameraLensDirection.front;
+    final targetCamera = isCurrentlyFront ? _mainBackCamera : _frontCamera;
+
+    await _initCameraController(targetCamera);
+  }
+
+  // Set Zoom Level with support for 0.5x Ultra-Wide lens
+  Future<void> _setZoom(double targetZoom) async {
+    if (_controller == null || !_controller!.value.isInitialized) return;
+
+    final isBack =
+        _controller!.description.lensDirection == CameraLensDirection.back;
+
+    if (targetZoom <= 0.7 && isBack) {
+      if (_minZoom <= 0.7) {
+        await _controller!.setZoomLevel(_minZoom);
+        setState(() => _currentZoom = 0.5);
+      } else if (_ultraWideCamera != null) {
+        if (_controller!.description != _ultraWideCamera) {
+          await _initCameraController(_ultraWideCamera!);
+        }
+        setState(() => _currentZoom = 0.5);
+      }
+      return;
+    }
+
+    // If currently on ultra-wide camera and selecting 1x or 2x:
+    if (_ultraWideCamera != null &&
+        _controller!.description == _ultraWideCamera) {
+      await _initCameraController(_mainBackCamera);
+    }
+
+    final clampedZoom = targetZoom.clamp(_minZoom, _maxZoom);
+    try {
+      await _controller!.setZoomLevel(clampedZoom);
+      setState(() => _currentZoom = clampedZoom);
+    } catch (_) {}
+  }
+
+  // Pick Media (photo/video) from Gallery
+  Future<void> _pickMediaFromGallery() async {
+    if (_isProcessing || _isRecording || _isStartingRecording) return;
+    HapticHelper.selection();
+    _isProcessing = true;
+
+    try {
+      final xFile = await _imagePicker.pickMedia(imageQuality: 92);
+      if (xFile != null && mounted) {
+        final pathLower = xFile.path.toLowerCase();
+        final isVideo = pathLower.endsWith('.mp4') ||
+            pathLower.endsWith('.mov') ||
+            pathLower.endsWith('.avi') ||
+            pathLower.endsWith('.m4v');
+
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => PreviewScreen(
+              filePath: xFile.path,
+              isVideo: isVideo,
+              isMirrored: false,
+              filter: _selectedFilter,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Pick gallery error: $e');
+    } finally {
+      _isProcessing = false;
+    }
   }
 
   void _toggleFlash() async {
@@ -207,16 +325,13 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
           .then((_) => _shutterAnimController.reverse());
       final xFile = await _controller!.takePicture();
 
-      final isFront =
-          _controller!.description.lensDirection == CameraLensDirection.front;
-
       if (mounted) {
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (context) => PreviewScreen(
               filePath: xFile.path,
               isVideo: false,
-              isMirrored: isFront,
+              isMirrored: false,
               filter: _selectedFilter,
             ),
           ),
@@ -303,8 +418,6 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       }
 
       final xFile = await _controller!.stopVideoRecording();
-      final isFront =
-          _controller!.description.lensDirection == CameraLensDirection.front;
 
       if (mounted) {
         setState(() {
@@ -321,7 +434,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             builder: (context) => PreviewScreen(
               filePath: xFile.path,
               isVideo: true,
-              isMirrored: isFront,
+              isMirrored: false,
               filter: _selectedFilter,
             ),
           ),
@@ -357,8 +470,6 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       );
     }
 
-    final isFrontCamera =
-        _controller!.description.lensDirection == CameraLensDirection.front;
     final previewSize = _controller!.value.previewSize;
     final double previewW = previewSize != null ? previewSize.height : size.width;
     final double previewH = previewSize != null ? previewSize.width : size.height;
@@ -389,10 +500,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                     child: SizedBox(
                       width: previewW,
                       height: previewH,
-                      child: Transform.scale(
-                        scaleX: isFrontCamera ? -1.0 : 1.0,
-                        child: CameraPreview(_controller!),
-                      ),
+                      child: CameraPreview(_controller!),
                     ),
                   ),
                 ),
@@ -504,30 +612,37 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             ),
           ),
 
-          // 4. Zoom Level Pill
+          // 4. Zoom / Lens Selector (.5 | 1x | 2x)
           if (!_isRecording)
             Positioned(
               bottom: 275,
               left: 0,
               right: 0,
               child: Center(
-                child: GestureDetector(
-                  onTap: () {
-                    HapticHelper.selection();
-                    final nextZoom = _currentZoom >= 2.0 ? 1.0 : 2.0;
-                    _controller!.setZoomLevel(nextZoom);
-                    setState(() => _currentZoom = nextZoom);
-                  },
-                  child: FrostedContainer(
-                    borderRadius: AppDimens.radiusFull,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    child: Text(
-                      '${_currentZoom.toStringAsFixed(1)}x',
-                      style: AppTypography.bold.copyWith(
-                        color: AppColors.white,
-                        fontSize: 13,
+                child: FrostedContainer(
+                  borderRadius: AppDimens.radiusFull,
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  backgroundColor: const Color(0x66000000),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_hasUltraWide)
+                        _buildZoomOption(
+                          label: '.5',
+                          isSelected: _currentZoom <= 0.7,
+                          onTap: () => _setZoom(0.5),
+                        ),
+                      _buildZoomOption(
+                        label: '1x',
+                        isSelected: _currentZoom > 0.7 && _currentZoom < 1.8,
+                        onTap: () => _setZoom(1.0),
                       ),
-                    ),
+                      _buildZoomOption(
+                        label: '2x',
+                        isSelected: _currentZoom >= 1.8,
+                        onTap: () => _setZoom(2.0),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -588,10 +703,21 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Empty spacer for visual balance with flip button
-                const SizedBox(width: 56),
+                // 1. Pick Media from Gallery
+                GestureDetector(
+                  onTap: _pickMediaFromGallery,
+                  child: FrostedContainer(
+                    borderRadius: AppDimens.radiusFull,
+                    padding: const EdgeInsets.all(14),
+                    child: const Icon(
+                      LucideIcons.image,
+                      color: AppColors.white,
+                      size: 24,
+                    ),
+                  ),
+                ),
 
-                // Shutter Button (Tap: Photo, Press & Hold: Video - Anti-Stuck)
+                // 2. Shutter Button (Tap: Photo, Press & Hold: Video - Anti-Stuck)
                 Listener(
                   behavior: HitTestBehavior.opaque,
                   onPointerDown: (_) => _handlePointerDown(),
@@ -668,7 +794,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                   ),
                 ),
 
-                // Flip Camera Facing
+                // 3. Flip Camera Facing (Front <-> Back only)
                 GestureDetector(
                   onTap: _toggleCameraFacing,
                   child: FrostedContainer(
@@ -685,6 +811,36 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildZoomOption({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: () {
+        HapticHelper.selection();
+        onTap();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: isSelected
+              ? AppColors.primary.withValues(alpha: 0.85)
+              : Colors.transparent,
+        ),
+        child: Text(
+          label,
+          style: AppTypography.bold.copyWith(
+            color: isSelected ? AppColors.white : Colors.white70,
+            fontSize: 12,
+          ),
+        ),
       ),
     );
   }
