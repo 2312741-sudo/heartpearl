@@ -1,26 +1,91 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function blockedBy(userId, otherUserId) {
+      return otherUserId in get(/databases/$(database)/documents/users/$(userId)).data.get('blockedUsers', []);
+    }
+
+    function interactionAllowed(firstUserId, secondUserId) {
+      return firstUserId == secondUserId ||
+        (!blockedBy(firstUserId, secondUserId) &&
+         !blockedBy(secondUserId, firstUserId));
+    }
+
+    function directChatAllowed(chatData) {
+      return signedIn()
+        && chatData.participants is list
+        && chatData.participants.size() == 2
+        && request.auth.uid in chatData.participants
+        && interactionAllowed(
+          request.auth.uid,
+          chatData.participants[0] == request.auth.uid
+            ? chatData.participants[1]
+            : chatData.participants[0]
+        );
+    }
+
     match /users/{userId} {
-      allow read, write: if request.auth != null;
+      allow read: if signedIn();
+      allow create, delete: if signedIn() && request.auth.uid == userId;
+      allow update: if signedIn() && (
+        request.auth.uid == userId ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['friends'])
+      );
     }
     match /photos/{photoId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null;
+      // Inbox queries contain photos from multiple senders, so visibility is
+      // filtered in the app providers. Per-document writes remain protected.
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.senderId == request.auth.uid;
+      allow update: if signedIn() && interactionAllowed(request.auth.uid, resource.data.senderId);
       allow delete: if request.auth != null;
     }
     match /friendRequests/{requestId} {
       allow read, write: if request.auth != null;
     }
     match /notifications/{notifId} {
-      allow read, write: if request.auth != null;
+      allow create: if signedIn()
+        && request.resource.data.senderId == request.auth.uid
+        && interactionAllowed(
+          request.resource.data.senderId,
+          request.resource.data.userId
+        );
+      allow read, update: if signedIn()
+        && resource.data.userId == request.auth.uid;
+      allow delete: if signedIn() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.senderId == request.auth.uid
+      );
     }
     match /chats/{chatId} {
-      allow read, write: if request.auth != null;
+      allow read: if signedIn();
+      allow create: if directChatAllowed(request.resource.data);
+      allow update: if directChatAllowed(resource.data)
+        && directChatAllowed(request.resource.data)
+        && request.resource.data.participants == resource.data.participants;
+      allow delete: if signedIn() && request.auth.uid in resource.data.participants;
       match /messages/{messageId} {
-        allow read, write: if request.auth != null;
+        allow read: if signedIn();
+        allow create: if signedIn()
+          && request.resource.data.senderId == request.auth.uid
+          && directChatAllowed(
+            getAfter(/databases/$(database)/documents/chats/$(chatId)).data
+          );
+        allow update, delete: if false;
       }
+    }
+    match /reports/{reportId} {
+      allow create: if signedIn()
+        && request.resource.data.reporterUid == request.auth.uid
+        && request.resource.data.targetUid is string
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() > 0;
+      allow read, update, delete: if false;
     }
   }
 }

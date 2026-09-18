@@ -10,6 +10,7 @@ import '../../core/utils/haptic_helper.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../common/app_text_field.dart';
+import '../common/eula_modal.dart';
 import '../common/gradient_button.dart';
 import 'create_profile_screen.dart';
 import 'phone_login_sheet.dart';
@@ -29,6 +30,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _isSignUp = false;
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _agreedToEula = false;
 
   @override
   void dispose() {
@@ -37,7 +39,37 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
+  bool _ensureEulaAgreed() {
+    if (!_agreedToEula) {
+      HapticHelper.heavy();
+      final lang = ref.read(settingsProvider).language;
+      final isVi = lang == 'vi';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isVi
+                ? 'Vui lòng đọc và đồng ý với Thỏa thuận EULA trước khi tiếp tục.'
+                : 'Please agree to EULA & Community Standards before proceeding.',
+          ),
+          backgroundColor: AppColors.error,
+          action: SnackBarAction(
+            label: isVi ? 'Xem EULA' : 'View EULA',
+            textColor: Colors.white,
+            onPressed: () {
+              EulaModal.show(context, onAgree: () {
+                setState(() => _agreedToEula = true);
+              });
+            },
+          ),
+        ),
+      );
+      return false;
+    }
+    return true;
+  }
+
   Future<void> _handleSubmit() async {
+    if (!_ensureEulaAgreed()) return;
     if (!_formKey.currentState!.validate()) {
       HapticHelper.heavy();
       return;
@@ -109,6 +141,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _handleGoogleSignIn() async {
+    if (!_ensureEulaAgreed()) return;
     setState(() => _isLoading = true);
     final authService = ref.read(authServiceProvider);
     try {
@@ -147,6 +180,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _handleAppleSignIn() async {
+    if (!_ensureEulaAgreed()) return;
     setState(() => _isLoading = true);
     final authService = ref.read(authServiceProvider);
     try {
@@ -223,6 +257,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   void _openPhoneLogin() {
+    if (!_ensureEulaAgreed()) return;
     HapticHelper.light();
     showModalBottomSheet(
       context: context,
@@ -334,7 +369,103 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ),
 
-                const SizedBox(height: AppDimens.spaceXl),
+                const SizedBox(height: AppDimens.spaceLg),
+
+                // EULA & UGC Safety Policy Agreement (Apple Guideline 1.2)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: _agreedToEula
+                        ? (isDark
+                            ? AppColors.darkSurfaceLight.withValues(alpha: 0.5)
+                            : AppColors.lightSurfaceLight)
+                        : AppColors.error.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(AppDimens.radiusLg),
+                    border: Border.all(
+                      color: _agreedToEula
+                          ? (isDark ? AppColors.darkBorder : AppColors.lightBorder)
+                          : AppColors.error.withValues(alpha: 0.35),
+                      width: _agreedToEula ? 1 : 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: Checkbox(
+                            value: _agreedToEula,
+                            activeColor: AppColors.primary,
+                            onChanged: (val) {
+                              HapticHelper.selection();
+                              setState(() => _agreedToEula = val ?? false);
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: InkWell(
+                          onTap: () {
+                            EulaModal.show(context, onAgree: () {
+                              setState(() => _agreedToEula = true);
+                            });
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: RichText(
+                              text: TextSpan(
+                                style: AppTypography.caption(
+                                  color: isDark
+                                      ? AppColors.darkTextPrimary
+                                      : AppColors.lightTextPrimary,
+                                ).copyWith(fontSize: 12.5, height: 1.35),
+                                children: [
+                                  TextSpan(
+                                    text: lang == 'vi'
+                                        ? 'Tôi đã đọc và đồng ý với '
+                                        : 'I have read and agree to ',
+                                  ),
+                                  TextSpan(
+                                    text: lang == 'vi'
+                                        ? 'Thỏa thuận EULA'
+                                        : 'Terms of Use (EULA)',
+                                    style: const TextStyle(
+                                      color: AppColors.primaryLight,
+                                      fontWeight: FontWeight.bold,
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: lang == 'vi'
+                                        ? ' (Chính sách Không khoan nhượng nội dung vi phạm) và '
+                                        : ' (Zero tolerance policy for abusive content) & ',
+                                  ),
+                                  TextSpan(
+                                    text: lang == 'vi'
+                                        ? 'Chính sách bảo mật'
+                                        : 'Privacy Policy',
+                                    style: const TextStyle(
+                                      color: AppColors.primaryLight,
+                                      fontWeight: FontWeight.bold,
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                  ),
+                                  const TextSpan(text: '.'),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: AppDimens.spaceLg),
 
                 // 1. Social & Phone Sign In Buttons
                 _buildSocialButton(

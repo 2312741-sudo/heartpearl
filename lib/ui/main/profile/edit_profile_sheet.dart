@@ -10,6 +10,7 @@ import '../../../core/utils/haptic_helper.dart';
 import '../../../models/user_model.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/feed_provider.dart';
+import '../../../services/content_filter_service.dart';
 import '../../common/app_text_field.dart';
 import '../../common/gradient_button.dart';
 
@@ -75,6 +76,17 @@ class _EditProfileSheetState extends ConsumerState<EditProfileSheet> {
     if (username.length < 3) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Username phải có ít nhất 3 ký tự')),
+      );
+      return;
+    }
+
+    if (ContentFilterService.isObjectionable(name) ||
+        ContentFilterService.isObjectionable(username)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tên hiển thị hoặc username chứa từ ngữ không phù hợp'),
+          backgroundColor: AppColors.error,
+        ),
       );
       return;
     }

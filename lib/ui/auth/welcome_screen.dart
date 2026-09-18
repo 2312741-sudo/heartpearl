@@ -6,6 +6,7 @@ import '../../core/constants/app_dimens.dart';
 import '../../core/constants/app_typography.dart';
 import '../../core/l10n/app_strings.dart';
 import '../../providers/settings_provider.dart';
+import '../common/eula_modal.dart';
 import '../common/gradient_button.dart';
 import 'login_screen.dart';
 
@@ -154,12 +155,51 @@ class WelcomeScreen extends ConsumerWidget {
 
                   const SizedBox(height: AppDimens.spaceBase),
 
-                  // Terms notice
-                  Text(
-                    AppStrings.tr('welcome_terms', lang: lang),
-                    textAlign: TextAlign.center,
-                    style: AppTypography.caption(
-                      color: AppColors.darkTextMuted,
+                  // Terms & EULA notice (Apple Guideline 1.2)
+                  InkWell(
+                    onTap: () => EulaModal.show(context),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      child: RichText(
+                        textAlign: TextAlign.center,
+                        text: TextSpan(
+                          style: AppTypography.caption(color: AppColors.darkTextMuted),
+                          children: [
+                            TextSpan(
+                              text: lang == 'vi'
+                                  ? 'Bằng cách tiếp tục, bạn đồng ý với '
+                                  : 'By continuing, you agree to our ',
+                            ),
+                            TextSpan(
+                              text: lang == 'vi'
+                                  ? 'Điều khoản dịch vụ & EULA'
+                                  : 'Terms of Use & EULA',
+                              style: const TextStyle(
+                                color: AppColors.primaryLight,
+                                fontWeight: FontWeight.bold,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                            TextSpan(text: lang == 'vi' ? ' và ' : ' and '),
+                            TextSpan(
+                              text: lang == 'vi'
+                                  ? 'Chính sách bảo mật'
+                                  : 'Privacy Policy',
+                              style: const TextStyle(
+                                color: AppColors.primaryLight,
+                                fontWeight: FontWeight.bold,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                            TextSpan(
+                              text: lang == 'vi'
+                                  ? ' (Không khoan nhượng nội dung vi phạm).'
+                                  : ' (Zero tolerance for objectionable content).',
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ],

@@ -5,6 +5,7 @@ import 'package:heartpearl/models/chat_model.dart';
 import 'package:heartpearl/models/friend_request_model.dart';
 import 'package:heartpearl/core/utils/date_helper.dart';
 import 'package:heartpearl/core/utils/camera_filters.dart';
+import 'package:heartpearl/services/content_filter_service.dart';
 
 void main() {
   group('HeartPearl Models & Helpers Tests', () {
@@ -16,6 +17,7 @@ void main() {
         username: 'tamchau',
         email: 'tam@example.com',
         friends: ['user_456', 'user_789'],
+        blockedUsers: ['user_blocked'],
         createdAt: now,
       );
 
@@ -25,11 +27,13 @@ void main() {
       expect(map['username'], 'tamchau');
       expect(map['email'], 'tam@example.com');
       expect(map['friends'], ['user_456', 'user_789']);
+      expect(map['blockedUsers'], ['user_blocked']);
 
       final fromMapUser = UserModel.fromMap(map, uid: 'user_123');
       expect(fromMapUser.uid, 'user_123');
       expect(fromMapUser.displayName, 'Thanh Tâm');
       expect(fromMapUser.username, 'tamchau');
+      expect(fromMapUser.blockedUsers, ['user_blocked']);
     });
 
     test('PhotoModel reactions and video flag test', () {
@@ -96,6 +100,14 @@ void main() {
       expect(BeautyFilter.all[1].type, BeautyFilterType.smoothSkin);
       expect(BeautyFilter.all[1].name, 'Cà Mụn');
       expect(BeautyFilter.all[1].blurSigma > 0, true);
+    });
+
+    test('ContentFilterService detects objectionable text per Guideline 1.2', () {
+      expect(ContentFilterService.isObjectionable('Hello friend'), isFalse);
+      expect(ContentFilterService.isObjectionable('Khoảnh khắc tuyệt vời!'), isFalse);
+      expect(ContentFilterService.isObjectionable('fuck you'), isTrue);
+      expect(ContentFilterService.isObjectionable('đụ má mày'), isTrue);
+      expect(ContentFilterService.isObjectionable('chat sex gái gọi'), isTrue);
     });
   });
 }

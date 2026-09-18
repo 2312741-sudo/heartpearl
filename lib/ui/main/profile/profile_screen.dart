@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_dimens.dart';
 import '../../../core/constants/app_typography.dart';
@@ -10,8 +11,12 @@ import '../../../core/utils/haptic_helper.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/feed_provider.dart';
 import '../../../providers/settings_provider.dart';
+
 import 'package:firebase_auth/firebase_auth.dart';
+
+import '../../common/eula_modal.dart';
 import '../../common/user_avatar.dart';
+import 'blocked_users_screen.dart';
 import 'edit_profile_sheet.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -37,12 +42,16 @@ class ProfileScreen extends ConsumerWidget {
         title: Text(
           AppStrings.tr('profile_title', lang: lang),
           style: AppTypography.h2(
-            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+            color: isDark
+                ? AppColors.darkTextPrimary
+                : AppColors.lightTextPrimary,
           ),
         ),
       ),
       body: user == null
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            )
           : SingleChildScrollView(
               padding: const EdgeInsets.all(AppDimens.spaceLg),
               child: Column(
@@ -61,7 +70,9 @@ class ProfileScreen extends ConsumerWidget {
                             ),
                       borderRadius: BorderRadius.circular(AppDimens.radius2Xl),
                       border: Border.all(
-                        color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                        color: isDark
+                            ? AppColors.darkBorder
+                            : AppColors.lightBorder,
                       ),
                       boxShadow: AppDimens.softCardShadow,
                     ),
@@ -78,20 +89,26 @@ class ProfileScreen extends ConsumerWidget {
                         Text(
                           user.displayName,
                           style: AppTypography.h2(
-                            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                            color: isDark
+                                ? AppColors.darkTextPrimary
+                                : AppColors.lightTextPrimary,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           '@${user.username}',
-                          style: AppTypography.bodyBold(color: AppColors.primaryLight),
+                          style: AppTypography.bodyBold(
+                            color: AppColors.primaryLight,
+                          ),
                         ),
                         if (user.email != null) ...[
                           const SizedBox(height: 2),
                           Text(
                             user.email!,
                             style: AppTypography.caption(
-                              color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                              color: isDark
+                                  ? AppColors.darkTextMuted
+                                  : AppColors.lightTextMuted,
                             ),
                           ),
                         ],
@@ -100,12 +117,18 @@ class ProfileScreen extends ConsumerWidget {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Icon(LucideIcons.phone, size: 12, color: AppColors.primaryLight),
+                              const Icon(
+                                LucideIcons.phone,
+                                size: 12,
+                                color: AppColors.primaryLight,
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 user.phone!,
                                 style: AppTypography.caption(
-                                  color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                                  color: isDark
+                                      ? AppColors.darkTextSecondary
+                                      : AppColors.lightTextSecondary,
                                 ),
                               ),
                             ],
@@ -118,28 +141,50 @@ class ProfileScreen extends ConsumerWidget {
                               showModalBottomSheet(
                                 context: context,
                                 isScrollControlled: true,
-                                backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+                                backgroundColor: isDark
+                                    ? AppColors.darkSurface
+                                    : AppColors.lightSurface,
                                 shape: const RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.vertical(top: Radius.circular(AppDimens.radius2Xl)),
+                                  borderRadius: BorderRadius.vertical(
+                                    top: Radius.circular(AppDimens.radius2Xl),
+                                  ),
                                 ),
-                                builder: (context) => EditProfileSheet(user: user),
+                                builder: (context) =>
+                                    EditProfileSheet(user: user),
                               );
                             },
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
                               decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(AppDimens.radiusFull),
-                                border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                                color: AppColors.primary.withValues(
+                                  alpha: 0.15,
+                                ),
+                                borderRadius: BorderRadius.circular(
+                                  AppDimens.radiusFull,
+                                ),
+                                border: Border.all(
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.3,
+                                  ),
+                                ),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(LucideIcons.phone, size: 12, color: AppColors.primaryLight),
+                                  const Icon(
+                                    LucideIcons.phone,
+                                    size: 12,
+                                    color: AppColors.primaryLight,
+                                  ),
                                   const SizedBox(width: 4),
                                   Text(
                                     'Thêm số điện thoại',
-                                    style: AppTypography.caption(color: AppColors.primaryLight).copyWith(fontWeight: FontWeight.bold),
+                                    style: AppTypography.caption(
+                                      color: AppColors.primaryLight,
+                                    ).copyWith(fontWeight: FontWeight.bold),
                                   ),
                                 ],
                               ),
@@ -156,27 +201,40 @@ class ProfileScreen extends ConsumerWidget {
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [
                             _buildStatItem(
-                              label: AppStrings.tr('profile_friends_stat', lang: lang),
+                              label: AppStrings.tr(
+                                'profile_friends_stat',
+                                lang: lang,
+                              ),
                               value: user.friends.length.toString(),
                               isDark: isDark,
                             ),
                             Container(
                               height: 30,
                               width: 1,
-                              color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                              color: isDark
+                                  ? AppColors.darkBorder
+                                  : AppColors.lightBorder,
                             ),
                             _buildStatItem(
-                              label: AppStrings.tr('profile_sent_stat', lang: lang),
+                              label: AppStrings.tr(
+                                'profile_sent_stat',
+                                lang: lang,
+                              ),
                               value: sentPhotos.length.toString(),
                               isDark: isDark,
                             ),
                             Container(
                               height: 30,
                               width: 1,
-                              color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                              color: isDark
+                                  ? AppColors.darkBorder
+                                  : AppColors.lightBorder,
                             ),
                             _buildStatItem(
-                              label: AppStrings.tr('profile_reactions_stat', lang: lang),
+                              label: AppStrings.tr(
+                                'profile_reactions_stat',
+                                lang: lang,
+                              ),
                               value: totalReactions.toString(),
                               isDark: isDark,
                             ),
@@ -200,16 +258,23 @@ class ProfileScreen extends ConsumerWidget {
                                   top: Radius.circular(AppDimens.radius2Xl),
                                 ),
                               ),
-                              builder: (context) => EditProfileSheet(user: user),
+                              builder: (context) =>
+                                  EditProfileSheet(user: user),
                             );
                           },
                           icon: const Icon(LucideIcons.edit2, size: 16),
-                          label: Text(AppStrings.tr('profile_edit', lang: lang)),
+                          label: Text(
+                            AppStrings.tr('profile_edit', lang: lang),
+                          ),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.primaryLight,
-                            side: const BorderSide(color: AppColors.primaryLight),
+                            side: const BorderSide(
+                              color: AppColors.primaryLight,
+                            ),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(AppDimens.radiusFull),
+                              borderRadius: BorderRadius.circular(
+                                AppDimens.radiusFull,
+                              ),
                             ),
                             padding: const EdgeInsets.symmetric(
                               horizontal: 20,
@@ -226,51 +291,76 @@ class ProfileScreen extends ConsumerWidget {
                   // Settings Card
                   Container(
                     decoration: BoxDecoration(
-                      color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+                      color: isDark
+                          ? AppColors.darkSurface
+                          : AppColors.lightSurface,
                       borderRadius: BorderRadius.circular(AppDimens.radiusXl),
                       border: Border.all(
-                        color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                        color: isDark
+                            ? AppColors.darkBorder
+                            : AppColors.lightBorder,
                       ),
                     ),
                     child: Column(
                       children: [
                         // Share Account
                         ListTile(
-                          leading: const Icon(LucideIcons.share2, color: AppColors.primaryLight),
+                          leading: const Icon(
+                            LucideIcons.share2,
+                            color: AppColors.primaryLight,
+                          ),
                           title: Text(
                             AppStrings.tr('profile_share', lang: lang),
                             style: AppTypography.bodyBold(
-                              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                              color: isDark
+                                  ? AppColors.darkTextPrimary
+                                  : AppColors.lightTextPrimary,
                             ),
                           ),
                           subtitle: Text(
                             '@${user.username}',
                             style: AppTypography.caption(
-                              color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                              color: isDark
+                                  ? AppColors.darkTextMuted
+                                  : AppColors.lightTextMuted,
                             ),
                           ),
                           trailing: const Icon(LucideIcons.copy, size: 18),
                           onTap: () {
-                            Clipboard.setData(ClipboardData(text: '@${user.username}'));
+                            Clipboard.setData(
+                              ClipboardData(text: '@${user.username}'),
+                            );
                             HapticHelper.selection();
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('Đã sao chép @username vào bộ nhớ tạm!'),
+                                content: Text(
+                                  'Đã sao chép @username vào bộ nhớ tạm!',
+                                ),
                                 duration: Duration(seconds: 2),
                               ),
                             );
                           },
                         ),
 
-                        Divider(color: isDark ? AppColors.darkBorder : AppColors.lightBorder, height: 1),
+                        Divider(
+                          color: isDark
+                              ? AppColors.darkBorder
+                              : AppColors.lightBorder,
+                          height: 1,
+                        ),
 
                         // Phone Number
                         ListTile(
-                          leading: const Icon(LucideIcons.phone, color: AppColors.primaryLight),
+                          leading: const Icon(
+                            LucideIcons.phone,
+                            color: AppColors.primaryLight,
+                          ),
                           title: Text(
                             'Số điện thoại',
                             style: AppTypography.bodyBold(
-                              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                              color: isDark
+                                  ? AppColors.darkTextPrimary
+                                  : AppColors.lightTextPrimary,
                             ),
                           ),
                           subtitle: Text(
@@ -278,8 +368,11 @@ class ProfileScreen extends ConsumerWidget {
                                 ? user.phone!
                                 : 'Chưa liên kết (Bấm để thêm)',
                             style: AppTypography.caption(
-                              color: user.phone != null && user.phone!.isNotEmpty
-                                  ? (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted)
+                              color:
+                                  user.phone != null && user.phone!.isNotEmpty
+                                  ? (isDark
+                                        ? AppColors.darkTextMuted
+                                        : AppColors.lightTextMuted)
                                   : AppColors.primaryLight,
                             ),
                           ),
@@ -289,18 +382,26 @@ class ProfileScreen extends ConsumerWidget {
                             showModalBottomSheet(
                               context: context,
                               isScrollControlled: true,
-                              backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+                              backgroundColor: isDark
+                                  ? AppColors.darkSurface
+                                  : AppColors.lightSurface,
                               shape: const RoundedRectangleBorder(
                                 borderRadius: BorderRadius.vertical(
                                   top: Radius.circular(AppDimens.radius2Xl),
                                 ),
                               ),
-                              builder: (context) => EditProfileSheet(user: user),
+                              builder: (context) =>
+                                  EditProfileSheet(user: user),
                             );
                           },
                         ),
 
-                        Divider(color: isDark ? AppColors.darkBorder : AppColors.lightBorder, height: 1),
+                        Divider(
+                          color: isDark
+                              ? AppColors.darkBorder
+                              : AppColors.lightBorder,
+                          height: 1,
+                        ),
 
                         // Dark Mode Toggle
                         SwitchListTile(
@@ -311,7 +412,9 @@ class ProfileScreen extends ConsumerWidget {
                           title: Text(
                             AppStrings.tr('profile_dark_mode', lang: lang),
                             style: AppTypography.bodyBold(
-                              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                              color: isDark
+                                  ? AppColors.darkTextPrimary
+                                  : AppColors.lightTextPrimary,
                             ),
                           ),
                           value: themeMode == ThemeMode.dark,
@@ -322,26 +425,43 @@ class ProfileScreen extends ConsumerWidget {
                           },
                         ),
 
-                        Divider(color: isDark ? AppColors.darkBorder : AppColors.lightBorder, height: 1),
+                        Divider(
+                          color: isDark
+                              ? AppColors.darkBorder
+                              : AppColors.lightBorder,
+                          height: 1,
+                        ),
 
                         // Language Toggle
                         ListTile(
-                          leading: const Icon(LucideIcons.globe, color: AppColors.primaryLight),
+                          leading: const Icon(
+                            LucideIcons.globe,
+                            color: AppColors.primaryLight,
+                          ),
                           title: Text(
                             AppStrings.tr('profile_language', lang: lang),
                             style: AppTypography.bodyBold(
-                              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                              color: isDark
+                                  ? AppColors.darkTextPrimary
+                                  : AppColors.lightTextPrimary,
                             ),
                           ),
                           trailing: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
                             decoration: BoxDecoration(
                               color: AppColors.primary.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(AppDimens.radiusFull),
+                              borderRadius: BorderRadius.circular(
+                                AppDimens.radiusFull,
+                              ),
                             ),
                             child: Text(
                               lang == 'vi' ? 'Tiếng Việt' : 'English',
-                              style: AppTypography.bodyBold(color: AppColors.primaryLight),
+                              style: AppTypography.bodyBold(
+                                color: AppColors.primaryLight,
+                              ),
                             ),
                           ),
                           onTap: () {
@@ -352,25 +472,126 @@ class ProfileScreen extends ConsumerWidget {
                           },
                         ),
 
-                        Divider(color: isDark ? AppColors.darkBorder : AppColors.lightBorder, height: 1),
+                        Divider(
+                          color: isDark
+                              ? AppColors.darkBorder
+                              : AppColors.lightBorder,
+                          height: 1,
+                        ),
+
+                        ListTile(
+                          leading: const Icon(
+                            LucideIcons.userRoundX,
+                            color: AppColors.primaryLight,
+                          ),
+                          title: Text(
+                            AppStrings.tr('safety_manage_blocks', lang: lang),
+                            style: AppTypography.bodyBold(
+                              color: isDark
+                                  ? AppColors.darkTextPrimary
+                                  : AppColors.lightTextPrimary,
+                            ),
+                          ),
+                          subtitle: Text(
+                            AppStrings.tr(
+                              'safety_manage_blocks_subtitle',
+                              lang: lang,
+                            ),
+                            style: AppTypography.caption(
+                              color: isDark
+                                  ? AppColors.darkTextMuted
+                                  : AppColors.lightTextMuted,
+                            ),
+                          ),
+                          trailing: const Icon(
+                            LucideIcons.chevronRight,
+                            size: 18,
+                          ),
+                          onTap: () {
+                            HapticHelper.light();
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const BlockedUsersScreen(),
+                              ),
+                            );
+                          },
+                        ),
+
+                        Divider(
+                          color: isDark
+                              ? AppColors.darkBorder
+                              : AppColors.lightBorder,
+                          height: 1,
+                        ),
 
                         // Privacy Policy
                         ListTile(
-                          leading: const Icon(LucideIcons.shieldCheck, color: AppColors.primaryLight),
+                          leading: const Icon(
+                            LucideIcons.shieldCheck,
+                            color: AppColors.primaryLight,
+                          ),
                           title: Text(
                             'Quyền riêng tư & Bảo mật',
                             style: AppTypography.bodyBold(
-                              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                              color: isDark
+                                  ? AppColors.darkTextPrimary
+                                  : AppColors.lightTextPrimary,
                             ),
                           ),
                           subtitle: Text(
                             'Tiêu chuẩn bảo mật Apple & HeartPearl',
                             style: AppTypography.caption(
-                              color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                              color: isDark
+                                  ? AppColors.darkTextMuted
+                                  : AppColors.lightTextMuted,
                             ),
                           ),
-                          trailing: const Icon(LucideIcons.chevronRight, size: 18),
-                          onTap: () => _showPrivacyPolicyDialog(context, ref, lang, isDark),
+                          trailing: const Icon(
+                            LucideIcons.chevronRight,
+                            size: 18,
+                          ),
+                          onTap: () => _showPrivacyPolicyDialog(
+                            context,
+                            ref,
+                            lang,
+                            isDark,
+                          ),
+                        ),
+
+                        Divider(
+                          color: isDark
+                              ? AppColors.darkBorder
+                              : AppColors.lightBorder,
+                          height: 1,
+                        ),
+
+                        // EULA & Community Standards (Apple Guideline 1.2)
+                        ListTile(
+                          leading: const Icon(
+                            LucideIcons.fileText,
+                            color: AppColors.primaryLight,
+                          ),
+                          title: Text(
+                            AppStrings.tr('profile_terms_eula', lang: lang),
+                            style: AppTypography.bodyBold(
+                              color: isDark
+                                  ? AppColors.darkTextPrimary
+                                  : AppColors.lightTextPrimary,
+                            ),
+                          ),
+                          subtitle: Text(
+                            AppStrings.tr('profile_terms_eula_sub', lang: lang),
+                            style: AppTypography.caption(
+                              color: isDark
+                                  ? AppColors.darkTextMuted
+                                  : AppColors.lightTextMuted,
+                            ),
+                          ),
+                          trailing: const Icon(
+                            LucideIcons.chevronRight,
+                            size: 18,
+                          ),
+                          onTap: () => EulaModal.show(context),
                         ),
                       ],
                     ),
@@ -378,24 +599,76 @@ class ProfileScreen extends ConsumerWidget {
 
                   const SizedBox(height: AppDimens.spaceLg),
 
-                  // Account Actions Card (Logout & Delete Account)
+                  // Account Actions Card (Delete Account & Logout per Apple Guideline 5.1.1(v))
                   Container(
                     decoration: BoxDecoration(
-                      color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+                      color: isDark
+                          ? AppColors.darkSurface
+                          : AppColors.lightSurface,
                       borderRadius: BorderRadius.circular(AppDimens.radiusXl),
                       border: Border.all(
-                        color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                        color: isDark
+                            ? AppColors.darkBorder
+                            : AppColors.lightBorder,
                       ),
                     ),
                     child: Column(
                       children: [
+                        // Standalone Delete Account Option (Apple Guideline 5.1.1(v))
+                        ListTile(
+                          leading: const Icon(
+                            LucideIcons.trash2,
+                            color: AppColors.error,
+                          ),
+                          title: Text(
+                            AppStrings.tr('profile_delete_account', lang: lang),
+                            style: AppTypography.bodyBold(
+                              color: AppColors.error,
+                            ),
+                          ),
+                          subtitle: Text(
+                            AppStrings.tr(
+                              'profile_delete_account_sub',
+                              lang: lang,
+                            ),
+                            style: AppTypography.caption(
+                              color: isDark
+                                  ? AppColors.darkTextMuted
+                                  : AppColors.lightTextMuted,
+                            ),
+                          ),
+                          trailing: const Icon(
+                            LucideIcons.chevronRight,
+                            size: 18,
+                            color: AppColors.error,
+                          ),
+                          onTap: () => _showDeleteAccountDialog(
+                            context,
+                            ref,
+                            lang,
+                            isDark,
+                          ),
+                        ),
+
+                        Divider(
+                          color: isDark
+                              ? AppColors.darkBorder
+                              : AppColors.lightBorder,
+                          height: 1,
+                        ),
+
                         // Logout
                         ListTile(
-                          leading: const Icon(LucideIcons.logOut, color: AppColors.primaryLight),
+                          leading: const Icon(
+                            LucideIcons.logOut,
+                            color: AppColors.primaryLight,
+                          ),
                           title: Text(
                             AppStrings.tr('profile_logout', lang: lang),
                             style: AppTypography.bodyBold(
-                              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                              color: isDark
+                                  ? AppColors.darkTextPrimary
+                                  : AppColors.lightTextPrimary,
                             ),
                           ),
                           onTap: () {
@@ -406,8 +679,15 @@ class ProfileScreen extends ConsumerWidget {
                                 backgroundColor: isDark
                                     ? AppColors.darkSurface
                                     : AppColors.lightSurface,
-                                title: Text(AppStrings.tr('profile_logout', lang: lang)),
-                                content: Text(AppStrings.tr('profile_confirm_logout', lang: lang)),
+                                title: Text(
+                                  AppStrings.tr('profile_logout', lang: lang),
+                                ),
+                                content: Text(
+                                  AppStrings.tr(
+                                    'profile_confirm_logout',
+                                    lang: lang,
+                                  ),
+                                ),
                                 actions: [
                                   TextButton(
                                     onPressed: () => Navigator.pop(ctx),
@@ -420,7 +700,9 @@ class ProfileScreen extends ConsumerWidget {
                                     },
                                     child: const Text(
                                       'Đăng xuất',
-                                      style: TextStyle(color: AppColors.primary),
+                                      style: TextStyle(
+                                        color: AppColors.primary,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -437,7 +719,9 @@ class ProfileScreen extends ConsumerWidget {
                   Text(
                     'HeartPearl v2.0 • Flutter Edition',
                     style: AppTypography.caption(
-                      color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                      color: isDark
+                          ? AppColors.darkTextMuted
+                          : AppColors.lightTextMuted,
                     ),
                   ),
 
@@ -466,7 +750,9 @@ class ProfileScreen extends ConsumerWidget {
         return StatefulBuilder(
           builder: (dialogContext, setState) {
             return AlertDialog(
-              backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+              backgroundColor: isDark
+                  ? AppColors.darkSurface
+                  : AppColors.lightSurface,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppDimens.radius2Xl),
                 side: const BorderSide(color: AppColors.error, width: 1.5),
@@ -479,7 +765,11 @@ class ProfileScreen extends ConsumerWidget {
                       color: AppColors.error.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(LucideIcons.alertTriangle, color: AppColors.error, size: 24),
+                    child: const Icon(
+                      LucideIcons.alertTriangle,
+                      color: AppColors.error,
+                      size: 24,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   const Expanded(
@@ -504,11 +794,30 @@ class ProfileScreen extends ConsumerWidget {
                       style: TextStyle(fontSize: 14, height: 1.4),
                     ),
                     const SizedBox(height: 12),
-                    _buildDeleteWarningItem('Toàn bộ ảnh và video khoảnh khắc bạn đã đăng.'),
-                    _buildDeleteWarningItem('Hồ sơ cá nhân, tên người dùng và ảnh đại diện.'),
-                    _buildDeleteWarningItem('Danh sách bạn bè và mọi lời mời kết bạn.'),
-                    _buildDeleteWarningItem('Toàn bộ tin nhắn và lịch sử trò chuyện.'),
-                    _buildDeleteWarningItem('Tài khoản đăng nhập và dữ liệu tiện ích Home Widget.'),
+                    _buildDeleteWarningItem(
+                      'Toàn bộ ảnh và video khoảnh khắc bạn đã đăng.',
+                    ),
+                    _buildDeleteWarningItem(
+                      'Hồ sơ cá nhân, tên người dùng và ảnh đại diện.',
+                    ),
+                    _buildDeleteWarningItem(
+                      'Danh sách bạn bè và mọi lời mời kết bạn.',
+                    ),
+                    _buildDeleteWarningItem(
+                      'Toàn bộ tin nhắn và lịch sử trò chuyện.',
+                    ),
+                    _buildDeleteWarningItem(
+                      'Tài khoản đăng nhập và dữ liệu tiện ích Home Widget.',
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Hoặc yêu cầu xóa tài khoản trực tuyến tại:\nhttps://tamchau-865f3.web.app/delete-account.html',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.primaryLight,
+                        height: 1.35,
+                      ),
+                    ),
                     if (errorText != null) ...[
                       const SizedBox(height: 12),
                       Container(
@@ -516,11 +825,16 @@ class ProfileScreen extends ConsumerWidget {
                         decoration: BoxDecoration(
                           color: AppColors.error.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+                          border: Border.all(
+                            color: AppColors.error.withValues(alpha: 0.3),
+                          ),
                         ),
                         child: Text(
                           errorText!,
-                          style: const TextStyle(color: AppColors.error, fontSize: 13),
+                          style: const TextStyle(
+                            color: AppColors.error,
+                            fontSize: 13,
+                          ),
                         ),
                       ),
                     ],
@@ -558,10 +872,13 @@ class ProfileScreen extends ConsumerWidget {
                               Navigator.of(ctx).pop();
                             }
                             if (context.mounted) {
-                              Navigator.of(context).popUntil((route) => route.isFirst);
+                              Navigator.of(context)
+                                  .popUntil((route) => route.isFirst);
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('Tài khoản và toàn bộ dữ liệu của bạn đã được xóa hoàn tất.'),
+                                  content: Text(
+                                    'Tài khoản và toàn bộ dữ liệu của bạn đã được xóa hoàn tất.',
+                                  ),
                                   backgroundColor: AppColors.success,
                                 ),
                               );
@@ -581,7 +898,8 @@ class ProfileScreen extends ConsumerWidget {
                             if (ctx.mounted) {
                               setState(() {
                                 isDeleting = false;
-                                errorText = 'Lỗi xóa tài khoản: ${e.toString()}';
+                                errorText =
+                                    'Lỗi xóa tài khoản: ${e.toString()}';
                               });
                             }
                           }
@@ -614,7 +932,13 @@ class ProfileScreen extends ConsumerWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('• ', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.bold)),
+          const Text(
+            '• ',
+            style: TextStyle(
+              color: AppColors.error,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           Expanded(
             child: Text(
               text,
@@ -636,10 +960,14 @@ class ProfileScreen extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+        backgroundColor: isDark
+            ? AppColors.darkSurface
+            : AppColors.lightSurface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppDimens.radius2Xl),
-          side: BorderSide(color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
+          side: BorderSide(
+            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+          ),
         ),
         title: const Row(
           children: [
@@ -658,22 +986,38 @@ class ProfileScreen extends ConsumerWidget {
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 10),
-              const Text('• Ảnh & Video: Chỉ chia sẻ trực tiếp với bạn bè mà bạn kết nối.'),
+              const Text(
+                '• Ảnh & Video: Chỉ chia sẻ trực tiếp với bạn bè mà bạn kết nối.',
+              ),
               const SizedBox(height: 6),
-              const Text('• Máy ảnh & Micrô: Chỉ hoạt động khi bạn chủ động chụp ảnh hoặc quay video.'),
+              const Text(
+                '• Máy ảnh & Micrô: Chỉ hoạt động khi bạn chủ động chụp ảnh hoặc quay video.',
+              ),
               const SizedBox(height: 6),
-              const Text('• Widget màn hình chính: Cập nhật tự động những khoảnh khắc mới nhất từ bạn bè.'),
+              const Text(
+                '• Widget màn hình chính: Cập nhật tự động những khoảnh khắc mới nhất từ bạn bè.',
+              ),
               const SizedBox(height: 6),
-              const Text('• Quyền làm chủ dữ liệu: Bạn có toàn quyền quản lý, xóa khoảnh khắc hoặc xóa vĩnh viễn tài khoản.'),
+              const Text(
+                '• Quyền làm chủ dữ liệu: Bạn có toàn quyền quản lý, xóa khoảnh khắc hoặc xóa vĩnh viễn tài khoản.',
+              ),
               const SizedBox(height: 14),
               const Text(
                 'Trang chính sách trực tuyến:\nhttps://tamchau-865f3.web.app/privacy-policy.html',
-                style: TextStyle(fontSize: 12, color: AppColors.primaryLight, height: 1.4),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.primaryLight,
+                  height: 1.4,
+                ),
               ),
               const SizedBox(height: 6),
               const Text(
                 'Yêu cầu xóa dữ liệu trực tuyến:\nhttps://tamchau-865f3.web.app/delete-account.html',
-                style: TextStyle(fontSize: 12, color: AppColors.primaryLight, height: 1.4),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.primaryLight,
+                  height: 1.4,
+                ),
               ),
 
               const SizedBox(height: 18),
@@ -686,14 +1030,20 @@ class ProfileScreen extends ConsumerWidget {
                 decoration: BoxDecoration(
                   color: AppColors.error.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.error.withValues(alpha: 0.25)),
+                  border: Border.all(
+                    color: AppColors.error.withValues(alpha: 0.25),
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Row(
                       children: [
-                        Icon(LucideIcons.alertTriangle, color: AppColors.error, size: 16),
+                        Icon(
+                          LucideIcons.alertTriangle,
+                          color: AppColors.error,
+                          size: 16,
+                        ),
                         SizedBox(width: 8),
                         Text(
                           'Quản lý tài khoản',
@@ -708,7 +1058,11 @@ class ProfileScreen extends ConsumerWidget {
                     const SizedBox(height: 6),
                     const Text(
                       'Nếu không còn nhu cầu sử dụng, bạn có thể xóa vĩnh viễn tài khoản và toàn bộ dữ liệu theo Apple Guideline 5.1.1(v).',
-                      style: TextStyle(fontSize: 12, color: Colors.white70, height: 1.3),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white70,
+                        height: 1.3,
+                      ),
                     ),
                     const SizedBox(height: 10),
                     SizedBox(
@@ -725,7 +1079,10 @@ class ProfileScreen extends ConsumerWidget {
                         icon: const Icon(LucideIcons.trash2, size: 14),
                         label: const Text(
                           'Xóa tài khoản vĩnh viễn',
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         onPressed: () {
                           Navigator.pop(ctx);
@@ -759,7 +1116,9 @@ class ProfileScreen extends ConsumerWidget {
         Text(
           value,
           style: AppTypography.h2(
-            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+            color: isDark
+                ? AppColors.darkTextPrimary
+                : AppColors.lightTextPrimary,
           ),
         ),
         const SizedBox(height: 2),

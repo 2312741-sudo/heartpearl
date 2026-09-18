@@ -18,9 +18,9 @@
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		E2CA7A77305B8EBB0009E02C /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E2CA7A76305B8EBB0009E02C /* WidgetKit.framework */; };
-		E2CA7A79305B8EBB0009E02C /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E2CA7A78305B8EBB0009E02C /* SwiftUI.framework */; };
 		E2CA7A86305B8EBC0009E02C /* HeartPearlWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E2CA7A75305B8EBB0009E02C /* HeartPearlWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		FBE100012EC3CC0400C636F2 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = FBE100022EC3CC0400C636F2 /* GoogleService-Info.plist */; };
+		FBE100032EC3CC0400C636F2 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = FBE100042EC3CC0400C636F2 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */

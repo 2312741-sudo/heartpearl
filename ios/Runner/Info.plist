@@ -44,6 +44,8 @@
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>HeartPearl cần quyền truy cập máy ảnh để chụp và gửi ảnh khoảnh khắc cho bạn bè.</string>
 	<key>NSMicrophoneUsageDescription</key>

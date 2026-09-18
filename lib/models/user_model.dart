@@ -9,6 +9,7 @@ class UserModel {
   final String? avatarUrl;
   final String? fcmToken;
   final List<String> friends;
+  final List<String> blockedUsers;
   final DateTime createdAt;
 
   const UserModel({
@@ -20,6 +21,7 @@ class UserModel {
     this.avatarUrl,
     this.fcmToken,
     this.friends = const [],
+    this.blockedUsers = const [],
     required this.createdAt,
   });
 
@@ -44,7 +46,8 @@ class UserModel {
       email: data['email'] as String?,
       avatarUrl: data['avatarUrl'] as String?,
       fcmToken: data['fcmToken'] as String?,
-      friends: List<String>.from(data['friends'] ?? []),
+      friends: _readStringList(data['friends']),
+      blockedUsers: _readStringList(data['blockedUsers']),
       createdAt: parsedDate,
     );
   }
@@ -59,6 +62,7 @@ class UserModel {
       'avatarUrl': avatarUrl,
       'fcmToken': fcmToken,
       'friends': friends,
+      'blockedUsers': blockedUsers,
       'createdAt': Timestamp.fromDate(createdAt),
     };
   }
@@ -71,6 +75,7 @@ class UserModel {
     String? avatarUrl,
     String? fcmToken,
     List<String>? friends,
+    List<String>? blockedUsers,
     DateTime? createdAt,
   }) {
     return UserModel(
@@ -82,7 +87,13 @@ class UserModel {
       avatarUrl: avatarUrl ?? this.avatarUrl,
       fcmToken: fcmToken ?? this.fcmToken,
       friends: friends ?? this.friends,
+      blockedUsers: blockedUsers ?? this.blockedUsers,
       createdAt: createdAt ?? this.createdAt,
     );
   }
+}
+
+List<String> _readStringList(dynamic value) {
+  if (value is! Iterable) return const [];
+  return value.whereType<String>().toList(growable: false);
 }

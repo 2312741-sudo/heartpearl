@@ -1,9 +1,12 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:video_player/video_player.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+
+import 'report_content_sheet.dart';
 import 'selfie_reaction_modal.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_dimens.dart';
@@ -11,9 +14,12 @@ import '../../../core/constants/app_typography.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/utils/date_helper.dart';
 import '../../../core/utils/haptic_helper.dart';
+import '../../../services/content_filter_service.dart';
 import '../../../models/photo_model.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../providers/chat_provider.dart';
 import '../../../providers/feed_provider.dart';
+import '../../../providers/friends_provider.dart';
 import '../../../providers/settings_provider.dart';
 import '../../common/frosted_container.dart';
 import '../../common/gradient_button.dart';
@@ -38,7 +44,14 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
   String? _selectedEnlargedReaction;
 
   static const List<String> quickEmojis = [
-    '❤️', '😍', '🔥', '😂', '🥺', '👏', 'Đẹp quá!', 'Thích!'
+    '❤️',
+    '😍',
+    '🔥',
+    '😂',
+    '🥺',
+    '👏',
+    'Đẹp quá!',
+    'Thích!',
   ];
 
   @override
@@ -70,6 +83,8 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
   Future<void> _handleSelfieReact() async {
     final user = ref.read(userProfileProvider).value;
     if (user == null) return;
+    if (!await _canInteract(user.uid)) return;
+    if (!mounted) return;
 
     HapticHelper.medium();
     final capturedPath = await showModalBottomSheet<String>(
@@ -85,6 +100,17 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
     final photoService = ref.read(photoServiceProvider);
 
     try {
+      await ref
+          .read(chatServiceProvider)
+          .prepareChatAccess(
+            chatId: _chatIdFor(user.uid, widget.photo.senderId),
+            senderId: user.uid,
+            recipientId: widget.photo.senderId,
+            currentUserName: user.displayName,
+            currentUserAvatar: user.avatarUrl ?? '',
+            recipientName: widget.photo.senderUser?.displayName ?? 'Bạn bè',
+            recipientAvatar: widget.photo.senderUser?.avatarUrl ?? '',
+          );
       final selfieUrl = await photoService.uploadPhoto(
         file: File(capturedPath),
         userId: user.uid,
@@ -121,7 +147,10 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
   }
 
   // Show Text Reaction Modal
-  void _showTextReactionSheet() {
+  Future<void> _showTextReactionSheet() async {
+    final user = ref.read(userProfileProvider).value;
+    if (user == null || !await _canInteract(user.uid)) return;
+    if (!mounted) return;
     HapticHelper.selection();
     final lang = ref.read(settingsProvider).language;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -131,12 +160,15 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
       isScrollControlled: true,
       backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppDimens.radius2Xl)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppDimens.radius2Xl),
+        ),
       ),
       builder: (context) {
         return Padding(
           padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom + AppDimens.spaceXl,
+            bottom:
+                MediaQuery.of(context).viewInsets.bottom + AppDimens.spaceXl,
             left: AppDimens.spaceXl,
             right: AppDimens.spaceXl,
             top: AppDimens.spaceLg,
@@ -149,7 +181,9 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: isDark ? AppColors.darkBorderLight : AppColors.lightBorder,
+                  color: isDark
+                      ? AppColors.darkBorderLight
+                      : AppColors.lightBorder,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -159,7 +193,9 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
               Text(
                 AppStrings.tr('photo_send_reaction', lang: lang),
                 style: AppTypography.h3(
-                  color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                  color: isDark
+                      ? AppColors.darkTextPrimary
+                      : AppColors.lightTextPrimary,
                 ),
               ),
 
@@ -178,12 +214,19 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
                           _sendTextReaction(emoji);
                         },
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
                             color: AppColors.primary.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(AppDimens.radiusFull),
+                            borderRadius: BorderRadius.circular(
+                              AppDimens.radiusFull,
+                            ),
                             border: Border.all(
-                              color: AppColors.primaryLight.withValues(alpha: 0.3),
+                              color: AppColors.primaryLight.withValues(
+                                alpha: 0.3,
+                              ),
                             ),
                           ),
                           child: Text(
@@ -206,24 +249,38 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
                     child: TextField(
                       controller: _textReactionController,
                       style: AppTypography.body(
-                        color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                        color: isDark
+                            ? AppColors.darkTextPrimary
+                            : AppColors.lightTextPrimary,
                       ),
                       decoration: InputDecoration(
                         hintText: 'Nhập tin nhắn phản hồi...',
-                        hintStyle: AppTypography.body(color: AppColors.darkTextMuted),
+                        hintStyle: AppTypography.body(
+                          color: AppColors.darkTextMuted,
+                        ),
                         filled: true,
-                        fillColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
+                        fillColor: isDark
+                            ? AppColors.darkBackground
+                            : AppColors.lightBackground,
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(AppDimens.radiusLg),
+                          borderRadius: BorderRadius.circular(
+                            AppDimens.radiusLg,
+                          ),
                           borderSide: BorderSide.none,
                         ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(width: AppDimens.spaceSm),
                   IconButton(
-                    icon: const Icon(LucideIcons.send, color: AppColors.primaryLight),
+                    icon: const Icon(
+                      LucideIcons.send,
+                      color: AppColors.primaryLight,
+                    ),
                     onPressed: () {
                       final text = _textReactionController.text.trim();
                       if (text.isNotEmpty) {
@@ -245,9 +302,34 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
   Future<void> _sendTextReaction(String text) async {
     final user = ref.read(userProfileProvider).value;
     if (user == null) return;
+    if (!await _canInteract(user.uid)) return;
+
+    if (ContentFilterService.isObjectionable(text)) {
+      HapticHelper.heavy();
+      if (!mounted) return;
+      final lang = ref.read(settingsProvider).language;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppStrings.tr('safety_objectionable_warning', lang: lang)),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
 
     final photoService = ref.read(photoServiceProvider);
     try {
+      await ref
+          .read(chatServiceProvider)
+          .prepareChatAccess(
+            chatId: _chatIdFor(user.uid, widget.photo.senderId),
+            senderId: user.uid,
+            recipientId: widget.photo.senderId,
+            currentUserName: user.displayName,
+            currentUserAvatar: user.avatarUrl ?? '',
+            recipientName: widget.photo.senderUser?.displayName ?? 'Bạn bè',
+            recipientAvatar: widget.photo.senderUser?.avatarUrl ?? '',
+          );
       await photoService.reactWithText(
         photo: widget.photo,
         currentUser: user,
@@ -265,6 +347,35 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
     } catch (_) {}
   }
 
+  Future<bool> _canInteract(String currentUid) async {
+    final lang = ref.read(settingsProvider).language;
+    try {
+      final blocked = await ref
+          .read(friendServiceProvider)
+          .isInteractionBlocked(currentUid, widget.photo.senderId);
+      if (!blocked) return true;
+    } catch (_) {
+      // Fail closed so a transient lookup error cannot bypass a block.
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppStrings.tr('safety_interaction_blocked', lang: lang),
+          ),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+    return false;
+  }
+
+  String _chatIdFor(String firstUid, String secondUid) {
+    final participants = [firstUid, secondUid]..sort();
+    return participants.join('_');
+  }
+
   Future<void> _handleDeletePhoto() async {
     HapticHelper.heavy();
     final confirm = await showDialog<bool>(
@@ -272,7 +383,10 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.darkSurface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Xóa khoảnh khắc?', style: TextStyle(color: AppColors.white, fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Xóa khoảnh khắc?',
+          style: TextStyle(color: AppColors.white, fontWeight: FontWeight.bold),
+        ),
         content: const Text(
           'Khoảnh khắc này sẽ bị xóa khỏi lịch sử của bạn vĩnh viễn.',
           style: TextStyle(color: Colors.white70),
@@ -284,7 +398,13 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Xóa', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Xóa',
+              style: TextStyle(
+                color: AppColors.error,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
@@ -300,10 +420,153 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Lỗi khi xóa ảnh: $e'), backgroundColor: AppColors.error),
+            SnackBar(
+              content: Text('Lỗi khi xóa ảnh: $e'),
+              backgroundColor: AppColors.error,
+            ),
           );
         }
       }
+    }
+  }
+
+  void _showSafetyMenu(String senderName) {
+    HapticHelper.light();
+    final lang = ref.read(settingsProvider).language;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppDimens.radius2Xl),
+        ),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(LucideIcons.flag, color: AppColors.error),
+                title: Text(
+                  AppStrings.tr('safety_report_photo', lang: lang),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  AppStrings.tr('safety_report_photo_desc', lang: lang),
+                  style: const TextStyle(fontSize: 12),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  ReportContentSheet.show(context, photo: widget.photo);
+                },
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(LucideIcons.userX, color: AppColors.error),
+                title: Text(
+                  '${AppStrings.tr('safety_menu_block', lang: lang)} $senderName',
+                  style: const TextStyle(
+                    color: AppColors.error,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                subtitle: Text(
+                  AppStrings.tr('safety_block_instant_notice', lang: lang),
+                  style: const TextStyle(fontSize: 12),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _handleBlockSender(senderName);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleBlockSender(String senderName) async {
+    final lang = ref.read(settingsProvider).language;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          '${AppStrings.tr('safety_menu_block', lang: lang)} $senderName?',
+        ),
+        content: Text(
+          AppStrings.tr('safety_block_instant_notice', lang: lang),
+          style: const TextStyle(fontSize: 14, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: Text(AppStrings.tr('safety_cancel', lang: lang)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: Text(AppStrings.tr('safety_confirm', lang: lang)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await ref.read(friendServiceProvider).blockUser(
+        widget.photo.senderId,
+        photoId: widget.photo.id,
+      );
+      HapticHelper.success();
+      if (!mounted) return;
+
+      ref.invalidate(inboxPhotosProvider);
+      ref.invalidate(userProfileProvider);
+
+      Navigator.of(context).pop();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            lang == 'vi'
+                ? 'Đã chặn $senderName. Nội dung đã được gỡ bỏ khỏi bảng tin.'
+                : 'Blocked $senderName. Content removed from your feed.',
+          ),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppStrings.tr('safety_error', lang: lang)),
+          backgroundColor: AppColors.error,
+        ),
+      );
     }
   }
 
@@ -338,7 +601,8 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
                         memCacheWidth: 1080,
                       ),
 
-                      if (_videoController != null && _videoController!.value.isInitialized)
+                      if (_videoController != null &&
+                          _videoController!.value.isInitialized)
                         GestureDetector(
                           onTap: () {
                             setState(() {
@@ -385,7 +649,11 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
                         ),
                       ),
                       errorWidget: (context, url, error) => const Center(
-                        child: Icon(LucideIcons.image, size: 48, color: Colors.white24),
+                        child: Icon(
+                          LucideIcons.image,
+                          size: 48,
+                          color: Colors.white24,
+                        ),
                       ),
                     ),
                   ),
@@ -400,7 +668,11 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
                   shape: BoxShape.circle,
                   color: Colors.black45,
                 ),
-                child: const Icon(LucideIcons.play, color: AppColors.white, size: 48),
+                child: const Icon(
+                  LucideIcons.play,
+                  color: AppColors.white,
+                  size: 48,
+                ),
               ),
             ),
 
@@ -410,7 +682,11 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
               child: Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Color(0x99000000), Colors.transparent, Color(0xCC000000)],
+                    colors: [
+                      Color(0x99000000),
+                      Colors.transparent,
+                      Color(0xCC000000),
+                    ],
                     stops: [0.0, 0.4, 1.0],
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
@@ -472,6 +748,23 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
                       ),
                     ],
                   ),
+
+                  const Spacer(),
+
+                  // Safety & Moderation Menu (Flag / Block) for received photos (Apple Guideline 1.2)
+                  if (!isMine)
+                    GestureDetector(
+                      onTap: () => _showSafetyMenu(senderName),
+                      child: FrostedContainer(
+                        borderRadius: AppDimens.radiusFull,
+                        padding: const EdgeInsets.all(10),
+                        child: const Icon(
+                          LucideIcons.moreVertical,
+                          color: AppColors.white,
+                          size: 20,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -495,7 +788,8 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
             ),
 
           // Selfie & Text Reactions Row
-          if (widget.photo.reactions.isNotEmpty || widget.photo.textReactions.isNotEmpty)
+          if (widget.photo.reactions.isNotEmpty ||
+              widget.photo.textReactions.isNotEmpty)
             Positioned(
               bottom: 120,
               left: AppDimens.spaceLg,
@@ -512,14 +806,19 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
                         child: GestureDetector(
                           onTap: () {
                             HapticHelper.selection();
-                            setState(() => _selectedEnlargedReaction = entry.value);
+                            setState(
+                              () => _selectedEnlargedReaction = entry.value,
+                            );
                           },
                           child: Container(
                             width: 44,
                             height: 44,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              border: Border.all(color: AppColors.primary, width: 2),
+                              border: Border.all(
+                                color: AppColors.primary,
+                                width: 2,
+                              ),
                             ),
                             child: ClipOval(
                               child: CachedNetworkImage(
@@ -536,10 +835,15 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
                     ...widget.photo.textReactions.entries.map((entry) {
                       return Container(
                         margin: const EdgeInsets.only(right: 8),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(AppDimens.radiusFull),
+                          borderRadius: BorderRadius.circular(
+                            AppDimens.radiusFull,
+                          ),
                           border: Border.all(color: Colors.white30),
                         ),
                         child: Center(
@@ -576,11 +880,17 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
                             child: FrostedContainer(
                               height: 52,
                               borderRadius: AppDimens.radiusFull,
-                              padding: const EdgeInsets.symmetric(horizontal: 24),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                              ),
                               child: const Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(LucideIcons.trash2, color: AppColors.error, size: 20),
+                                  Icon(
+                                    LucideIcons.trash2,
+                                    color: AppColors.error,
+                                    size: 20,
+                                  ),
                                   SizedBox(width: 8),
                                   Text(
                                     'Xóa khoảnh khắc này',
@@ -601,9 +911,16 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
                           // Selfie React Button
                           Expanded(
                             child: GradientButton(
-                              text: AppStrings.tr('photo_selfie_react', lang: lang),
+                              text: AppStrings.tr(
+                                'photo_selfie_react',
+                                lang: lang,
+                              ),
                               isLoading: _isReacting,
-                              icon: const Icon(LucideIcons.camera, color: AppColors.white, size: 18),
+                              icon: const Icon(
+                                LucideIcons.camera,
+                                color: AppColors.white,
+                                size: 18,
+                              ),
                               onPressed: _handleSelfieReact,
                             ),
                           ),
@@ -617,15 +934,26 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
                               child: FrostedContainer(
                                 height: 54,
                                 borderRadius: AppDimens.radiusFull,
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    const Icon(LucideIcons.messageSquare, color: AppColors.white, size: 18),
+                                    const Icon(
+                                      LucideIcons.messageSquare,
+                                      color: AppColors.white,
+                                      size: 18,
+                                    ),
                                     const SizedBox(width: AppDimens.spaceSm),
                                     Text(
-                                      AppStrings.tr('photo_text_react', lang: lang),
-                                      style: AppTypography.button(color: AppColors.white),
+                                      AppStrings.tr(
+                                        'photo_text_react',
+                                        lang: lang,
+                                      ),
+                                      style: AppTypography.button(
+                                        color: AppColors.white,
+                                      ),
                                     ),
                                   ],
                                 ),

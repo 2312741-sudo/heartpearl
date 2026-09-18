@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_dimens.dart';
 import '../../../core/constants/app_typography.dart';
@@ -16,6 +18,7 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/feed_provider.dart';
 import '../../../providers/friends_provider.dart';
 import '../../../providers/settings_provider.dart';
+import '../../../services/content_filter_service.dart';
 import '../../common/frosted_container.dart';
 import '../../common/gradient_button.dart';
 import '../../common/user_avatar.dart';
@@ -76,7 +79,9 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
 
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng đợi thông tin tài khoản được đồng bộ.')),
+        const SnackBar(
+          content: Text('Vui lòng đợi thông tin tài khoản được đồng bộ.'),
+        ),
       );
       return;
     }
@@ -92,6 +97,18 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
       return;
     }
 
+    final caption = _captionController.text.trim();
+    if (ContentFilterService.isObjectionable(caption)) {
+      HapticHelper.heavy();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppStrings.tr('safety_objectionable_warning', lang: lang)),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _isUploading = true;
       _uploadProgress = 0.0;
@@ -100,12 +117,26 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
     final photoService = ref.read(photoServiceProvider);
 
     try {
+      final allowedRecipientIds = await ref
+          .read(friendServiceProvider)
+          .filterAllowedRecipients(
+            senderUid: user.uid,
+            recipientUids: _selectedFriendIds,
+          );
+      if (allowedRecipientIds.isEmpty) {
+        throw StateError(
+          AppStrings.tr('safety_interaction_blocked', lang: lang),
+        );
+      }
+
       String mediaUrl;
       String? videoUrl;
 
       if (widget.isVideo) {
         // 1. Generate video review thumbnail frame using native AVAssetImageGenerator
-        final thumbFile = await MediaHelper.generateVideoThumbnail(widget.filePath);
+        final thumbFile = await MediaHelper.generateVideoThumbnail(
+          widget.filePath,
+        );
         String? thumbUrl;
         if (thumbFile != null) {
           try {
@@ -125,7 +156,9 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
         // 2. Hardware Video Compression (reducing from 35MB to ~2MB with fast-start streaming)
         File uploadVideoFile = File(widget.filePath);
         try {
-          final compressedPath = await MediaHelper.compressVideo(widget.filePath);
+          final compressedPath = await MediaHelper.compressVideo(
+            widget.filePath,
+          );
           if (compressedPath != null && compressedPath != widget.filePath) {
             uploadVideoFile = File(compressedPath);
           }
@@ -157,9 +190,21 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
         );
       }
 
+      final finalRecipientIds = await ref
+          .read(friendServiceProvider)
+          .filterAllowedRecipients(
+            senderUid: user.uid,
+            recipientUids: allowedRecipientIds,
+          );
+      if (finalRecipientIds.isEmpty) {
+        throw StateError(
+          AppStrings.tr('safety_interaction_blocked', lang: lang),
+        );
+      }
+
       await photoService.sendPhoto(
         senderId: user.uid,
-        recipientIds: _selectedFriendIds.toList(),
+        recipientIds: finalRecipientIds,
         imageUrl: mediaUrl,
         videoUrl: videoUrl,
         caption: _captionController.text.trim().isNotEmpty
@@ -241,10 +286,17 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                   if (widget.isVideo)
                     FrostedContainer(
                       borderRadius: AppDimens.radiusFull,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       child: Row(
                         children: [
-                          const Icon(LucideIcons.play, color: AppColors.white, size: 14),
+                          const Icon(
+                            LucideIcons.play,
+                            color: AppColors.white,
+                            size: 14,
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             AppStrings.tr('home_video_badge', lang: lang),
@@ -286,37 +338,52 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                             // 2.1 Media (Photo / Video)
                             widget.isVideo
                                 ? (_videoController != null &&
-                                        _videoController!.value.isInitialized
-                                    ? FittedBox(
-                                        fit: BoxFit.cover,
-                                        child: SizedBox(
-                                          width: _videoController!.value.size.width,
-                                          height: _videoController!.value.size.height,
-                                          child: widget.filter.colorFilter != null
-                                              ? ColorFiltered(
-                                                  colorFilter: widget.filter.colorFilter!,
-                                                  child: VideoPlayer(_videoController!),
-                                                )
-                                              : VideoPlayer(_videoController!),
-                                        ),
-                                      )
-                                    : const Center(
-                                        child: CircularProgressIndicator(
-                                          color: AppColors.primary,
-                                        ),
-                                      ))
+                                          _videoController!.value.isInitialized
+                                      ? FittedBox(
+                                          fit: BoxFit.cover,
+                                          child: SizedBox(
+                                            width: _videoController!
+                                                .value
+                                                .size
+                                                .width,
+                                            height: _videoController!
+                                                .value
+                                                .size
+                                                .height,
+                                            child:
+                                                widget.filter.colorFilter !=
+                                                    null
+                                                ? ColorFiltered(
+                                                    colorFilter: widget
+                                                        .filter
+                                                        .colorFilter!,
+                                                    child: VideoPlayer(
+                                                      _videoController!,
+                                                    ),
+                                                  )
+                                                : VideoPlayer(
+                                                    _videoController!,
+                                                  ),
+                                          ),
+                                        )
+                                      : const Center(
+                                          child: CircularProgressIndicator(
+                                            color: AppColors.primary,
+                                          ),
+                                        ))
                                 : (widget.filter.colorFilter != null
-                                    ? ColorFiltered(
-                                        colorFilter: widget.filter.colorFilter!,
-                                        child: Image.file(
+                                      ? ColorFiltered(
+                                          colorFilter:
+                                              widget.filter.colorFilter!,
+                                          child: Image.file(
+                                            File(widget.filePath),
+                                            fit: BoxFit.cover,
+                                          ),
+                                        )
+                                      : Image.file(
                                           File(widget.filePath),
                                           fit: BoxFit.cover,
-                                        ),
-                                      )
-                                    : Image.file(
-                                        File(widget.filePath),
-                                        fit: BoxFit.cover,
-                                      )),
+                                        )),
 
                             // 2.2 TikTok Skin-Smoothing & Blemish Softening Diffusion Layer
                             if (widget.filter.blurSigma > 0)
@@ -330,7 +397,9 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                                         sigmaY: widget.filter.blurSigma,
                                       ),
                                       child: Container(
-                                        color: widget.filter.overlayColor != Colors.transparent
+                                        color:
+                                            widget.filter.overlayColor !=
+                                                Colors.transparent
                                             ? widget.filter.overlayColor
                                             : Colors.transparent,
                                       ),
@@ -341,10 +410,13 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
 
                             // 2.3 Beauty Filter Color Overlay
                             if (widget.filter.blurSigma == 0 &&
-                                widget.filter.overlayColor != Colors.transparent)
+                                widget.filter.overlayColor !=
+                                    Colors.transparent)
                               Positioned.fill(
                                 child: IgnorePointer(
-                                  child: Container(color: widget.filter.overlayColor),
+                                  child: Container(
+                                    color: widget.filter.overlayColor,
+                                  ),
                                 ),
                               ),
                           ],
@@ -360,181 +432,219 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
 
             // 3. Bottom Controls & Captions
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppDimens.spaceLg),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimens.spaceLg,
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                    // Caption Field
-                    FrostedContainer(
-                      borderRadius: AppDimens.radiusXl,
+                  // Caption Field
+                  FrostedContainer(
+                    borderRadius: AppDimens.radiusXl,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppDimens.spaceBase,
+                      vertical: 4,
+                    ),
+                    child: TextField(
+                      controller: _captionController,
+                      style: AppTypography.body(color: AppColors.white),
+                      maxLength: 100,
+                      decoration: InputDecoration(
+                        hintText: AppStrings.tr(
+                          'home_caption_placeholder',
+                          lang: lang,
+                        ),
+                        hintStyle: AppTypography.body(
+                          color: AppColors.white.withValues(alpha: 0.6),
+                        ),
+                        border: InputBorder.none,
+                        counterText: '',
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: AppDimens.spaceMd),
+
+                  // Friend Selector Toggle
+                  GestureDetector(
+                    onTap: () {
+                      HapticHelper.selection();
+                      setState(() => _showFriendPicker = !_showFriendPicker);
+                    },
+                    child: FrostedContainer(
+                      borderRadius: AppDimens.radiusFull,
                       padding: const EdgeInsets.symmetric(
-                        horizontal: AppDimens.spaceBase,
-                        vertical: 4,
+                        horizontal: AppDimens.spaceLg,
+                        vertical: 10,
                       ),
-                      child: TextField(
-                        controller: _captionController,
-                        style: AppTypography.body(color: AppColors.white),
-                        maxLength: 100,
-                        decoration: InputDecoration(
-                          hintText: AppStrings.tr('home_caption_placeholder', lang: lang),
-                          hintStyle: AppTypography.body(color: AppColors.white.withValues(alpha: 0.6)),
-                          border: InputBorder.none,
-                          counterText: '',
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: AppDimens.spaceMd),
-
-                    // Friend Selector Toggle
-                    GestureDetector(
-                      onTap: () {
-                        HapticHelper.selection();
-                        setState(() => _showFriendPicker = !_showFriendPicker);
-                      },
-                      child: FrostedContainer(
-                        borderRadius: AppDimens.radiusFull,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppDimens.spaceLg,
-                          vertical: 10,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              LucideIcons.users,
-                              color: AppColors.primaryLight,
-                              size: 18,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            LucideIcons.users,
+                            color: AppColors.primaryLight,
+                            size: 18,
+                          ),
+                          const SizedBox(width: AppDimens.spaceSm),
+                          Text(
+                            _selectedFriendIds.isEmpty
+                                ? AppStrings.tr(
+                                    'home_select_recipient',
+                                    lang: lang,
+                                  )
+                                : '${_selectedFriendIds.length} ${AppStrings.tr('home_selected', lang: lang)}',
+                            style: AppTypography.medium.copyWith(
+                              color: AppColors.white,
+                              fontSize: 14,
                             ),
-                            const SizedBox(width: AppDimens.spaceSm),
-                            Text(
-                              _selectedFriendIds.isEmpty
-                                  ? AppStrings.tr('home_select_recipient', lang: lang)
-                                  : '${_selectedFriendIds.length} ${AppStrings.tr('home_selected', lang: lang)}',
-                              style: AppTypography.medium.copyWith(
-                                color: AppColors.white,
-                                fontSize: 14,
-                              ),
-                            ),
-                            const SizedBox(width: AppDimens.spaceSm),
-                            Icon(
-                              _showFriendPicker
-                                  ? LucideIcons.chevronDown
-                                  : LucideIcons.chevronUp,
-                              color: AppColors.white.withValues(alpha: 0.7),
-                              size: 16,
-                            ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: AppDimens.spaceSm),
+                          Icon(
+                            _showFriendPicker
+                                ? LucideIcons.chevronDown
+                                : LucideIcons.chevronUp,
+                            color: AppColors.white.withValues(alpha: 0.7),
+                            size: 16,
+                          ),
+                        ],
                       ),
                     ),
+                  ),
 
-                    // Friend list picker
-                    if (_showFriendPicker) ...[
-                      const SizedBox(height: AppDimens.spaceSm),
-                      FrostedContainer(
-                        borderRadius: AppDimens.radiusLg,
-                        padding: const EdgeInsets.all(AppDimens.spaceSm),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Select All / Deselect All
-                            if (friends.isNotEmpty)
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    '${friends.length} bạn bè',
-                                    style: AppTypography.caption(color: AppColors.darkTextMuted),
+                  // Friend list picker
+                  if (_showFriendPicker) ...[
+                    const SizedBox(height: AppDimens.spaceSm),
+                    FrostedContainer(
+                      borderRadius: AppDimens.radiusLg,
+                      padding: const EdgeInsets.all(AppDimens.spaceSm),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Select All / Deselect All
+                          if (friends.isNotEmpty)
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  '${friends.length} bạn bè',
+                                  style: AppTypography.caption(
+                                    color: AppColors.darkTextMuted,
                                   ),
-                                  TextButton(
-                                    onPressed: () {
+                                ),
+                                TextButton(
+                                  onPressed: () {
+                                    HapticHelper.selection();
+                                    setState(() {
+                                      if (_selectedFriendIds.length ==
+                                          friends.length) {
+                                        _selectedFriendIds.clear();
+                                      } else {
+                                        _selectedFriendIds.addAll(
+                                          friends.map((f) => f.uid),
+                                        );
+                                      }
+                                    });
+                                  },
+                                  child: Text(
+                                    _selectedFriendIds.length == friends.length
+                                        ? AppStrings.tr(
+                                            'home_deselect_all',
+                                            lang: lang,
+                                          )
+                                        : AppStrings.tr(
+                                            'home_select_all',
+                                            lang: lang,
+                                          ),
+                                    style: AppTypography.bodyBold(
+                                      color: AppColors.primaryLight,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          if (friends.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.all(AppDimens.spaceMd),
+                              child: Text(
+                                'Chưa có bạn bè. Hãy thêm bạn bè ở mục Bạn bè!',
+                                style: AppTypography.caption(
+                                  color: AppColors.white.withValues(alpha: 0.7),
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            )
+                          else
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxHeight: 180),
+                              child: ListView.builder(
+                                shrinkWrap: true,
+                                itemCount: friends.length,
+                                itemBuilder: (context, index) {
+                                  final friend = friends[index];
+                                  final isSelected = _selectedFriendIds
+                                      .contains(friend.uid);
+
+                                  return ListTile(
+                                    dense: true,
+                                    leading: UserAvatar(
+                                      imageUrl: friend.avatarUrl,
+                                      name: friend.displayName,
+                                      size: 36,
+                                    ),
+                                    title: Text(
+                                      friend.displayName,
+                                      style: AppTypography.bodyBold(
+                                        color: AppColors.white,
+                                      ),
+                                    ),
+                                    trailing: isSelected
+                                        ? const Icon(
+                                            LucideIcons.checkCircle2,
+                                            color: AppColors.primaryLight,
+                                          )
+                                        : const Icon(
+                                            LucideIcons.circle,
+                                            color: Colors.white38,
+                                          ),
+                                    onTap: () {
                                       HapticHelper.selection();
                                       setState(() {
-                                        if (_selectedFriendIds.length == friends.length) {
-                                          _selectedFriendIds.clear();
+                                        if (isSelected) {
+                                          _selectedFriendIds.remove(friend.uid);
                                         } else {
-                                          _selectedFriendIds.addAll(friends.map((f) => f.uid));
+                                          _selectedFriendIds.add(friend.uid);
                                         }
                                       });
                                     },
-                                    child: Text(
-                                      _selectedFriendIds.length == friends.length
-                                          ? AppStrings.tr('home_deselect_all', lang: lang)
-                                          : AppStrings.tr('home_select_all', lang: lang),
-                                      style: AppTypography.bodyBold(color: AppColors.primaryLight),
-                                    ),
-                                  ),
-                                ],
+                                  );
+                                },
                               ),
-                            if (friends.isEmpty)
-                              Padding(
-                                padding: const EdgeInsets.all(AppDimens.spaceMd),
-                                child: Text(
-                                  'Chưa có bạn bè. Hãy thêm bạn bè ở mục Bạn bè!',
-                                  style: AppTypography.caption(color: AppColors.white.withValues(alpha: 0.7)),
-                                  textAlign: TextAlign.center,
-                                ),
-                              )
-                            else
-                              ConstrainedBox(
-                                constraints: const BoxConstraints(maxHeight: 180),
-                                child: ListView.builder(
-                                  shrinkWrap: true,
-                                  itemCount: friends.length,
-                                  itemBuilder: (context, index) {
-                                    final friend = friends[index];
-                                    final isSelected = _selectedFriendIds.contains(friend.uid);
-
-                                    return ListTile(
-                                      dense: true,
-                                      leading: UserAvatar(
-                                        imageUrl: friend.avatarUrl,
-                                        name: friend.displayName,
-                                        size: 36,
-                                      ),
-                                      title: Text(
-                                        friend.displayName,
-                                        style: AppTypography.bodyBold(color: AppColors.white),
-                                      ),
-                                      trailing: isSelected
-                                          ? const Icon(LucideIcons.checkCircle2, color: AppColors.primaryLight)
-                                          : const Icon(LucideIcons.circle, color: Colors.white38),
-                                      onTap: () {
-                                        HapticHelper.selection();
-                                        setState(() {
-                                          if (isSelected) {
-                                            _selectedFriendIds.remove(friend.uid);
-                                          } else {
-                                            _selectedFriendIds.add(friend.uid);
-                                          }
-                                        });
-                                      },
-                                    );
-                                  },
-                                ),
-                              ),
-                          ],
-                        ),
+                            ),
+                        ],
                       ),
-                    ],
-
-                    const SizedBox(height: AppDimens.spaceLg),
-
-                    // Send Button
-                    GradientButton(
-                      text: _isUploading
-                          ? '${(_uploadProgress * 100).toInt()}% ${AppStrings.tr('home_sending', lang: lang)}'
-                          : AppStrings.tr('home_send', lang: lang),
-                      isLoading: _isUploading,
-                      icon: const Icon(LucideIcons.send, color: AppColors.white, size: 20),
-                      onPressed: () => _handleSend(friends),
                     ),
-
-                    const SizedBox(height: AppDimens.spaceBase),
                   ],
-                ),
+
+                  const SizedBox(height: AppDimens.spaceLg),
+
+                  // Send Button
+                  GradientButton(
+                    text: _isUploading
+                        ? '${(_uploadProgress * 100).toInt()}% ${AppStrings.tr('home_sending', lang: lang)}'
+                        : AppStrings.tr('home_send', lang: lang),
+                    isLoading: _isUploading,
+                    icon: const Icon(
+                      LucideIcons.send,
+                      color: AppColors.white,
+                      size: 20,
+                    ),
+                    onPressed: () => _handleSend(friends),
+                  ),
+
+                  const SizedBox(height: AppDimens.spaceBase),
+                ],
               ),
+            ),
             const SizedBox(height: 8),
           ],
         ),

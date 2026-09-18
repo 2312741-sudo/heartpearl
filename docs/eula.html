@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Thỏa thuận Người dùng Cuối (EULA) & Tiêu chuẩn Cộng đồng - HeartPearl</title>
+  <style>
+    :root {
+      --primary: #C42E5C;
+      --primary-light: #E55080;
+      --bg: #0F0814;
+      --card-bg: #1B0E24;
+      --text: #F6EEFF;
+      --text-muted: #A88AA3;
+      --border: rgba(255, 255, 255, 0.1);
+      --error: #EF4444;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.6;
+      padding: 32px 16px;
+    }
+    .container {
+      max-width: 840px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border-radius: 24px;
+      border: 1px solid var(--border);
+      padding: 40px 32px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 36px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo {
+      font-size: 38px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      background: linear-gradient(135deg, #FF80A0, #C42E5C);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(239, 68, 68, 0.15);
+      color: #FF6B6B;
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 6px;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .lang-toggle {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin: 20px 0;
+    }
+    .lang-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 18px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+    .lang-btn.active {
+      background: var(--primary);
+      border-color: var(--primary-light);
+      color: #fff;
+    }
+    .alert-box {
+      background: rgba(239, 68, 68, 0.12);
+      border: 1.5px solid var(--error);
+      border-radius: 16px;
+      padding: 18px 20px;
+      margin-bottom: 24px;
+    }
+    .alert-title {
+      font-size: 16px;
+      font-weight: bold;
+      color: #FF6B6B;
+      margin-bottom: 8px;
+    }
+    h2 {
+      color: #fff;
+      font-size: 22px;
+      margin: 28px 0 12px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    h3 {
+      color: var(--primary-light);
+      font-size: 17px;
+      margin: 18px 0 8px 0;
+    }
+    p, li {
+      color: var(--text-muted);
+      font-size: 15px;
+      margin-bottom: 12px;
+    }
+    ul {
+      padding-left: 24px;
+      margin-bottom: 16px;
+    }
+    a {
+      color: var(--primary-light);
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 40px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">HeartPearl</div>
+      <div class="badge">Apple App Store Guideline 1.2 Compliant</div>
+      <h1 style="font-size: 24px; margin-top: 12px;">Thỏa thuận Người dùng Cuối (EULA) & Tiêu chuẩn Cộng đồng</h1>
+      <p style="margin-top: 6px;">End User License Agreement & Community Guidelines</p>
+      
+      <div class="lang-toggle">
+        <button class="lang-btn active" onclick="setLang('vi')">Tiếng Việt</button>
+        <button class="lang-btn" onclick="setLang('en')">English</button>
+      </div>
+    </div>
+
+    <!-- Vietnamese Content -->
+    <div id="content-vi">
+      <div class="alert-box">
+        <div class="alert-title">⚠️ CHÍNH SÁCH KHÔNG KHOAN NHƯỢNG (ZERO TOLERANCE POLICY)</div>
+        <p style="color: #FFF; margin: 0;">
+          HeartPearl tuyệt đối <strong>KHÔNG KHOAN NHƯỢNG</strong> đối với bất kỳ nội dung phản cảm hoặc người dùng có hành vi lạm dụng nào. Mọi hình thức đăng tải hình ảnh, video khiêu dâm, bạo lực, xúc phạm, phân biệt đối xử, quấy rối hoặc kích động thù hận đều bị nghiêm cấm hoàn toàn.
+        </p>
+      </div>
+
+      <h2>1. Cam kết Xử lý Vi phạm trong vòng 24 Giờ</h2>
+      <p>
+        Theo đúng tiêu chuẩn Apple App Store Review Guideline 1.2, đội ngũ điều hành HeartPearl cam kết:
+      </p>
+      <ul>
+        <li>Rà soát và xử lý tất cả các báo cáo nội dung phản cảm hoặc người dùng lạm dụng trong vòng <strong>24 giờ</strong> kể từ thời điểm nhận được báo cáo.</li>
+        <li>Gỡ bỏ ngay lập tức nội dung vi phạm khỏi toàn bộ hệ thống ứng dụng và tiện ích màn hình.</li>
+        <li>Khóa vĩnh viễn (eject/ban) tài khoản của bất kỳ người dùng nào vi phạm tiêu chuẩn cộng đồng.</li>
+      </ul>
+
+      <h2>2. Cơ chế Báo cáo Nội dung Vi phạm (Flagging)</h2>
+      <p>
+        Mọi người dùng trên HeartPearl đều được trang bị công cụ báo cáo trực tiếp:
+      </p>
+      <ul>
+        <li>Khi xem bất kỳ ảnh hoặc video nào nhận từ bạn bè, bạn có thể bấm vào menu ba chấm hoặc biểu tượng lá cờ để <strong>"Báo cáo khoảnh khắc"</strong>.</li>
+        <li>Người dùng có thể chọn lý do (Nội dung khiêu dâm/phản cảm, Bạo lực, Xúc phạm/Quấy rối, Spam, Khác) và mô tả chi tiết.</li>
+        <li>Báo cáo sẽ được chuyển tới hàng đợi kiểm duyệt để xử lý tức thì.</li>
+      </ul>
+
+      <h2>3. Cơ chế Chặn & Gỡ Nội dung Ngay lập tức (Instant Blocking)</h2>
+      <p>
+        Để bảo vệ sự an toàn và trải nghiệm của bạn:
+      </p>
+      <ul>
+        <li>Bạn có thể chặn bất kỳ người dùng nào ngay trên màn hình xem ảnh/video, trong cuộc trò chuyện tin nhắn hoặc trong danh sách bạn bè.</li>
+        <li><strong>Gỡ nội dung tức thì:</strong> Ngay khi bấm Chặn, toàn bộ hình ảnh, video và tin nhắn của người đó sẽ lập tức biến mất khỏi bảng tin và tiện ích màn hình của bạn.</li>
+        <li><strong>Thông báo tới nhà phát triển:</strong> Hệ thống sẽ tự động tạo một bản ghi cảnh báo gửi trực tiếp đến nhà phát triển về hành vi lạm dụng của đối tượng bị chặn.</li>
+      </ul>
+
+      <h2>4. Bộ lọc Nội dung Tự động</h2>
+      <p>
+        HeartPearl áp dụng bộ lọc từ ngữ phản cảm và kiểm duyệt tự động trên tất cả các trường nhập văn bản (chú thích ảnh, tin nhắn, phản hồi, tên hiển thị, tên người dùng) nhằm ngăn ngừa các từ ngữ khiếm nhã trước khi xuất hiện trên nền tảng.
+      </p>
+
+      <h2>5. Quyền Xóa Tài khoản Hoàn toàn (Apple Guideline 5.1.1(v))</h2>
+      <p>
+        Người dùng có toàn quyền xóa vĩnh viễn tài khoản và toàn bộ dữ liệu của mình bất cứ lúc nào:
+      </p>
+      <ul>
+        <li>Trực tiếp trong ứng dụng: Vào mục <strong>Hồ sơ &gt; Cài đặt &gt; Xóa tài khoản vĩnh viễn</strong>.</li>
+        <li>Hoặc gửi yêu cầu trực tuyến tại: <a href="delete-account.html">https://tamchau-865f3.web.app/delete-account.html</a></li>
+      </ul>
+    </div>
+
+    <!-- English Content -->
+    <div id="content-en" style="display: none;">
+      <div class="alert-box">
+        <div class="alert-title">⚠️ ZERO TOLERANCE POLICY</div>
+        <p style="color: #FFF; margin: 0;">
+          HeartPearl has <strong>ZERO TOLERANCE</strong> for objectionable content or abusive users. Any dissemination of pornography, sexually explicit media, violence, harassment, hate speech, bullying, or defamation is strictly prohibited on HeartPearl.
+        </p>
+      </div>
+
+      <h2>1. 24-Hour Moderation Action Commitment</h2>
+      <p>
+        In accordance with Apple App Store Review Guideline 1.2, the HeartPearl moderation team strictly commits to:
+      </p>
+      <ul>
+        <li>Review and act upon all user-reported objectionable content and abusive user reports within <strong>24 hours</strong>.</li>
+        <li>Immediately remove offending photos, videos, or messages from all user feeds and home screen widgets.</li>
+        <li>Permanently eject and ban offending users who post objectionable content or engage in abusive behavior.</li>
+      </ul>
+
+      <h2>2. Content Flagging Mechanism</h2>
+      <p>
+        HeartPearl provides built-in flagging mechanisms for all user-generated content:
+      </p>
+      <ul>
+        <li>While viewing any photo or video received from another user, tap the three-dot action button to choose <strong>"Report Moment"</strong>.</li>
+        <li>Select the violation category (Nudity/Inappropriate Content, Violence, Harassment, Spam, Other) and optionally provide notes.</li>
+        <li>The flagged content is immediately submitted for urgent administrative review.</li>
+      </ul>
+
+      <h2>3. Instant User Blocking & Developer Notification</h2>
+      <p>
+        To ensure user safety:
+      </p>
+      <ul>
+        <li>Users can block any abusive user directly from the media viewer, chat room, or friend list.</li>
+        <li><strong>Instant Feed Removal:</strong> When a user is blocked, all of their photos, videos, and messages are instantly removed from your feed and widgets.</li>
+        <li><strong>Developer Notification:</strong> Blocking an abusive user automatically notifies our developers and logs an incident report for immediate inspection.</li>
+      </ul>
+
+      <h2>4. Automated Content Filtering</h2>
+      <p>
+        HeartPearl utilizes text filtering algorithms across captions, messages, reactions, and user profiles to intercept profanity and objectionable words before publication.
+      </p>
+
+      <h2>5. Complete Account Deletion (Apple Guideline 5.1.1(v))</h2>
+      <p>
+        Users have the complete right to delete their account and all personal data anytime:
+      </p>
+      <ul>
+        <li>Directly within the app: Navigate to <strong>Profile &gt; Account Settings &gt; Delete Account Permanently</strong>.</li>
+        <li>Or online via our dedicated deletion portal: <a href="delete-account.html">https://tamchau-865f3.web.app/delete-account.html</a></li>
+      </ul>
+    </div>
+
+    <div class="footer">
+      <p>© 2026 HeartPearl. All rights reserved.</p>
+      <p style="margin-top: 8px;">
+        <a href="privacy-policy.html">Chính sách Bảo mật (Privacy Policy)</a> &bull; 
+        <a href="delete-account.html">Yêu cầu Xóa tài khoản (Account Deletion)</a>
+      </p>
+    </div>
+  </div>
+
+  <script>
+    function setLang(lang) {
+      document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
+      if (lang === 'vi') {
+        document.querySelector('.lang-btn:nth-child(1)').classList.add('active');
+        document.getElementById('content-vi').style.display = 'block';
+        document.getElementById('content-en').style.display = 'none';
+      } else {
+        document.querySelector('.lang-btn:nth-child(2)').classList.add('active');
+        document.getElementById('content-vi').style.display = 'none';
+        document.getElementById('content-en').style.display = 'block';
+      }
+    }
+  </script>
+</body>
+</html>

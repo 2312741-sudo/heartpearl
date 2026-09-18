@@ -11,6 +11,7 @@ import '../../core/utils/haptic_helper.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/feed_provider.dart';
 import '../../providers/settings_provider.dart';
+import '../../services/content_filter_service.dart';
 import '../common/app_text_field.dart';
 import '../common/gradient_button.dart';
 
@@ -70,6 +71,12 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
     final validUsernameRegex = RegExp(r'^[a-z0-9_.]+$');
     if (!validUsernameRegex.hasMatch(username)) {
       _showError('Username chỉ chứa chữ thường, số, dấu gạch dưới (_) và chấm (.)');
+      return;
+    }
+
+    if (ContentFilterService.isObjectionable(displayName) ||
+        ContentFilterService.isObjectionable(username)) {
+      _showError('Tên hiển thị hoặc username chứa từ ngữ không phù hợp với tiêu chuẩn cộng đồng.');
       return;
     }
 
