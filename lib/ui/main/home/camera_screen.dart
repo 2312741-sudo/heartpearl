@@ -674,9 +674,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     final unreadChats = ref.watch(totalUnreadChatsProvider);
     final bottomInset = MediaQuery.of(context).padding.bottom;
     final navBarClearance = 80.0 + bottomInset + 16.0;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: AppColors.black,
+      backgroundColor: isDark ? AppColors.black : AppColors.lightBackground,
       body: Stack(
         children: [
           SafeArea(
@@ -710,7 +711,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                       ),
                       Text(
                         'Pearl',
-                        style: AppTypography.h2(color: AppColors.pearl),
+                        style: AppTypography.h2(
+                          color: isDark ? AppColors.pearl : AppColors.lightTextPrimary,
+                        ),
                       ),
                     ],
                   ),
@@ -731,9 +734,18 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                         child: FrostedContainer(
                           borderRadius: AppDimens.radiusFull,
                           padding: const EdgeInsets.all(10),
-                          child: const Icon(
+                          backgroundColor: isDark
+                              ? const Color(0x331E0D26)
+                              : AppColors.lightSurface.withValues(alpha: 0.9),
+                          border: Border.all(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.12)
+                                : AppColors.lightBorder.withValues(alpha: 0.6),
+                            width: 1,
+                          ),
+                          child: Icon(
                             LucideIcons.mapPin,
-                            color: AppColors.white,
+                            color: isDark ? AppColors.white : AppColors.lightTextPrimary,
                             size: 22,
                           ),
                         ),
@@ -757,9 +769,18 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                             FrostedContainer(
                               borderRadius: AppDimens.radiusFull,
                               padding: const EdgeInsets.all(10),
-                              child: const Icon(
+                              backgroundColor: isDark
+                                  ? const Color(0x331E0D26)
+                                  : AppColors.lightSurface.withValues(alpha: 0.9),
+                              border: Border.all(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.12)
+                                    : AppColors.lightBorder.withValues(alpha: 0.6),
+                                width: 1,
+                              ),
+                              child: Icon(
                                 LucideIcons.messageCircle,
-                                color: AppColors.white,
+                                color: isDark ? AppColors.white : AppColors.lightTextPrimary,
                                 size: 22,
                               ),
                             ),
@@ -781,9 +802,20 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                         child: FrostedContainer(
                           borderRadius: AppDimens.radiusFull,
                           padding: const EdgeInsets.all(10),
+                          backgroundColor: isDark
+                              ? const Color(0x331E0D26)
+                              : AppColors.lightSurface.withValues(alpha: 0.9),
+                          border: Border.all(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.12)
+                                : AppColors.lightBorder.withValues(alpha: 0.6),
+                            width: 1,
+                          ),
                           child: Icon(
                             _isFlashOn ? LucideIcons.zap : LucideIcons.zapOff,
-                            color: _isFlashOn ? AppColors.warning : AppColors.white,
+                            color: _isFlashOn
+                                ? AppColors.warning
+                                : (isDark ? AppColors.white : AppColors.lightTextPrimary),
                             size: 22,
                           ),
                         ),
@@ -810,9 +842,20 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                           color: Colors.black,
                           borderRadius: BorderRadius.circular(28),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.15),
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.15)
+                                : AppColors.lightBorder,
                             width: 1.5,
                           ),
+                          boxShadow: isDark
+                              ? null
+                              : [
+                                  BoxShadow(
+                                    color: AppColors.primary.withValues(alpha: 0.08),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
                         ),
                         child: AnimatedBuilder(
                           animation: _flipAnimController,
@@ -1039,11 +1082,13 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                         ),
                         backgroundColor: isSelected
                             ? AppColors.primary.withValues(alpha: 0.85)
-                            : const Color(0x4D1E0D26),
+                            : (isDark
+                                ? const Color(0x4D1E0D26)
+                                : AppColors.lightSurface.withValues(alpha: 0.9)),
                         border: Border.all(
                           color: isSelected
                               ? AppColors.primaryLight
-                              : Colors.white24,
+                              : (isDark ? Colors.white24 : AppColors.lightBorder),
                           width: isSelected ? 1.5 : 1,
                         ),
                         child: Center(
@@ -1058,7 +1103,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                               Text(
                                 filter.name,
                                 style: AppTypography.medium.copyWith(
-                                  color: AppColors.white,
+                                  color: isSelected
+                                      ? AppColors.white
+                                      : (isDark ? AppColors.white : AppColors.lightTextPrimary),
                                   fontSize: 13,
                                   fontWeight: isSelected
                                       ? FontWeight.bold
@@ -1091,9 +1138,18 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                     child: FrostedContainer(
                       borderRadius: AppDimens.radiusFull,
                       padding: const EdgeInsets.all(14),
-                      child: const Icon(
+                      backgroundColor: isDark
+                          ? const Color(0x331E0D26)
+                          : AppColors.lightSurface.withValues(alpha: 0.9),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.12)
+                            : AppColors.lightBorder.withValues(alpha: 0.6),
+                        width: 1,
+                      ),
+                      child: Icon(
                         LucideIcons.image,
-                        color: AppColors.white,
+                        color: isDark ? AppColors.white : AppColors.lightTextPrimary,
                         size: 24,
                       ),
                     ),
@@ -1124,8 +1180,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                               valueColor: const AlwaysStoppedAnimation<Color>(
                                 AppColors.primaryLight,
                               ),
-                              backgroundColor:
-                                  _isRecording ? Colors.white24 : Colors.transparent,
+                              backgroundColor: _isRecording
+                                  ? (isDark ? Colors.white24 : AppColors.lightBorder)
+                                  : Colors.transparent,
                             ),
                           ),
 
@@ -1138,7 +1195,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                               border: Border.all(
                                 color: (_isRecording || _isButtonPressed)
                                     ? AppColors.primaryLight
-                                    : Colors.white.withValues(alpha: 0.8),
+                                    : (isDark
+                                        ? Colors.white.withValues(alpha: 0.8)
+                                        : AppColors.primary.withValues(alpha: 0.35)),
                                 width: 3.5,
                               ),
                             ),
@@ -1182,9 +1241,18 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                     child: FrostedContainer(
                       borderRadius: AppDimens.radiusFull,
                       padding: const EdgeInsets.all(14),
-                      child: const Icon(
+                      backgroundColor: isDark
+                          ? const Color(0x331E0D26)
+                          : AppColors.lightSurface.withValues(alpha: 0.9),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.12)
+                            : AppColors.lightBorder.withValues(alpha: 0.6),
+                        width: 1,
+                      ),
+                      child: Icon(
                         LucideIcons.switchCamera,
-                        color: AppColors.white,
+                        color: isDark ? AppColors.white : AppColors.lightTextPrimary,
                         size: 24,
                       ),
                     ),

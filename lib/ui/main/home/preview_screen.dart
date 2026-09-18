@@ -253,9 +253,10 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
     final lang = ref.watch(settingsProvider).language;
     final friendsAsync = ref.watch(friendsListProvider);
     final friends = friendsAsync.value ?? [];
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: AppColors.black,
+      backgroundColor: isDark ? AppColors.black : AppColors.lightBackground,
       body: SafeArea(
         child: Column(
           children: [
@@ -276,9 +277,18 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                     child: FrostedContainer(
                       borderRadius: AppDimens.radiusFull,
                       padding: const EdgeInsets.all(10),
-                      child: const Icon(
+                      backgroundColor: isDark
+                          ? const Color(0x331E0D26)
+                          : AppColors.lightSurface.withValues(alpha: 0.9),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.12)
+                            : AppColors.lightBorder.withValues(alpha: 0.6),
+                        width: 1,
+                      ),
+                      child: Icon(
                         LucideIcons.x,
-                        color: AppColors.white,
+                        color: isDark ? AppColors.white : AppColors.lightTextPrimary,
                         size: 22,
                       ),
                     ),
@@ -290,11 +300,20 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                         horizontal: 12,
                         vertical: 6,
                       ),
+                      backgroundColor: isDark
+                          ? const Color(0x331E0D26)
+                          : AppColors.lightSurface.withValues(alpha: 0.9),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.12)
+                            : AppColors.lightBorder.withValues(alpha: 0.6),
+                        width: 1,
+                      ),
                       child: Row(
                         children: [
-                          const Icon(
+                          Icon(
                             LucideIcons.play,
-                            color: AppColors.white,
+                            color: isDark ? AppColors.white : AppColors.lightTextPrimary,
                             size: 14,
                           ),
                           const SizedBox(width: 4),
@@ -302,7 +321,7 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                             AppStrings.tr('home_video_badge', lang: lang),
                             style: AppTypography.bold.copyWith(
                               fontSize: 12,
-                              color: AppColors.white,
+                              color: isDark ? AppColors.white : AppColors.lightTextPrimary,
                             ),
                           ),
                         ],
@@ -328,9 +347,20 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                           color: Colors.black,
                           borderRadius: BorderRadius.circular(28),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.15),
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.15)
+                                : AppColors.lightBorder,
                             width: 1.5,
                           ),
+                          boxShadow: isDark
+                              ? null
+                              : [
+                                  BoxShadow(
+                                    color: AppColors.primary.withValues(alpha: 0.08),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
                         ),
                         child: Stack(
                           fit: StackFit.expand,
@@ -445,9 +475,20 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                       horizontal: AppDimens.spaceBase,
                       vertical: 4,
                     ),
+                    backgroundColor: isDark
+                        ? const Color(0x331E0D26)
+                        : AppColors.lightSurface.withValues(alpha: 0.9),
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.12)
+                          : AppColors.lightBorder.withValues(alpha: 0.6),
+                      width: 1,
+                    ),
                     child: TextField(
                       controller: _captionController,
-                      style: AppTypography.body(color: AppColors.white),
+                      style: AppTypography.body(
+                        color: isDark ? AppColors.white : AppColors.lightTextPrimary,
+                      ),
                       maxLength: 100,
                       decoration: InputDecoration(
                         hintText: AppStrings.tr(
@@ -455,7 +496,9 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                           lang: lang,
                         ),
                         hintStyle: AppTypography.body(
-                          color: AppColors.white.withValues(alpha: 0.6),
+                          color: isDark
+                              ? AppColors.white.withValues(alpha: 0.6)
+                              : AppColors.lightTextMuted,
                         ),
                         border: InputBorder.none,
                         counterText: '',
@@ -477,6 +520,15 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                         horizontal: AppDimens.spaceLg,
                         vertical: 10,
                       ),
+                      backgroundColor: isDark
+                          ? const Color(0x331E0D26)
+                          : AppColors.lightSurface.withValues(alpha: 0.9),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.12)
+                            : AppColors.lightBorder.withValues(alpha: 0.6),
+                        width: 1,
+                      ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -494,7 +546,7 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                                   )
                                 : '${_selectedFriendIds.length} ${AppStrings.tr('home_selected', lang: lang)}',
                             style: AppTypography.medium.copyWith(
-                              color: AppColors.white,
+                              color: isDark ? AppColors.white : AppColors.lightTextPrimary,
                               fontSize: 14,
                             ),
                           ),
@@ -503,7 +555,9 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                             _showFriendPicker
                                 ? LucideIcons.chevronDown
                                 : LucideIcons.chevronUp,
-                            color: AppColors.white.withValues(alpha: 0.7),
+                            color: isDark
+                                ? AppColors.white.withValues(alpha: 0.7)
+                                : AppColors.lightTextPrimary.withValues(alpha: 0.7),
                             size: 16,
                           ),
                         ],
@@ -517,6 +571,15 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                     FrostedContainer(
                       borderRadius: AppDimens.radiusLg,
                       padding: const EdgeInsets.all(AppDimens.spaceSm),
+                      backgroundColor: isDark
+                          ? const Color(0x331E0D26)
+                          : AppColors.lightSurface.withValues(alpha: 0.95),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.12)
+                            : AppColors.lightBorder.withValues(alpha: 0.6),
+                        width: 1,
+                      ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -528,7 +591,9 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                                 Text(
                                   '${friends.length} bạn bè',
                                   style: AppTypography.caption(
-                                    color: AppColors.darkTextMuted,
+                                    color: isDark
+                                        ? AppColors.darkTextMuted
+                                        : AppColors.lightTextMuted,
                                   ),
                                 ),
                                 TextButton(
@@ -568,7 +633,9 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                               child: Text(
                                 'Chưa có bạn bè. Hãy thêm bạn bè ở mục Bạn bè!',
                                 style: AppTypography.caption(
-                                  color: AppColors.white.withValues(alpha: 0.7),
+                                  color: isDark
+                                      ? AppColors.white.withValues(alpha: 0.7)
+                                      : AppColors.lightTextMuted,
                                 ),
                                 textAlign: TextAlign.center,
                               ),
@@ -594,7 +661,9 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                                     title: Text(
                                       friend.displayName,
                                       style: AppTypography.bodyBold(
-                                        color: AppColors.white,
+                                        color: isDark
+                                            ? AppColors.white
+                                            : AppColors.lightTextPrimary,
                                       ),
                                     ),
                                     trailing: isSelected
@@ -602,9 +671,11 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                                             LucideIcons.checkCircle2,
                                             color: AppColors.primaryLight,
                                           )
-                                        : const Icon(
+                                        : Icon(
                                             LucideIcons.circle,
-                                            color: Colors.white38,
+                                            color: isDark
+                                                ? Colors.white38
+                                                : AppColors.lightBorderLight,
                                           ),
                                     onTap: () {
                                       HapticHelper.selection();
