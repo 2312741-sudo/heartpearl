@@ -24,7 +24,9 @@ final notificationsStreamProvider = StreamProvider<List<NotificationModel>>((
       .map(
         (notifications) => notifications
             .where(
-              (notification) => !blockedUsers.contains(notification.senderId),
+              (notification) =>
+                  notification.type != 'message' &&
+                  !blockedUsers.contains(notification.senderId),
             )
             .toList(),
       );

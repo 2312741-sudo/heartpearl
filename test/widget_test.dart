@@ -7,6 +7,7 @@ import 'package:heartpearl/models/notification_model.dart';
 import 'package:heartpearl/core/utils/date_helper.dart';
 import 'package:heartpearl/core/utils/camera_filters.dart';
 import 'package:heartpearl/services/content_filter_service.dart';
+import 'package:heartpearl/services/widget_service.dart';
 
 void main() {
   group('HeartPearl Models & Helpers Tests', () {
@@ -102,13 +103,22 @@ void main() {
       expect(BeautyFilter.all[1].name, 'Pearl Natural');
     });
 
-    test('ContentFilterService detects objectionable text per Guideline 1.2', () {
-      expect(ContentFilterService.isObjectionable('Hello friend'), isFalse);
-      expect(ContentFilterService.isObjectionable('Khoảnh khắc tuyệt vời!'), isFalse);
-      expect(ContentFilterService.isObjectionable('fuck you'), isTrue);
-      expect(ContentFilterService.isObjectionable('đụ má mày'), isTrue);
-      expect(ContentFilterService.isObjectionable('chat sex gái gọi'), isTrue);
-    });
+    test(
+      'ContentFilterService detects objectionable text per Guideline 1.2',
+      () {
+        expect(ContentFilterService.isObjectionable('Hello friend'), isFalse);
+        expect(
+          ContentFilterService.isObjectionable('Khoảnh khắc tuyệt vời!'),
+          isFalse,
+        );
+        expect(ContentFilterService.isObjectionable('fuck you'), isTrue);
+        expect(ContentFilterService.isObjectionable('đụ má mày'), isTrue);
+        expect(
+          ContentFilterService.isObjectionable('chat sex gái gọi'),
+          isTrue,
+        );
+      },
+    );
 
     test('NotificationModel mapping and serialization test', () {
       final now = DateTime(2026, 9, 18, 12, 0);
@@ -134,6 +144,44 @@ void main() {
       expect(map['type'], 'photo');
       expect(map['read'], false);
       expect(map['photoId'], 'photo_999');
+    });
+
+    test('BeautySettings serialization and default values', () {
+      const settings = BeautySettings();
+      expect(settings.enabled, isTrue);
+      expect(settings.overall, 0.34);
+      expect(settings.smoothing, 0.32);
+      expect(settings.hasEffect, isTrue);
+
+      final map = settings.toMap();
+      final restored = BeautySettings.fromMap(map);
+      expect(restored.enabled, settings.enabled);
+      expect(restored.overall, settings.overall);
+      expect(restored.smoothing, settings.smoothing);
+      expect(restored.vitality, settings.vitality);
+
+      final off = BeautySettings.off;
+      expect(off.hasEffect, isFalse);
+    });
+
+    test('FilterCategory categorizes filters correctly', () {
+      expect(FilterCategory.values.length, 8);
+      final naturalFilters = BeautyFilter.inCategory(FilterCategory.natural);
+      expect(naturalFilters.length, 3);
+      expect(naturalFilters.any((f) => f.name == 'Pearl Natural'), isTrue);
+
+      final koreanFilters = BeautyFilter.inCategory(
+        FilterCategory.koreanBeauty,
+      );
+      expect(koreanFilters.length, 3);
+      expect(koreanFilters.any((f) => f.name == 'Milk Glow'), isTrue);
+    });
+
+    test('WidgetService constants are correct', () {
+      expect(WidgetService.appGroupId, 'group.com.tamchau.app');
+      expect(WidgetService.iOSWidgetName, 'widget');
+      expect(WidgetService.locationWidgetUniqueName,
+          'com.heartpearl.heartpearl.locationWidgetRefresh');
     });
   });
 }

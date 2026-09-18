@@ -7,12 +7,17 @@ import 'firebase_options.dart';
 import 'providers/auth_provider.dart';
 import 'providers/notifications_provider.dart';
 import 'providers/settings_provider.dart';
+import 'services/notification_service.dart';
 import 'services/widget_service.dart';
 import 'ui/auth/welcome_screen.dart';
+import 'ui/common/in_app_message_overlay.dart';
 import 'ui/main/main_scaffold.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Register FCM background handler BEFORE Firebase.initializeApp
+  NotificationService.registerBackgroundHandler();
 
   // Set system UI style
   SystemChrome.setSystemUIOverlayStyle(
@@ -52,11 +57,15 @@ class HeartPearlApp extends ConsumerWidget {
     final authState = ref.watch(authStateProvider);
 
     return MaterialApp(
+      navigatorKey: appNavigatorKey,
       title: 'HeartPearl',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,
+      builder: (context, child) => InAppMessageOverlay(
+        child: child ?? const SizedBox.shrink(),
+      ),
       home: authState.when(
         data: (user) {
           if (user != null) {

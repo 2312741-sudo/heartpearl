@@ -48,8 +48,10 @@ class CameraEffectsService {
       }
       return CameraEffectsSelection(
         filter: filter,
-        filterIntensity:
-            (storedIntensity ?? filter.defaultIntensity).clamp(0, 1),
+        filterIntensity: (storedIntensity ?? filter.defaultIntensity).clamp(
+          0,
+          1,
+        ),
         beauty: BeautySettings.fromMap(beautyMap),
       );
     } catch (error) {
@@ -67,10 +69,7 @@ class CameraEffectsService {
           _filterIntensityKey,
           selection.filterIntensity.clamp(0, 1),
         ),
-        preferences.setString(
-          _beautyKey,
-          jsonEncode(selection.beauty.toMap()),
-        ),
+        preferences.setString(_beautyKey, jsonEncode(selection.beauty.toMap())),
       ]);
     } catch (error) {
       debugPrint('Camera effects preferences save failed: $error');
@@ -86,8 +85,7 @@ class CameraEffectsService {
     required double filterIntensity,
     required BeautySettings beauty,
   }) async {
-    if ((!beauty.hasEffect) &&
-        (filter.isOriginal || filterIntensity <= 0)) {
+    if ((!beauty.hasEffect) && (filter.isOriginal || filterIntensity <= 0)) {
       return source;
     }
 
@@ -124,10 +122,26 @@ class CameraEffectsService {
     const lg = .715;
     const lb = .072;
     return [
-      lr * inverse + saturation, lg * inverse, lb * inverse, 0, brightness,
-      lr * inverse, lg * inverse + saturation, lb * inverse, 0, brightness,
-      lr * inverse, lg * inverse, lb * inverse + saturation, 0, brightness,
-      0, 0, 0, 1, 0,
+      lr * inverse + saturation,
+      lg * inverse,
+      lb * inverse,
+      0,
+      brightness,
+      lr * inverse,
+      lg * inverse + saturation,
+      lb * inverse,
+      0,
+      brightness,
+      lr * inverse,
+      lg * inverse,
+      lb * inverse + saturation,
+      0,
+      brightness,
+      0,
+      0,
+      0,
+      1,
+      0,
     ];
   }
 }
@@ -205,8 +219,7 @@ String? _renderPhoto(Map<String, dynamic> request) {
         final mask = skinMask.getPixel(x, y).r.toDouble() / 255;
         if (mask > .03) {
           final soft = softened.getPixel(x, y);
-          final textureBlend =
-              ((smoothing * .28) + (blemish * .18)) * mask;
+          final textureBlend = ((smoothing * .28) + (blemish * .18)) * mask;
           red += (soft.r.toDouble() - red) * textureBlend;
           green += (soft.g.toDouble() - green) * textureBlend;
           blue += (soft.b.toDouble() - blue) * textureBlend;
@@ -234,15 +247,12 @@ String? _renderPhoto(Map<String, dynamic> request) {
         }
       }
 
-      final matrixRed = red * matrix[0] +
-          green * matrix[1] +
-          blue * matrix[2] +
-          matrix[4];
-      final matrixGreen = red * matrix[5] +
-          green * matrix[6] +
-          blue * matrix[7] +
-          matrix[9];
-      final matrixBlue = red * matrix[10] +
+      final matrixRed =
+          red * matrix[0] + green * matrix[1] + blue * matrix[2] + matrix[4];
+      final matrixGreen =
+          red * matrix[5] + green * matrix[6] + blue * matrix[7] + matrix[9];
+      final matrixBlue =
+          red * matrix[10] +
           green * matrix[11] +
           blue * matrix[12] +
           matrix[14];
@@ -272,8 +282,7 @@ String? _renderPhoto(Map<String, dynamic> request) {
   return outputPath;
 }
 
-double _unit(dynamic value) =>
-    ((value as num?)?.toDouble() ?? 0).clamp(0, 1);
+double _unit(dynamic value) => ((value as num?)?.toDouble() ?? 0).clamp(0, 1);
 
 double _skinProbability(double red, double green, double blue) {
   final y = .299 * red + .587 * green + .114 * blue;

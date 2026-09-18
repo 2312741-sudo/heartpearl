@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_dimens.dart';
@@ -24,24 +26,46 @@ class MainScaffold extends ConsumerStatefulWidget {
 class _MainScaffoldState extends ConsumerState<MainScaffold>
     with WidgetsBindingObserver {
   int _currentIndex = 0;
-
-  final List<Widget> _screens = const [
-    CameraScreen(),
-    InboxScreen(),
-    MapScreen(),
-    HistoryScreen(),
-    ProfileScreen(),
-  ];
+  int _cameraTrigger = 0;
+  StreamSubscription<Uri?>? _widgetSub;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _initWidgetLaunch();
+  }
+
+  void _initWidgetLaunch() {
+    try {
+      HomeWidget.initiallyLaunchedFromHomeWidget().then((uri) {
+        if (uri != null) _handleWidgetUri(uri);
+      });
+      _widgetSub = HomeWidget.widgetClicked.listen((uri) {
+        if (uri != null) _handleWidgetUri(uri);
+      });
+    } catch (_) {}
+  }
+
+  void _handleWidgetUri(Uri uri) {
+    if (uri.host == 'map' || uri.path.contains('map')) {
+      if (mounted) {
+        setState(() => _currentIndex = 2);
+      }
+    } else if (uri.host == 'camera' || uri.path.contains('camera')) {
+      if (mounted) {
+        setState(() {
+          _currentIndex = 0;
+          _cameraTrigger++;
+        });
+      }
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _widgetSub?.cancel();
     super.dispose();
   }
 
@@ -63,7 +87,16 @@ class _MainScaffoldState extends ConsumerState<MainScaffold>
       extendBody: true,
       body: IndexedStack(
         index: _currentIndex,
-        children: _screens,
+        children: [
+          CameraScreen(
+            isActive: _currentIndex == 0,
+            cameraTrigger: _cameraTrigger,
+          ),
+          const InboxScreen(),
+          const MapScreen(),
+          const HistoryScreen(),
+          const ProfileScreen(),
+        ],
       ),
       bottomNavigationBar: SafeArea(
         child: Padding(

@@ -17,6 +17,7 @@ import '../../../models/location_model.dart';
 import '../../../models/user_model.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/location_provider.dart';
+import '../../../services/widget_service.dart';
 import '../profile/location_privacy_screen.dart';
 
 enum MapStyle { dark, street, satellite }
@@ -394,6 +395,11 @@ class _MapScreenState extends ConsumerState<MapScreen>
               ),
             ),
           ),
+          IconButton(
+            tooltip: 'Tiện ích Widget màn hình chính',
+            icon: const Icon(LucideIcons.layoutGrid, size: 21),
+            onPressed: _showWidgetGuideSheet,
+          ),
           const SizedBox(width: AppDimens.spaceXs),
         ],
       ),
@@ -685,6 +691,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                             16.0,
                           );
                         },
+                        onLongPress: () => _showFriendDetails(item),
                       );
                     },
                   ),
@@ -856,21 +863,250 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 ],
               ),
               const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  _mapController.move(
-                    LatLng(item.location.lat, item.location.lng),
-                    17.0,
-                  );
-                },
-                icon: const Icon(LucideIcons.navigation),
-                label: const Text('Phóng to vị trí này'),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _mapController.move(
+                          LatLng(item.location.lat, item.location.lng),
+                          17.0,
+                        );
+                      },
+                      icon: const Icon(LucideIcons.navigation, size: 18),
+                      label: const Text('Phóng to'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        backgroundColor: AppColors.primary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        HapticHelper.medium();
+                        final messenger = ScaffoldMessenger.of(context);
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Đang ghim vị trí của ${item.friend.displayName} lên Widget...',
+                            ),
+                            duration: const Duration(seconds: 1),
+                          ),
+                        );
+                        final ownLoc = _myPosition != null
+                            ? LocationModel(
+                                uid: '',
+                                lat: _myPosition!.latitude,
+                                lng: _myPosition!.longitude,
+                                timestamp: DateTime.now(),
+                                accuracy: _myAccuracy ?? 0,
+                                speed: 0,
+                                isSharing: true,
+                              )
+                            : null;
+                        final ok =
+                            await WidgetService.pinFriendLocationToWidget(
+                          friend: item.friend,
+                          location: item.location,
+                          ownLocation: ownLoc,
+                        );
+                        if (mounted) {
+                          messenger.showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                ok
+                                    ? 'Đã ghim vị trí của ${item.friend.displayName} lên màn hình chính!'
+                                    : 'Không thể cập nhật Widget. Vui lòng thử lại.',
+                              ),
+                              backgroundColor:
+                                  ok ? AppColors.primary : Colors.red,
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      },
+                      icon: const Icon(LucideIcons.layoutGrid, size: 18),
+                      label: const Text('Ghim lên Widget'),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  void _showWidgetGuideSheet() {
+    HapticHelper.selection();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      LucideIcons.layoutGrid,
+                      color: AppColors.primary,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Tiện ích màn hình chính (Widget)',
+                    style: AppTypography.h3(
+                      color: isDark
+                          ? AppColors.darkTextPrimary
+                          : AppColors.lightTextPrimary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Cách thêm và sử dụng tiện ích trên iOS:',
+                style: AppTypography.caption(
+                  color: isDark
+                      ? AppColors.darkTextMuted
+                      : AppColors.lightTextMuted,
+                ).copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 10),
+              _buildGuideStep(
+                number: '1',
+                title: 'Thêm Widget vào màn hình chính',
+                desc:
+                    'Nhấn giữ màn hình chính iPhone -> Bấm dấu "+" góc trên -> Chọn HeartPearl -> Nhấn "Thêm tiện ích".',
+                isDark: isDark,
+              ),
+              const SizedBox(height: 8),
+              _buildGuideStep(
+                number: '2',
+                title: 'Ghim vị trí bạn bè lên Widget',
+                desc:
+                    'Chạm vào bạn bè trên bản đồ này -> Chọn "Ghim lên Widget". Widget sẽ lập tức chuyển sang chế độ bản đồ định vị bạn bè!',
+                isDark: isDark,
+              ),
+              const SizedBox(height: 8),
+              _buildGuideStep(
+                number: '3',
+                title: 'Xem ảnh khoảnh khắc',
+                desc:
+                    'Khi bạn bè gửi ảnh mới, widget sẽ tự động cập nhật ảnh mới nhất.',
+                isDark: isDark,
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    await WidgetService.switchToPhotoMode();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content:
+                              Text('Đã chuyển Widget về chế độ hiển thị Ảnh.'),
+                          backgroundColor: AppColors.primary,
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
+                  },
+                  icon: const Icon(LucideIcons.image, size: 18),
+                  label: const Text('Chuyển Widget về chế độ Ảnh'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGuideStep({
+    required String number,
+    required String title,
+    required String desc,
+    required bool isDark,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CircleAvatar(
+          radius: 11,
+          backgroundColor: AppColors.primary.withValues(alpha: 0.15),
+          child: Text(
+            number,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: AppColors.primary,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: RichText(
+            text: TextSpan(
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.35,
+                color: isDark
+                    ? AppColors.darkTextPrimary
+                    : AppColors.lightTextPrimary,
+              ),
+              children: [
+                TextSpan(
+                  text: '$title: ',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                TextSpan(text: desc),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1139,8 +1375,13 @@ String _relativeTime(DateTime timestamp) {
 class _FriendLocationCard extends StatelessWidget {
   final FriendLocation item;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
-  const _FriendLocationCard({required this.item, required this.onTap});
+  const _FriendLocationCard({
+    required this.item,
+    required this.onTap,
+    this.onLongPress,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1151,6 +1392,7 @@ class _FriendLocationCard extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
         onTap: onTap,
+        onLongPress: onLongPress,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
           child: Row(

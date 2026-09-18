@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:camera/camera.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_dimens.dart';
 import '../../../core/constants/app_typography.dart';
@@ -13,7 +17,9 @@ import '../../../core/utils/haptic_helper.dart';
 import '../../../providers/chat_provider.dart';
 import '../../../providers/friends_provider.dart';
 import '../../../providers/notifications_provider.dart';
+import '../../../services/camera_effects_service.dart';
 import '../../common/app_badge.dart';
+import '../../common/camera_effect_layer.dart';
 import '../../../core/utils/media_helper.dart';
 import '../../common/frosted_container.dart';
 import '../chat/chat_list_screen.dart';
@@ -22,7 +28,14 @@ import '../notifications/notifications_screen.dart';
 import 'preview_screen.dart';
 
 class CameraScreen extends ConsumerStatefulWidget {
-  const CameraScreen({super.key});
+  final bool isActive;
+  final int cameraTrigger;
+
+  const CameraScreen({
+    super.key,
+    this.isActive = true,
+    this.cameraTrigger = 0,
+  });
 
   @override
   ConsumerState<CameraScreen> createState() => _CameraScreenState();
@@ -44,6 +57,12 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
   // Beauty Filter
   BeautyFilter _selectedFilter = BeautyFilter.all.first;
+  double _filterIntensity = 0;
+  BeautySettings _beauty = const BeautySettings();
+  FilterCategory _selectedCategory = FilterCategory.natural;
+  bool _showOriginal = false;
+  final CameraEffectsService _effectsService = CameraEffectsService();
+  Timer? _effectsSaveTimer;
 
   // Video & Photo State
   bool _isRecording = false;
@@ -67,6 +86,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   bool _isTransitioningLens = false;
   Future<void>? _pendingDispose;
   CameraDescription? _currentCameraDescription;
+  final GlobalKey _viewfinderKey = GlobalKey();
+  ui.Image? _frozenFrame;
 
   @override
   void initState() {
@@ -93,7 +114,67 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       vsync: this,
       duration: const Duration(milliseconds: 750),
     );
+    _loadEffects();
     _initCameras();
+  }
+
+  @override
+  void didUpdateWidget(CameraScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.isActive && widget.isActive) {
+      // Switched back to camera tab -> restore live 60fps preview!
+      _resumeCamera();
+    } else if (oldWidget.isActive && !widget.isActive) {
+      // Switched away to another tab (e.g. Map) -> pause camera to save battery & GPU!
+      _pauseCamera();
+    } else if (widget.isActive && widget.cameraTrigger != oldWidget.cameraTrigger) {
+      // Widget on home screen was tapped while app is running -> guarantee fresh 60fps camera!
+      _ensureFreshCamera(forceRestart: true);
+    }
+  }
+
+  Future<void> _loadEffects() async {
+    final selection = await _effectsService.loadSelection();
+    if (!mounted) return;
+    setState(() {
+      _selectedFilter = selection.filter;
+      _filterIntensity = selection.filterIntensity;
+      _beauty = selection.beauty;
+      _selectedCategory = selection.filter.category ?? FilterCategory.natural;
+    });
+  }
+
+  void _saveEffectsSoon() {
+    _effectsSaveTimer?.cancel();
+    _effectsSaveTimer = Timer(const Duration(milliseconds: 250), () {
+      _effectsService.saveSelection(
+        CameraEffectsSelection(
+          filter: _selectedFilter,
+          filterIntensity: _filterIntensity,
+          beauty: _beauty,
+        ),
+      );
+    });
+  }
+
+  void _selectFilter(BeautyFilter filter) {
+    HapticHelper.selection();
+    setState(() {
+      _selectedFilter = filter;
+      _filterIntensity = filter.defaultIntensity;
+      if (filter.category != null) _selectedCategory = filter.category!;
+    });
+    _saveEffectsSoon();
+  }
+
+  void _resetEffects() {
+    setState(() {
+      _selectedFilter = BeautyFilter.all.first;
+      _filterIntensity = 0;
+      _beauty = const BeautySettings();
+      _selectedCategory = FilterCategory.natural;
+    });
+    _saveEffectsSoon();
   }
 
   @override
@@ -101,6 +182,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     WidgetsBinding.instance.removeObserver(this);
     _longPressTimer?.cancel();
     _recordTimer?.cancel();
+    _effectsSaveTimer?.cancel();
+    _frozenFrame?.dispose();
+    _frozenFrame = null;
     _controller?.dispose();
     _shutterAnimController.dispose();
     _flipAnimController.dispose();
@@ -111,34 +195,69 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
-    if (state == AppLifecycleState.paused) {
-      // Free native camera session only when truly paused in background
-      final c = _controller;
-      _controller = null;
-      if (c != null) {
-        _pendingDispose = c.dispose();
-      }
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      // Free native camera session whenever leaving foreground
+      _pauseCamera();
     } else if (state == AppLifecycleState.resumed) {
-      // When resuming from background, widget tap, or unlock: wait for any pending dispose to finish
-      if (_pendingDispose != null) {
-        try {
-          await _pendingDispose;
-        } catch (_) {}
-        _pendingDispose = null;
-      }
-      if (_controller == null || !_controller!.value.isInitialized) {
-        final targetCamera = _currentCameraDescription ?? _mainBackCamera;
-        await _switchCamera(targetCamera);
+      // When resuming from background, widget tap, or unlock: restore fresh camera session
+      if (widget.isActive) {
+        _resumeCamera();
       }
     }
   }
 
-  // Camera Getters
-  List<CameraDescription> get _backCameras =>
-      _cameras.where((c) => c.lensDirection == CameraLensDirection.back).toList();
+  Future<void> _captureSnapshot() async {
+    try {
+      final boundary = _viewfinderKey.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
+      if (boundary != null && boundary.hasSize) {
+        final snapshot = await boundary.toImage(pixelRatio: 1.0);
+        final oldFrame = _frozenFrame;
+        _frozenFrame = snapshot;
+        oldFrame?.dispose();
+      }
+    } catch (_) {}
+  }
 
-  List<CameraDescription> get _frontCameras =>
-      _cameras.where((c) => c.lensDirection == CameraLensDirection.front).toList();
+  Future<void> _pauseCamera() async {
+    if (_controller == null && _pendingDispose == null) return;
+    await _captureSnapshot();
+    final c = _controller;
+    _controller = null;
+    if (mounted) setState(() {});
+    if (c != null) {
+      _pendingDispose = c.dispose();
+    }
+  }
+
+  Future<void> _resumeCamera() async {
+    if (_pendingDispose != null) {
+      try {
+        await _pendingDispose;
+      } catch (_) {}
+      _pendingDispose = null;
+    }
+    await _ensureFreshCamera(forceRestart: true);
+  }
+
+  Future<void> _ensureFreshCamera({bool forceRestart = false}) async {
+    if (_isSwitchingCamera) return;
+    if (forceRestart || _controller == null || !_controller!.value.isInitialized) {
+      final targetCamera = _currentCameraDescription ?? _mainBackCamera;
+      await _switchCamera(targetCamera);
+    }
+  }
+
+  // Camera Getters
+  List<CameraDescription> get _backCameras => _cameras
+      .where((c) => c.lensDirection == CameraLensDirection.back)
+      .toList();
+
+  List<CameraDescription> get _frontCameras => _cameras
+      .where((c) => c.lensDirection == CameraLensDirection.front)
+      .toList();
 
   CameraDescription get _frontCamera {
     if (_frontCameras.isNotEmpty) return _frontCameras.first;
@@ -150,7 +269,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     if (back.isEmpty) return _cameras.first;
 
     // 1. Explicit lensType == wide
-    final explicitWide = back.where((c) => c.lensType == CameraLensType.wide).firstOrNull;
+    final explicitWide = back
+        .where((c) => c.lensType == CameraLensType.wide)
+        .firstOrNull;
     if (explicitWide != null) return explicitWide;
 
     // 2. Hardware discovery order on iPhone Pro: [0: Telephoto, 1: UltraWide, 2: Wide]
@@ -171,7 +292,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     if (back.length < 2) return null;
 
     // 1. Explicit lensType == ultraWide
-    final explicitUltra = back.where((c) => c.lensType == CameraLensType.ultraWide).firstOrNull;
+    final explicitUltra = back
+        .where((c) => c.lensType == CameraLensType.ultraWide)
+        .firstOrNull;
     if (explicitUltra != null) return explicitUltra;
 
     // 2. Name check
@@ -199,7 +322,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     if (back.length < 3) return null;
 
     // 1. Explicit lensType == telephoto
-    final explicitTele = back.where((c) => c.lensType == CameraLensType.telephoto).firstOrNull;
+    final explicitTele = back
+        .where((c) => c.lensType == CameraLensType.telephoto)
+        .firstOrNull;
     if (explicitTele != null) return explicitTele;
 
     // 2. On 3-camera setup: index 0 is telephoto
@@ -241,12 +366,19 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     _isSwitchingCamera = true;
     _currentCameraDescription = targetCamera;
 
+    // 1. Capture snapshot of current viewfinder before unmounting old controller
+    await _captureSnapshot();
+
+    final oldController = _controller;
     if (mounted) {
-      setState(() => _isTransitioningLens = true);
+      setState(() {
+        _isTransitioningLens = true;
+        // Unmount old controller so dead texture is NEVER rendered (eliminates gray screen!)
+        _controller = null;
+      });
     }
 
-    // 1. Cleanly dispose previous controller FIRST to prevent iOS AVCaptureSession collisions
-    final oldController = _controller;
+    // 2. Cleanly dispose previous controller
     if (oldController != null) {
       try {
         await oldController.dispose();
@@ -255,7 +387,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       }
     }
 
-    // 2. Initialize new controller
+    // 3. Initialize new controller
     final newController = CameraController(
       targetCamera,
       ResolutionPreset.high,
@@ -270,7 +402,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
       final isFront = targetCamera.lensDirection == CameraLensDirection.front;
       // On front camera: default to wide selfie (_minZoom, e.g. 0.7x) to avoid zoomed-in face
-      final initialZoom = isFront ? _minZoom : (_minZoom < 1.0 ? 1.0 : _minZoom);
+      final initialZoom = isFront
+          ? _minZoom
+          : (_minZoom < 1.0 ? 1.0 : _minZoom);
       try {
         await newController.setZoomLevel(initialZoom);
       } catch (_) {}
@@ -282,8 +416,6 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       }
 
       // Explicitly configure flashMode right after initialization.
-      // Native iOS and Android default to FlashMode.auto which causes
-      // the camera to flash automatically when taking photos in low light!
       try {
         if (!_isFlashOn || isFront) {
           await newController.setFlashMode(FlashMode.off);
@@ -299,6 +431,18 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       if (mounted) {
         setState(() {
           _controller = newController;
+          _isTransitioningLens = false;
+        });
+
+        // Let the new camera preview paint a frame before clearing the frozen frame
+        Future.delayed(const Duration(milliseconds: 140), () {
+          if (mounted) {
+            final oldFrame = _frozenFrame;
+            setState(() => _frozenFrame = null);
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              oldFrame?.dispose();
+            });
+          }
         });
       }
     } catch (e) {
@@ -306,21 +450,29 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       try {
         await newController.dispose();
       } catch (_) {}
-    } finally {
       if (mounted) {
         setState(() => _isTransitioningLens = false);
       }
+    } finally {
       _isSwitchingCamera = false;
     }
   }
 
   // Toggle Camera Facing strictly between Front and Back with smooth 3D flip animation
   void _toggleCameraFacing() async {
-    if (_cameras.length < 2 || _isRecording || _isStartingRecording || _isSwitchingCamera || _isFlippingCamera) return;
+    if (_cameras.length < 2 ||
+        _isRecording ||
+        _isStartingRecording ||
+        _isSwitchingCamera ||
+        _isFlippingCamera) {
+      return;
+    }
     HapticHelper.selection();
 
     final isCurrentlyFront =
-        _controller?.description.lensDirection == CameraLensDirection.front;
+        (_controller?.description.lensDirection ??
+                _currentCameraDescription?.lensDirection) ==
+            CameraLensDirection.front;
     if (!isCurrentlyFront && _isFlashOn) {
       try {
         await _controller?.setFlashMode(FlashMode.off);
@@ -351,7 +503,11 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
   // Set Zoom Level with support for .5, 1x, 2x, 3x
   Future<void> _setZoom(double targetZoom) async {
-    if (_controller == null || !_controller!.value.isInitialized || _isSwitchingCamera) return;
+    if (_controller == null ||
+        !_controller!.value.isInitialized ||
+        _isSwitchingCamera) {
+      return;
+    }
 
     final isBack =
         _controller!.description.lensDirection == CameraLensDirection.back;
@@ -409,7 +565,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       final xFile = await _imagePicker.pickMedia(imageQuality: 92);
       if (xFile != null && mounted) {
         final pathLower = xFile.path.toLowerCase();
-        final isVideo = pathLower.endsWith('.mp4') ||
+        final isVideo =
+            pathLower.endsWith('.mp4') ||
             pathLower.endsWith('.mov') ||
             pathLower.endsWith('.avi') ||
             pathLower.endsWith('.m4v');
@@ -421,6 +578,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
               isVideo: isVideo,
               isMirrored: false,
               filter: _selectedFilter,
+              filterIntensity: _filterIntensity,
+              beauty: _beauty,
             ),
           ),
         );
@@ -524,9 +683,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
     try {
       HapticHelper.medium();
-      _shutterAnimController
-          .forward()
-          .then((_) => _shutterAnimController.reverse());
+      _shutterAnimController.forward().then(
+        (_) => _shutterAnimController.reverse(),
+      );
 
       // Strictly ensure native camera flash mode is off when flash is off or for front camera
       if (!_isFlashOn || isFront) {
@@ -563,6 +722,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
               isVideo: false,
               isMirrored: false,
               filter: _selectedFilter,
+              filterIntensity: _filterIntensity,
+              beauty: _beauty,
             ),
           ),
         );
@@ -681,6 +842,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
               isVideo: true,
               isMirrored: false,
               filter: _selectedFilter,
+              filterIntensity: _filterIntensity,
+              beauty: _beauty,
             ),
           ),
         );
@@ -719,177 +882,560 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             child: Column(
               children: [
                 // 1. Top App Bar Controls
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppDimens.spaceLg,
-                vertical: AppDimens.spaceSm,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  // Brand Logo + Title
-                  Row(
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimens.spaceLg,
+                    vertical: AppDimens.spaceSm,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.asset(
-                          'assets/icon/app_icon.png',
-                          width: 28,
-                          height: 28,
-                        ),
+                      // Brand Logo + Title
+                      Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.asset(
+                              'assets/icon/app_icon.png',
+                              width: 28,
+                              height: 28,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Heart',
+                            style: AppTypography.h2(
+                              color: AppColors.primaryLight,
+                            ),
+                          ),
+                          Text(
+                            'Pearl',
+                            style: AppTypography.h2(
+                              color: isDark
+                                  ? AppColors.pearl
+                                  : AppColors.lightTextPrimary,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Heart',
-                        style: AppTypography.h2(color: AppColors.primaryLight),
-                      ),
-                      Text(
-                        'Pearl',
-                        style: AppTypography.h2(
-                          color: isDark ? AppColors.pearl : AppColors.lightTextPrimary,
-                        ),
+
+                      // Actions: Friends, Notifications, Messages & Flash
+                      Row(
+                        children: [
+                          // 1. Friends button with friend requests badge
+                          GestureDetector(
+                            onTap: () {
+                              HapticHelper.selection();
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) => const FriendsScreen(),
+                                ),
+                              );
+                            },
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                FrostedContainer(
+                                  borderRadius: AppDimens.radiusFull,
+                                  padding: const EdgeInsets.all(9),
+                                  backgroundColor: isDark
+                                      ? const Color(0x331E0D26)
+                                      : AppColors.lightSurface.withValues(
+                                          alpha: 0.9,
+                                        ),
+                                  border: Border.all(
+                                    color: isDark
+                                        ? Colors.white.withValues(alpha: 0.12)
+                                        : AppColors.lightBorder.withValues(
+                                            alpha: 0.6,
+                                          ),
+                                    width: 1,
+                                  ),
+                                  child: Icon(
+                                    LucideIcons.users,
+                                    color: isDark
+                                        ? AppColors.white
+                                        : AppColors.lightTextPrimary,
+                                    size: 20,
+                                  ),
+                                ),
+                                if (unreadRequests > 0)
+                                  Positioned(
+                                    top: -2,
+                                    right: -2,
+                                    child: AppBadge(count: unreadRequests),
+                                  ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(width: AppDimens.spaceSm),
+
+                          // 2. Notifications bell with unread count badge
+                          GestureDetector(
+                            onTap: () {
+                              HapticHelper.selection();
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const NotificationsScreen(),
+                                ),
+                              );
+                            },
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                FrostedContainer(
+                                  borderRadius: AppDimens.radiusFull,
+                                  padding: const EdgeInsets.all(9),
+                                  backgroundColor: isDark
+                                      ? const Color(0x331E0D26)
+                                      : AppColors.lightSurface.withValues(
+                                          alpha: 0.9,
+                                        ),
+                                  border: Border.all(
+                                    color: isDark
+                                        ? Colors.white.withValues(alpha: 0.12)
+                                        : AppColors.lightBorder.withValues(
+                                            alpha: 0.6,
+                                          ),
+                                    width: 1,
+                                  ),
+                                  child: Icon(
+                                    LucideIcons.bell,
+                                    color: isDark
+                                        ? AppColors.white
+                                        : AppColors.lightTextPrimary,
+                                    size: 20,
+                                  ),
+                                ),
+                                if (unreadNotifications > 0)
+                                  Positioned(
+                                    top: -2,
+                                    right: -2,
+                                    child: AppBadge(count: unreadNotifications),
+                                  ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(width: AppDimens.spaceSm),
+
+                          // 3. Chat icon with unread badge
+                          GestureDetector(
+                            onTap: () {
+                              HapticHelper.selection();
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) => const ChatListScreen(),
+                                ),
+                              );
+                            },
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                FrostedContainer(
+                                  borderRadius: AppDimens.radiusFull,
+                                  padding: const EdgeInsets.all(9),
+                                  backgroundColor: isDark
+                                      ? const Color(0x331E0D26)
+                                      : AppColors.lightSurface.withValues(
+                                          alpha: 0.9,
+                                        ),
+                                  border: Border.all(
+                                    color: isDark
+                                        ? Colors.white.withValues(alpha: 0.12)
+                                        : AppColors.lightBorder.withValues(
+                                            alpha: 0.6,
+                                          ),
+                                    width: 1,
+                                  ),
+                                  child: Icon(
+                                    LucideIcons.messageCircle,
+                                    color: isDark
+                                        ? AppColors.white
+                                        : AppColors.lightTextPrimary,
+                                    size: 20,
+                                  ),
+                                ),
+                                if (unreadChats > 0)
+                                  Positioned(
+                                    top: -2,
+                                    right: -2,
+                                    child: AppBadge(count: unreadChats),
+                                  ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(width: AppDimens.spaceSm),
+
+                          // 4. Flash Toggle
+                          GestureDetector(
+                            onTap: _toggleFlash,
+                            child: FrostedContainer(
+                              borderRadius: AppDimens.radiusFull,
+                              padding: const EdgeInsets.all(9),
+                              backgroundColor: isDark
+                                  ? const Color(0x331E0D26)
+                                  : AppColors.lightSurface.withValues(
+                                      alpha: 0.9,
+                                    ),
+                              border: Border.all(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.12)
+                                    : AppColors.lightBorder.withValues(
+                                        alpha: 0.6,
+                                      ),
+                                width: 1,
+                              ),
+                              child: Icon(
+                                _isFlashOn
+                                    ? LucideIcons.zap
+                                    : LucideIcons.zapOff,
+                                color: _isFlashOn
+                                    ? AppColors.warning
+                                    : (isDark
+                                          ? AppColors.white
+                                          : AppColors.lightTextPrimary),
+                                size: 20,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
+                ),
 
-                  // Actions: Friends, Notifications, Messages & Flash
-                  Row(
+                const SizedBox(height: 4),
+
+                // 2. Camera Viewfinder (Native 3:4 aspect ratio with rounded corners)
+                Expanded(
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      child: AspectRatio(
+                        aspectRatio: 3 / 4,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(28),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.black,
+                              borderRadius: BorderRadius.circular(28),
+                              border: Border.all(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.15)
+                                    : AppColors.lightBorder,
+                                width: 1.5,
+                              ),
+                              boxShadow: isDark
+                                  ? null
+                                  : [
+                                      BoxShadow(
+                                        color: AppColors.primary.withValues(
+                                          alpha: 0.08,
+                                        ),
+                                        blurRadius: 16,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
+                            ),
+                            child: AnimatedBuilder(
+                              animation: _flipAnimController,
+                              builder: (context, child) {
+                                final angle =
+                                    _flipAnimController.value *
+                                    3.141592653589793;
+                                final isBackHalf =
+                                    _flipAnimController.value > 0.5;
+                                return Transform(
+                                  alignment: Alignment.center,
+                                  transform: Matrix4.identity()
+                                    ..setEntry(3, 2, 0.001)
+                                    ..rotateY(angle),
+                                  child: isBackHalf
+                                      ? Transform(
+                                          alignment: Alignment.center,
+                                          transform: Matrix4.identity()
+                                            ..rotateY(3.141592653589793),
+                                          child: child,
+                                        )
+                                      : child,
+                                );
+                              },
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  // 2.0 Frozen Snapshot during transitions (held underneath to prevent any gray/black blink)
+                                  if (_frozenFrame != null)
+                                    Positioned.fill(
+                                      child: RawImage(
+                                        image: _frozenFrame,
+                                        fit: BoxFit.cover,
+                                        alignment: Alignment.center,
+                                      ),
+                                    ),
+
+                                  // 2.1 Viewfinder with Pinch-to-zoom & Long-press to compare original
+                                  if (_controller != null &&
+                                      _controller!.value.isInitialized)
+                                    RepaintBoundary(
+                                      key: _viewfinderKey,
+                                      child: GestureDetector(
+                                        onScaleStart: (details) {
+                                          _baseScale = _currentZoom;
+                                        },
+                                        onScaleUpdate: (details) {
+                                          final newZoom =
+                                              (_baseScale * details.scale).clamp(
+                                                _minZoom,
+                                                _maxZoom,
+                                              );
+                                          _controller!.setZoomLevel(newZoom);
+                                          setState(() => _currentZoom = newZoom);
+                                        },
+                                        onLongPressStart: (_) {
+                                          HapticHelper.light();
+                                          setState(() => _showOriginal = true);
+                                        },
+                                        onLongPressEnd: (_) {
+                                          setState(() => _showOriginal = false);
+                                        },
+                                        child: Builder(
+                                          builder: (context) {
+                                            final previewSize =
+                                                _controller?.value.previewSize;
+                                            final double previewW =
+                                                previewSize != null
+                                                ? previewSize.height
+                                                : 720.0;
+                                            final double previewH =
+                                                previewSize != null
+                                                ? previewSize.width
+                                                : 1280.0;
+
+                                            return FittedBox(
+                                              fit: BoxFit.cover,
+                                              clipBehavior: Clip.hardEdge,
+                                              child: SizedBox(
+                                                width: previewW,
+                                                height: previewH,
+                                                child: CameraEffectLayer(
+                                                  filter: _selectedFilter,
+                                                  filterIntensity:
+                                                      _filterIntensity,
+                                                  beauty: _beauty,
+                                                  showOriginal: _showOriginal,
+                                                  child: CameraPreview(
+                                                    _controller!,
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    )
+                                  else if (_frozenFrame == null)
+                                    Container(
+                                      color: Colors.black,
+                                      child: const Center(
+                                        child: CircularProgressIndicator(
+                                          color: AppColors.primary,
+                                          strokeWidth: 2.5,
+                                        ),
+                                      ),
+                                    ),
+
+                                  // 2.2 Lens Switch Smooth Transition Blur (during .5 <-> 1x)
+                                  if (_isTransitioningLens &&
+                                      !_isFlippingCamera)
+                                    Positioned.fill(
+                                      child: BackdropFilter(
+                                        filter: ImageFilter.blur(
+                                          sigmaX: 12,
+                                          sigmaY: 12,
+                                        ),
+                                        child: Container(
+                                          color: Colors.black.withValues(
+                                            alpha: 0.15,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+
+                                  // 2.3 Original Image Comparison Pill
+                                  if (_showOriginal)
+                                    Positioned(
+                                      top: 14,
+                                      left: 0,
+                                      right: 0,
+                                      child: Center(
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 14,
+                                            vertical: 6,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withValues(
+                                              alpha: 0.75,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                            border: Border.all(
+                                              color: Colors.white30,
+                                              width: 0.8,
+                                            ),
+                                          ),
+                                          child: const Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                LucideIcons.eye,
+                                                size: 14,
+                                                color: Colors.white,
+                                              ),
+                                              SizedBox(width: 6),
+                                              Text(
+                                                'Đang xem ảnh gốc',
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+
+                                  // 2.4 Zoom / Lens Selector (.5 | 1x | 2x | 3x) inside Viewfinder
+                                  if (!_isRecording)
+                                    Positioned(
+                                      bottom: 14,
+                                      left: 0,
+                                      right: 0,
+                                      child: Center(
+                                        child: FrostedContainer(
+                                          borderRadius: AppDimens.radiusFull,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 4,
+                                          ),
+                                          backgroundColor: const Color(
+                                            0x66000000,
+                                          ),
+                                          child: Builder(
+                                            builder: (context) {
+                                              final isFront =
+                                                  _controller
+                                                      ?.description
+                                                      .lensDirection ==
+                                                  CameraLensDirection.front;
+                                              if (isFront) {
+                                                return Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    if (_minZoom < 0.95)
+                                                      _buildZoomOption(
+                                                        label: _minZoom <= 0.6
+                                                            ? '.5'
+                                                            : '.7',
+                                                        isSelected:
+                                                            _currentZoom <=
+                                                            0.85,
+                                                        onTap: () =>
+                                                            _setZoom(_minZoom),
+                                                      ),
+                                                    _buildZoomOption(
+                                                      label: '1x',
+                                                      isSelected:
+                                                          _currentZoom > 0.85,
+                                                      onTap: () =>
+                                                          _setZoom(1.0),
+                                                    ),
+                                                  ],
+                                                );
+                                              }
+                                              return Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  if (_hasUltraWide)
+                                                    _buildZoomOption(
+                                                      label: '.5',
+                                                      isSelected:
+                                                          _currentZoom <= 0.7,
+                                                      onTap: () =>
+                                                          _setZoom(0.5),
+                                                    ),
+                                                  _buildZoomOption(
+                                                    label: '1x',
+                                                    isSelected:
+                                                        _currentZoom > 0.7 &&
+                                                        _currentZoom < 1.8,
+                                                    onTap: () => _setZoom(1.0),
+                                                  ),
+                                                  _buildZoomOption(
+                                                    label: '2x',
+                                                    isSelected:
+                                                        _currentZoom >= 1.8 &&
+                                                        _currentZoom < 2.8,
+                                                    onTap: () => _setZoom(2.0),
+                                                  ),
+                                                  if (_hasTelephoto)
+                                                    _buildZoomOption(
+                                                      label: '3x',
+                                                      isSelected:
+                                                          _currentZoom >= 2.8,
+                                                      onTap: () =>
+                                                          _setZoom(3.0),
+                                                    ),
+                                                ],
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+
+                                  // 2.5 Dynamic Video Recording HUD: Shrinking Laser Progress Line & Island Countdown
+                                  if (_isRecording) _buildRecordingHUD(),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                // 3. Multi-Category Filter Carousel & Beauty Controls
+                if (!_isRecording) _buildFilterAndBeautyBar(isDark),
+
+                const SizedBox(height: 10),
+
+                // 4. Bottom Shutter & Controls (positioned above bottom navigation bar)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimens.spaceLg,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // 1. Friends button with friend requests badge
+                      // 1. Pick Media from Gallery
                       GestureDetector(
-                        onTap: () {
-                          HapticHelper.selection();
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => const FriendsScreen(),
-                            ),
-                          );
-                        },
-                        child: Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            FrostedContainer(
-                              borderRadius: AppDimens.radiusFull,
-                              padding: const EdgeInsets.all(9),
-                              backgroundColor: isDark
-                                  ? const Color(0x331E0D26)
-                                  : AppColors.lightSurface.withValues(alpha: 0.9),
-                              border: Border.all(
-                                color: isDark
-                                    ? Colors.white.withValues(alpha: 0.12)
-                                    : AppColors.lightBorder.withValues(alpha: 0.6),
-                                width: 1,
-                              ),
-                              child: Icon(
-                                LucideIcons.users,
-                                color: isDark ? AppColors.white : AppColors.lightTextPrimary,
-                                size: 20,
-                              ),
-                            ),
-                            if (unreadRequests > 0)
-                              Positioned(
-                                top: -2,
-                                right: -2,
-                                child: AppBadge(count: unreadRequests),
-                              ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(width: AppDimens.spaceSm),
-
-                      // 2. Notifications bell with unread count badge
-                      GestureDetector(
-                        onTap: () {
-                          HapticHelper.selection();
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => const NotificationsScreen(),
-                            ),
-                          );
-                        },
-                        child: Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            FrostedContainer(
-                              borderRadius: AppDimens.radiusFull,
-                              padding: const EdgeInsets.all(9),
-                              backgroundColor: isDark
-                                  ? const Color(0x331E0D26)
-                                  : AppColors.lightSurface.withValues(alpha: 0.9),
-                              border: Border.all(
-                                color: isDark
-                                    ? Colors.white.withValues(alpha: 0.12)
-                                    : AppColors.lightBorder.withValues(alpha: 0.6),
-                                width: 1,
-                              ),
-                              child: Icon(
-                                LucideIcons.bell,
-                                color: isDark ? AppColors.white : AppColors.lightTextPrimary,
-                                size: 20,
-                              ),
-                            ),
-                            if (unreadNotifications > 0)
-                              Positioned(
-                                top: -2,
-                                right: -2,
-                                child: AppBadge(count: unreadNotifications),
-                              ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(width: AppDimens.spaceSm),
-
-                      // 3. Chat icon with unread badge
-                      GestureDetector(
-                        onTap: () {
-                          HapticHelper.selection();
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => const ChatListScreen(),
-                            ),
-                          );
-                        },
-                        child: Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            FrostedContainer(
-                              borderRadius: AppDimens.radiusFull,
-                              padding: const EdgeInsets.all(9),
-                              backgroundColor: isDark
-                                  ? const Color(0x331E0D26)
-                                  : AppColors.lightSurface.withValues(alpha: 0.9),
-                              border: Border.all(
-                                color: isDark
-                                    ? Colors.white.withValues(alpha: 0.12)
-                                    : AppColors.lightBorder.withValues(alpha: 0.6),
-                                width: 1,
-                              ),
-                              child: Icon(
-                                LucideIcons.messageCircle,
-                                color: isDark ? AppColors.white : AppColors.lightTextPrimary,
-                                size: 20,
-                              ),
-                            ),
-                            if (unreadChats > 0)
-                              Positioned(
-                                top: -2,
-                                right: -2,
-                                child: AppBadge(count: unreadChats),
-                              ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(width: AppDimens.spaceSm),
-
-                      // 4. Flash Toggle
-                      GestureDetector(
-                        onTap: _toggleFlash,
+                        onTap: _pickMediaFromGallery,
                         child: FrostedContainer(
                           borderRadius: AppDimens.radiusFull,
-                          padding: const EdgeInsets.all(9),
+                          padding: const EdgeInsets.all(14),
                           backgroundColor: isDark
                               ? const Color(0x331E0D26)
                               : AppColors.lightSurface.withValues(alpha: 0.9),
@@ -900,487 +1446,669 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                             width: 1,
                           ),
                           child: Icon(
-                            _isFlashOn ? LucideIcons.zap : LucideIcons.zapOff,
-                            color: _isFlashOn
-                                ? AppColors.warning
-                                : (isDark ? AppColors.white : AppColors.lightTextPrimary),
-                            size: 20,
+                            LucideIcons.image,
+                            color: isDark
+                                ? AppColors.white
+                                : AppColors.lightTextPrimary,
+                            size: 24,
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
 
-            const SizedBox(height: 4),
-
-            // 2. Camera Viewfinder (Native 3:4 aspect ratio with rounded corners)
-            Expanded(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  child: AspectRatio(
-                    aspectRatio: 3 / 4,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(28),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.black,
-                          borderRadius: BorderRadius.circular(28),
-                          border: Border.all(
-                            color: isDark
-                                ? Colors.white.withValues(alpha: 0.15)
-                                : AppColors.lightBorder,
-                            width: 1.5,
-                          ),
-                          boxShadow: isDark
-                              ? null
-                              : [
-                                  BoxShadow(
-                                    color: AppColors.primary.withValues(alpha: 0.08),
-                                    blurRadius: 16,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                        ),
-                        child: AnimatedBuilder(
-                          animation: _flipAnimController,
-                          builder: (context, child) {
-                            final angle = _flipAnimController.value * 3.141592653589793;
-                            final isBackHalf = _flipAnimController.value > 0.5;
-                            return Transform(
-                              alignment: Alignment.center,
-                              transform: Matrix4.identity()
-                                ..setEntry(3, 2, 0.001)
-                                ..rotateY(angle),
-                              child: isBackHalf
-                                  ? Transform(
-                                      alignment: Alignment.center,
-                                      transform: Matrix4.identity()
-                                        ..rotateY(3.141592653589793),
-                                      child: child,
-                                    )
-                                  : child,
-                            );
-                          },
+                      // 2. Shutter Button (Tap: Photo, Press & Hold: Video - Anti-Stuck)
+                      Listener(
+                        behavior: HitTestBehavior.opaque,
+                        onPointerDown: (_) => _handlePointerDown(),
+                        onPointerUp: (_) => _handlePointerUp(),
+                        onPointerCancel: (_) => _handlePointerCancel(),
+                        child: AnimatedScale(
+                          scale: (_isButtonPressed || _isRecording)
+                              ? 0.92
+                              : 1.0,
+                          duration: const Duration(milliseconds: 120),
+                          curve: Curves.easeOutCubic,
                           child: Stack(
-                            fit: StackFit.expand,
+                            alignment: Alignment.center,
                             children: [
-                              // 2.1 Viewfinder with Pinch-to-zoom
-                              if (_controller != null && _controller!.value.isInitialized)
-                                GestureDetector(
-                                  onScaleStart: (details) {
-                                    _baseScale = _currentZoom;
+                              // Outer Progress Ring for Recording
+                              SizedBox(
+                                width: 86,
+                                height: 86,
+                                child: AnimatedBuilder(
+                                  animation: _recordProgressController,
+                                  builder: (context, child) {
+                                    return CircularProgressIndicator(
+                                      value: _isRecording
+                                          ? _recordProgressController.value
+                                          : 0.0,
+                                      strokeWidth: 4,
+                                      valueColor:
+                                          const AlwaysStoppedAnimation<Color>(
+                                            AppColors.primaryLight,
+                                          ),
+                                      backgroundColor: _isRecording
+                                          ? (isDark
+                                                ? Colors.white24
+                                                : AppColors.lightBorder)
+                                          : Colors.transparent,
+                                    );
                                   },
-                                  onScaleUpdate: (details) {
-                                    final newZoom = (_baseScale * details.scale)
-                                        .clamp(_minZoom, _maxZoom);
-                                    _controller!.setZoomLevel(newZoom);
-                                    setState(() => _currentZoom = newZoom);
-                                  },
-                                  child: Builder(
-                                    builder: (context) {
-                                      final previewSize = _controller?.value.previewSize;
-                                      final double previewW =
-                                          previewSize != null ? previewSize.height : 720.0;
-                                      final double previewH =
-                                          previewSize != null ? previewSize.width : 1280.0;
+                                ),
+                              ),
 
-                                      return FittedBox(
-                                        fit: BoxFit.cover,
-                                        clipBehavior: Clip.hardEdge,
-                                        child: SizedBox(
-                                          width: previewW,
-                                          height: previewH,
-                                          child: _selectedFilter.colorFilter != null
-                                              ? ColorFiltered(
-                                                  colorFilter:
-                                                      _selectedFilter.colorFilter!,
-                                                  child: CameraPreview(_controller!),
+                              // Outer ring border
+                              Container(
+                                width: 80,
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: (_isRecording || _isButtonPressed)
+                                        ? AppColors.primaryLight
+                                        : (isDark
+                                              ? Colors.white.withValues(
+                                                  alpha: 0.8,
                                                 )
-                                              : CameraPreview(_controller!),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                )
-                              else
-                                const Center(
-                                  child: CircularProgressIndicator(
-                                    color: AppColors.primary,
-                                    strokeWidth: 2.5,
-                                  ),
-                                ),
-
-                              // 2.2 Lens Switch Smooth Transition Blur (during .5 <-> 1x)
-                              if (_isTransitioningLens && !_isFlippingCamera)
-                                Positioned.fill(
-                                  child: BackdropFilter(
-                                    filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                                    child: Container(
-                                      color: Colors.black.withValues(alpha: 0.3),
-                                    ),
-                                  ),
-                                ),
-
-                            // 2.2 TikTok Skin-Smoothing & Blemish Softening Diffusion Layer
-                            if (_selectedFilter.blurSigma > 0)
-                              Positioned.fill(
-                                child: IgnorePointer(
-                                  child: Opacity(
-                                    opacity: _selectedFilter.blurOpacity,
-                                    child: BackdropFilter(
-                                      filter: ImageFilter.blur(
-                                        sigmaX: _selectedFilter.blurSigma,
-                                        sigmaY: _selectedFilter.blurSigma,
-                                      ),
-                                      child: Container(
-                                        color: _selectedFilter.overlayColor !=
-                                                Colors.transparent
-                                            ? _selectedFilter.overlayColor
-                                            : Colors.transparent,
-                                      ),
-                                    ),
+                                              : AppColors.primary.withValues(
+                                                  alpha: 0.35,
+                                                )),
+                                    width: 3.5,
                                   ),
                                 ),
                               ),
 
-                            // 2.3 Beauty Filter Color Overlay
-                            if (_selectedFilter.blurSigma == 0 &&
-                                _selectedFilter.overlayColor != Colors.transparent)
-                              Positioned.fill(
-                                child: IgnorePointer(
-                                  child: Container(
-                                    color: _selectedFilter.overlayColor,
+                              // Inner Shutter Button
+                              AnimatedContainer(
+                                duration: const Duration(milliseconds: 150),
+                                width: _isRecording ? 48 : 64,
+                                height: _isRecording ? 48 : 64,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: AppColors.primaryGradient,
+                                  boxShadow: AppDimens.glowShadow(
+                                    AppColors.primary,
+                                    opacity: (_isRecording || _isButtonPressed)
+                                        ? 0.8
+                                        : 0.4,
                                   ),
                                 ),
-                              ),
-
-                            // 2.4 Zoom / Lens Selector (.5 | 1x | 2x | 3x) inside Viewfinder
-                            if (!_isRecording)
-                              Positioned(
-                                bottom: 14,
-                                left: 0,
-                                right: 0,
-                                child: Center(
-                                  child: FrostedContainer(
-                                    borderRadius: AppDimens.radiusFull,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 4,
-                                    ),
-                                    backgroundColor: const Color(0x66000000),
-                                    child: Builder(
-                                      builder: (context) {
-                                        final isFront = _controller
-                                                ?.description.lensDirection ==
-                                            CameraLensDirection.front;
-                                        if (isFront) {
-                                          return Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              if (_minZoom < 0.95)
-                                                _buildZoomOption(
-                                                  label: _minZoom <= 0.6 ? '.5' : '.7',
-                                                  isSelected: _currentZoom <= 0.85,
-                                                  onTap: () => _setZoom(_minZoom),
-                                                ),
-                                              _buildZoomOption(
-                                                label: '1x',
-                                                isSelected: _currentZoom > 0.85,
-                                                onTap: () => _setZoom(1.0),
+                                child: _isRecording
+                                    ? Center(
+                                        child: Container(
+                                          width: 18,
+                                          height: 18,
+                                          decoration: BoxDecoration(
+                                            color: AppColors.white,
+                                            borderRadius: BorderRadius.circular(
+                                              4,
+                                            ),
+                                            boxShadow: const [
+                                              BoxShadow(
+                                                color: Colors.black26,
+                                                blurRadius: 4,
                                               ),
                                             ],
-                                          );
-                                        }
-                                        return Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            if (_hasUltraWide)
-                                              _buildZoomOption(
-                                                label: '.5',
-                                                isSelected: _currentZoom <= 0.7,
-                                                onTap: () => _setZoom(0.5),
-                                              ),
-                                            _buildZoomOption(
-                                              label: '1x',
-                                              isSelected: _currentZoom > 0.7 &&
-                                                  _currentZoom < 1.8,
-                                              onTap: () => _setZoom(1.0),
-                                            ),
-                                            _buildZoomOption(
-                                              label: '2x',
-                                              isSelected: _currentZoom >= 1.8 &&
-                                                  _currentZoom < 2.8,
-                                              onTap: () => _setZoom(2.0),
-                                            ),
-                                            if (_hasTelephoto)
-                                              _buildZoomOption(
-                                                label: '3x',
-                                                isSelected: _currentZoom >= 2.8,
-                                                onTap: () => _setZoom(3.0),
-                                              ),
-                                          ],
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ),
-                              ),
-
-                            // 2.5 Dynamic Video Recording HUD: Shrinking Laser Progress Line & Island Countdown
-                            if (_isRecording)
-                              _buildRecordingHUD(),
-                          ],
-                        ),
-                      ),
-                    ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 10),
-
-            // 3. Beauty Filter Selector (TikTok filters)
-            if (!_isRecording)
-              SizedBox(
-                height: 42,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppDimens.spaceLg,
-                  ),
-                  itemCount: BeautyFilter.all.length,
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(width: AppDimens.spaceMd),
-                  itemBuilder: (context, index) {
-                    final filter = BeautyFilter.all[index];
-                    final isSelected = filter.type == _selectedFilter.type;
-
-                    return GestureDetector(
-                      onTap: () {
-                        HapticHelper.selection();
-                        setState(() => _selectedFilter = filter);
-                      },
-                      child: FrostedContainer(
-                        borderRadius: AppDimens.radiusFull,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        backgroundColor: isSelected
-                            ? AppColors.primary.withValues(alpha: 0.85)
-                            : (isDark
-                                ? const Color(0x4D1E0D26)
-                                : AppColors.lightSurface.withValues(alpha: 0.9)),
-                        border: Border.all(
-                          color: isSelected
-                              ? AppColors.primaryLight
-                              : (isDark ? Colors.white24 : AppColors.lightBorder),
-                          width: isSelected ? 1.5 : 1,
-                        ),
-                        child: Center(
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                filter.icon,
-                                style: const TextStyle(fontSize: 13),
-                              ),
-                              const SizedBox(width: 5),
-                              Text(
-                                filter.name,
-                                style: AppTypography.medium.copyWith(
-                                  color: isSelected
-                                      ? AppColors.white
-                                      : (isDark ? AppColors.white : AppColors.lightTextPrimary),
-                                  fontSize: 13,
-                                  fontWeight: isSelected
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                ),
+                                          ),
+                                        ),
+                                      )
+                                    : null,
                               ),
                             ],
                           ),
                         ),
                       ),
-                    );
-                  },
+
+                      // 3. Flip Camera Facing (Front <-> Back only)
+                      GestureDetector(
+                        onTap: _toggleCameraFacing,
+                        child: FrostedContainer(
+                          borderRadius: AppDimens.radiusFull,
+                          padding: const EdgeInsets.all(14),
+                          backgroundColor: isDark
+                              ? const Color(0x331E0D26)
+                              : AppColors.lightSurface.withValues(alpha: 0.9),
+                          border: Border.all(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.12)
+                                : AppColors.lightBorder.withValues(alpha: 0.6),
+                            width: 1,
+                          ),
+                          child: Icon(
+                            LucideIcons.switchCamera,
+                            color: isDark
+                                ? AppColors.white
+                                : AppColors.lightTextPrimary,
+                            size: 24,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Bottom clearance for floating MainScaffold bottom nav bar
+                SizedBox(height: navBarClearance),
+              ],
+            ),
+          ),
+
+          // Screen Flash Overlay for front camera
+          if (_isScreenFlashing)
+            Positioned.fill(child: Container(color: const Color(0xFFFFFBEA))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterAndBeautyBar(bool isDark) {
+    final hasActiveFilter = _selectedFilter.type != BeautyFilterType.normal;
+    final categoryFilters = [
+      if (_selectedCategory == FilterCategory.natural) BeautyFilter.all.first,
+      ...BeautyFilter.inCategory(_selectedCategory),
+    ];
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // A. Filter Intensity Slider (Only when a filter is active)
+        if (hasActiveFilter)
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppDimens.spaceLg,
+              vertical: 2,
+            ),
+            child: Row(
+              children: [
+                Text(
+                  'Cường độ',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: isDark
+                        ? Colors.white70
+                        : AppColors.lightTextSecondary,
+                  ),
+                ),
+                Expanded(
+                  child: SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      trackHeight: 2.5,
+                      thumbShape: const RoundSliderThumbShape(
+                        enabledThumbRadius: 6,
+                      ),
+                      overlayShape: const RoundSliderOverlayShape(
+                        overlayRadius: 12,
+                      ),
+                      activeTrackColor: AppColors.primary,
+                      inactiveTrackColor: isDark
+                          ? Colors.white24
+                          : AppColors.lightBorder,
+                      thumbColor: AppColors.primary,
+                    ),
+                    child: Slider(
+                      value: _filterIntensity,
+                      min: 0.0,
+                      max: 1.0,
+                      onChanged: (val) {
+                        setState(() => _filterIntensity = val);
+                        _saveEffectsSoon();
+                      },
+                    ),
+                  ),
+                ),
+                Text(
+                  '${(_filterIntensity * 100).round()}%',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : AppColors.lightTextPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+        // B. Filter Carousel for current category
+        SizedBox(
+          height: 38,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: AppDimens.spaceLg),
+            itemCount: categoryFilters.length,
+            separatorBuilder: (context, index) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
+              final filter = categoryFilters[index];
+              final isSelected = filter.type == _selectedFilter.type;
+
+              return GestureDetector(
+                onTap: () => _selectFilter(filter),
+                child: FrostedContainer(
+                  borderRadius: AppDimens.radiusFull,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  backgroundColor: isSelected
+                      ? AppColors.primary.withValues(alpha: 0.85)
+                      : (isDark
+                            ? const Color(0x4D1E0D26)
+                            : AppColors.lightSurface.withValues(alpha: 0.9)),
+                  border: Border.all(
+                    color: isSelected
+                        ? AppColors.primaryLight
+                        : (isDark ? Colors.white24 : AppColors.lightBorder),
+                    width: isSelected ? 1.5 : 1,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(filter.icon, style: const TextStyle(fontSize: 12)),
+                      const SizedBox(width: 4),
+                      Text(
+                        filter.name,
+                        style: AppTypography.medium.copyWith(
+                          color: isSelected
+                              ? AppColors.white
+                              : (isDark
+                                    ? AppColors.white
+                                    : AppColors.lightTextPrimary),
+                          fontSize: 12,
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+
+        const SizedBox(height: 6),
+
+        // C. Category Bar + Reset + Beauty Button
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppDimens.spaceLg),
+          child: Row(
+            children: [
+              // 1. Reset button
+              GestureDetector(
+                onTap: () {
+                  HapticHelper.light();
+                  _resetEffects();
+                },
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isDark
+                        ? const Color(0x4D1E0D26)
+                        : AppColors.lightSurface.withValues(alpha: 0.9),
+                    border: Border.all(
+                      color: isDark ? Colors.white24 : AppColors.lightBorder,
+                      width: 1,
+                    ),
+                  ),
+                  child: Icon(
+                    LucideIcons.rotateCcw,
+                    size: 14,
+                    color: isDark
+                        ? Colors.white70
+                        : AppColors.lightTextSecondary,
+                  ),
                 ),
               ),
 
-            const SizedBox(height: 12),
+              const SizedBox(width: 8),
 
-            // 4. Bottom Shutter & Controls (positioned above bottom navigation bar)
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppDimens.spaceLg,
+              // 2. Scrollable Category Chips
+              Expanded(
+                child: SizedBox(
+                  height: 32,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: FilterCategory.values.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(width: 6),
+                    itemBuilder: (context, index) {
+                      final category = FilterCategory.values[index];
+                      final isSelected = category == _selectedCategory;
+
+                      return GestureDetector(
+                        onTap: () {
+                          HapticHelper.selection();
+                          setState(() => _selectedCategory = category);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            color: isSelected
+                                ? (isDark
+                                      ? Colors.white.withValues(alpha: 0.18)
+                                      : AppColors.primary.withValues(
+                                          alpha: 0.12,
+                                        ))
+                                : Colors.transparent,
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppColors.primaryLight
+                                  : Colors.transparent,
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            '${category.icon} ${category.label}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              color: isSelected
+                                  ? (isDark
+                                        ? AppColors.white
+                                        : AppColors.primary)
+                                  : (isDark
+                                        ? Colors.white60
+                                        : AppColors.lightTextSecondary),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // 1. Pick Media from Gallery
-                  GestureDetector(
-                    onTap: _pickMediaFromGallery,
-                    child: FrostedContainer(
-                      borderRadius: AppDimens.radiusFull,
-                      padding: const EdgeInsets.all(14),
-                      backgroundColor: isDark
-                          ? const Color(0x331E0D26)
-                          : AppColors.lightSurface.withValues(alpha: 0.9),
-                      border: Border.all(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.12)
-                            : AppColors.lightBorder.withValues(alpha: 0.6),
-                        width: 1,
-                      ),
-                      child: Icon(
-                        LucideIcons.image,
-                        color: isDark ? AppColors.white : AppColors.lightTextPrimary,
-                        size: 24,
-                      ),
+
+              const SizedBox(width: 8),
+
+              // 3. Beauty Settings Button
+              GestureDetector(
+                onTap: () {
+                  HapticHelper.selection();
+                  _showBeautySettingsSheet(isDark);
+                },
+                child: Container(
+                  height: 32,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    color: _beauty.hasEffect
+                        ? AppColors.primary.withValues(alpha: 0.22)
+                        : (isDark
+                              ? const Color(0x4D1E0D26)
+                              : AppColors.lightSurface.withValues(alpha: 0.9)),
+                    border: Border.all(
+                      color: _beauty.hasEffect
+                          ? AppColors.primary
+                          : (isDark ? Colors.white24 : AppColors.lightBorder),
+                      width: 1,
                     ),
                   ),
-
-                  // 2. Shutter Button (Tap: Photo, Press & Hold: Video - Anti-Stuck)
-                  Listener(
-                    behavior: HitTestBehavior.opaque,
-                    onPointerDown: (_) => _handlePointerDown(),
-                    onPointerUp: (_) => _handlePointerUp(),
-                    onPointerCancel: (_) => _handlePointerCancel(),
-                    child: AnimatedScale(
-                      scale: (_isButtonPressed || _isRecording) ? 0.92 : 1.0,
-                      duration: const Duration(milliseconds: 120),
-                      curve: Curves.easeOutCubic,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          // Outer Progress Ring for Recording
-                          SizedBox(
-                            width: 86,
-                            height: 86,
-                            child: AnimatedBuilder(
-                              animation: _recordProgressController,
-                              builder: (context, child) {
-                                return CircularProgressIndicator(
-                                  value: _isRecording
-                                      ? _recordProgressController.value
-                                      : 0.0,
-                                  strokeWidth: 4,
-                                  valueColor: const AlwaysStoppedAnimation<Color>(
-                                    AppColors.primaryLight,
-                                  ),
-                                  backgroundColor: _isRecording
-                                      ? (isDark ? Colors.white24 : AppColors.lightBorder)
-                                      : Colors.transparent,
-                                );
-                              },
-                            ),
-                          ),
-
-                          // Outer ring border
-                          Container(
-                            width: 80,
-                            height: 80,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: (_isRecording || _isButtonPressed)
-                                    ? AppColors.primaryLight
-                                    : (isDark
-                                        ? Colors.white.withValues(alpha: 0.8)
-                                        : AppColors.primary.withValues(alpha: 0.35)),
-                                width: 3.5,
-                              ),
-                            ),
-                          ),
-
-                          // Inner Shutter Button
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 150),
-                            width: _isRecording ? 48 : 64,
-                            height: _isRecording ? 48 : 64,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: AppColors.primaryGradient,
-                              boxShadow: AppDimens.glowShadow(
-                                AppColors.primary,
-                                opacity: (_isRecording || _isButtonPressed)
-                                    ? 0.8
-                                    : 0.4,
-                              ),
-                            ),
-                            child: _isRecording
-                                ? Center(
-                                    child: Container(
-                                      width: 18,
-                                      height: 18,
-                                      decoration: BoxDecoration(
-                                        color: AppColors.white,
-                                        borderRadius: BorderRadius.circular(4),
-                                        boxShadow: const [
-                                          BoxShadow(
-                                            color: Colors.black26,
-                                            blurRadius: 4,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  )
-                                : null,
-                          ),
-                        ],
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        LucideIcons.sparkles,
+                        size: 14,
+                        color: _beauty.hasEffect
+                            ? AppColors.primaryLight
+                            : (isDark
+                                  ? AppColors.white
+                                  : AppColors.lightTextPrimary),
                       ),
-                    ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Làm đẹp',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: _beauty.hasEffect
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                          color: _beauty.hasEffect
+                              ? AppColors.primaryLight
+                              : (isDark
+                                    ? AppColors.white
+                                    : AppColors.lightTextPrimary),
+                        ),
+                      ),
+                    ],
                   ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 
-                  // 3. Flip Camera Facing (Front <-> Back only)
-                  GestureDetector(
-                    onTap: _toggleCameraFacing,
-                    child: FrostedContainer(
-                      borderRadius: AppDimens.radiusFull,
-                      padding: const EdgeInsets.all(14),
-                      backgroundColor: isDark
-                          ? const Color(0x331E0D26)
-                          : AppColors.lightSurface.withValues(alpha: 0.9),
-                      border: Border.all(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.12)
-                            : AppColors.lightBorder.withValues(alpha: 0.6),
-                        width: 1,
-                      ),
-                      child: Icon(
-                        LucideIcons.switchCamera,
-                        color: isDark ? AppColors.white : AppColors.lightTextPrimary,
-                        size: 24,
+  void _showBeautySettingsSheet(bool isDark) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final textColor = isDark
+                ? AppColors.white
+                : AppColors.lightTextPrimary;
+            final subTextColor = isDark
+                ? Colors.white70
+                : AppColors.lightTextSecondary;
+
+            Widget buildSliderRow({
+              required String label,
+              required double value,
+              required ValueChanged<double> onChanged,
+            }) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 140,
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: textColor,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
+                    Expanded(
+                      child: SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          trackHeight: 2.5,
+                          thumbShape: const RoundSliderThumbShape(
+                            enabledThumbRadius: 6,
+                          ),
+                          overlayShape: const RoundSliderOverlayShape(
+                            overlayRadius: 12,
+                          ),
+                          activeTrackColor: AppColors.primary,
+                          inactiveTrackColor: isDark
+                              ? Colors.white24
+                              : AppColors.lightBorder,
+                          thumbColor: AppColors.primary,
+                        ),
+                        child: Slider(
+                          value: value,
+                          min: 0.0,
+                          max: 1.0,
+                          onChanged: _beauty.enabled
+                              ? (v) {
+                                  setSheetState(() {
+                                    onChanged(v);
+                                  });
+                                  setState(() {});
+                                  _saveEffectsSoon();
+                                }
+                              : null,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: 36,
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        '${(value * 100).round()}%',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: subTextColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return Container(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xFF1E1E26)
+                    : AppColors.lightSurface,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    blurRadius: 20,
+                    offset: const Offset(0, -4),
                   ),
                 ],
               ),
-            ),
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Handle
+                    Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 14),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white24 : Colors.black12,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
 
-            // Bottom clearance for floating MainScaffold bottom nav bar
-            SizedBox(height: navBarClearance),
-          ],
-        ),
-      ),
+                    // Title & Master Switch
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(
+                              LucideIcons.sparkles,
+                              size: 18,
+                              color: AppColors.primary,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Làm đẹp da tự nhiên',
+                              style: AppTypography.h3(color: textColor),
+                            ),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            TextButton(
+                              onPressed: () {
+                                HapticHelper.light();
+                                setSheetState(() {
+                                  _beauty = const BeautySettings();
+                                });
+                                setState(() {});
+                                _saveEffectsSoon();
+                              },
+                              child: Text(
+                                'Mặc định',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.primaryLight,
+                                ),
+                              ),
+                            ),
+                            Switch.adaptive(
+                              value: _beauty.enabled,
+                              activeTrackColor: AppColors.primary,
+                              onChanged: (val) {
+                                HapticHelper.selection();
+                                setSheetState(() {
+                                  _beauty = _beauty.copyWith(enabled: val);
+                                });
+                                setState(() {});
+                                _saveEffectsSoon();
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
 
-      // Screen Flash Overlay for front camera
-      if (_isScreenFlashing)
-        Positioned.fill(
-          child: Container(
-            color: const Color(0xFFFFFBEA),
-          ),
-        ),
-    ],
-  ),
-);
+                    const Divider(height: 16),
+
+                    // Sliders
+                    buildSliderRow(
+                      label: 'Tổng thể (Overall)',
+                      value: _beauty.overall,
+                      onChanged: (v) => _beauty = _beauty.copyWith(overall: v),
+                    ),
+                    buildSliderRow(
+                      label: 'Làm mịn da',
+                      value: _beauty.smoothing,
+                      onChanged: (v) =>
+                          _beauty = _beauty.copyWith(smoothing: v),
+                    ),
+                    buildSliderRow(
+                      label: 'Đều màu da',
+                      value: _beauty.toneEvenness,
+                      onChanged: (v) =>
+                          _beauty = _beauty.copyWith(toneEvenness: v),
+                    ),
+                    buildSliderRow(
+                      label: 'Giảm khuyết điểm',
+                      value: _beauty.blemishReduction,
+                      onChanged: (v) =>
+                          _beauty = _beauty.copyWith(blemishReduction: v),
+                    ),
+                    buildSliderRow(
+                      label: 'Sáng da tự nhiên',
+                      value: _beauty.brightness,
+                      onChanged: (v) =>
+                          _beauty = _beauty.copyWith(brightness: v),
+                    ),
+                    buildSliderRow(
+                      label: 'Tươi tắn & Sức sống',
+                      value: _beauty.vitality,
+                      onChanged: (v) => _beauty = _beauty.copyWith(vitality: v),
+                    ),
+                    buildSliderRow(
+                      label: 'Giảm bóng dầu / Cháy',
+                      value: _beauty.highlightReduction,
+                      onChanged: (v) =>
+                          _beauty = _beauty.copyWith(highlightReduction: v),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Widget _buildZoomOption({
@@ -1426,8 +2154,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
           AnimatedBuilder(
             animation: _recordProgressController,
             builder: (context, child) {
-              final remainingFraction =
-                  (1.0 - _recordProgressController.value).clamp(0.0, 1.0);
+              final remainingFraction = (1.0 - _recordProgressController.value)
+                  .clamp(0.0, 1.0);
               final isUrgent = remainingFraction <= (3.0 / maxVideoDuration);
 
               return Container(
@@ -1457,22 +2185,23 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                                   ? const [
                                       Color(0xFFFF1744),
                                       Color(0xFFFF5252),
-                                      Color(0xFFFF8A80)
+                                      Color(0xFFFF8A80),
                                     ]
                                   : const [
                                       AppColors.primary,
                                       AppColors.primaryLight,
-                                      Color(0xFFFF9EBA)
+                                      Color(0xFFFF9EBA),
                                     ],
                               begin: Alignment.centerLeft,
                               end: Alignment.centerRight,
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: (isUrgent
-                                        ? const Color(0xFFFF1744)
-                                        : AppColors.primaryLight)
-                                    .withValues(alpha: 0.7),
+                                color:
+                                    (isUrgent
+                                            ? const Color(0xFFFF1744)
+                                            : AppColors.primaryLight)
+                                        .withValues(alpha: 0.7),
                                 blurRadius: 6,
                                 spreadRadius: 0.5,
                               ),
@@ -1519,8 +2248,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
           // 2. Dynamic Recording Island HUD
           AnimatedBuilder(
-            animation: Listenable.merge(
-                [_recordProgressController, _recPulseController]),
+            animation: Listenable.merge([
+              _recordProgressController,
+              _recPulseController,
+            ]),
             builder: (context, child) {
               final remainingSec =
                   (maxVideoDuration * (1.0 - _recordProgressController.value))
@@ -1532,13 +2263,18 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
               return Center(
                 child: FrostedContainer(
                   borderRadius: AppDimens.radiusFull,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 6,
+                  ),
                   backgroundColor: const Color(0x80000000),
                   border: Border.all(
                     color: isUrgent
-                        ? Color.lerp(const Color(0xFFFF1744), Colors.white,
-                            pulseVal * 0.6)!
+                        ? Color.lerp(
+                            const Color(0xFFFF1744),
+                            Colors.white,
+                            pulseVal * 0.6,
+                          )!
                         : Colors.white.withValues(alpha: 0.25),
                     width: 1.2,
                   ),
@@ -1580,11 +2316,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                       const SizedBox(width: 8),
 
                       // Divider
-                      Container(
-                        width: 1,
-                        height: 12,
-                        color: Colors.white24,
-                      ),
+                      Container(width: 1, height: 12, color: Colors.white24),
                       const SizedBox(width: 8),
 
                       // Countdown text
@@ -1597,10 +2329,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                           fontSize: 14,
                           letterSpacing: 0.5,
                           shadows: const [
-                            Shadow(
-                              color: Colors.black87,
-                              blurRadius: 4,
-                            ),
+                            Shadow(color: Colors.black87, blurRadius: 4),
                           ],
                         ),
                       ),

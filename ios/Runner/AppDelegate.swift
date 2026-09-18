@@ -1,6 +1,7 @@
 import Flutter
 import UIKit
 import AVFoundation
+import WidgetKit
 #if canImport(GoogleMaps)
 import GoogleMaps
 #endif
@@ -166,5 +167,32 @@ import workmanager_apple
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     AppDelegate.registerPluginSafely(with: engineBridge.pluginRegistry)
+  }
+
+  // ─── Silent Push Handler for Widget Refresh ──────────────────────────────
+  // Called by iOS when a data-only (content-available:1) push arrives even
+  // while the app is in the background or suspended.
+  override func application(
+    _ application: UIApplication,
+    didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+    fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+  ) {
+    let type = userInfo["type"] as? String
+
+    if type == "location_widget_update" {
+      // Reload all WidgetKit timelines so the location widget refreshes now
+      if #available(iOS 14.0, *) {
+        WidgetCenter.shared.reloadAllTimelines()
+      }
+      completionHandler(.newData)
+      return
+    }
+
+    // Pass to Flutter / Firebase for other notification types
+    super.application(
+      application,
+      didReceiveRemoteNotification: userInfo,
+      fetchCompletionHandler: completionHandler
+    )
   }
 }

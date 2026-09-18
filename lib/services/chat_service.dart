@@ -88,20 +88,6 @@ class ChatService {
         'unreadCount.$recipientId': FieldValue.increment(1),
       }, SetOptions(merge: true));
       await batch.commit();
-
-      // In-app notification
-      try {
-        await _db.collection('notifications').add({
-          'userId': recipientId,
-          'senderId': senderId,
-          'type': 'message',
-          'title': 'HeartPearl',
-          'body': '💬 $currentUserName: $trimmed',
-          'read': false,
-          'chatId': chatId,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      } catch (_) {}
     } catch (error) {
       throw Exception('Không thể gửi tin nhắn: $error');
     }

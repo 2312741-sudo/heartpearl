@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,7 +17,9 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/feed_provider.dart';
 import '../../../providers/friends_provider.dart';
 import '../../../providers/settings_provider.dart';
+import '../../../services/camera_effects_service.dart';
 import '../../../services/content_filter_service.dart';
+import '../../common/camera_effect_layer.dart';
 import '../../common/frosted_container.dart';
 import '../../common/gradient_button.dart';
 import '../../common/user_avatar.dart';
@@ -28,6 +29,8 @@ class PreviewScreen extends ConsumerStatefulWidget {
   final bool isVideo;
   final bool isMirrored;
   final BeautyFilter filter;
+  final double filterIntensity;
+  final BeautySettings beauty;
 
   const PreviewScreen({
     super.key,
@@ -35,6 +38,8 @@ class PreviewScreen extends ConsumerStatefulWidget {
     required this.isVideo,
     required this.isMirrored,
     required this.filter,
+    this.filterIntensity = 0.65,
+    this.beauty = const BeautySettings(),
   });
 
   @override
@@ -102,7 +107,9 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
       HapticHelper.heavy();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(AppStrings.tr('safety_objectionable_warning', lang: lang)),
+          content: Text(
+            AppStrings.tr('safety_objectionable_warning', lang: lang),
+          ),
           backgroundColor: AppColors.error,
         ),
       );
@@ -139,14 +146,29 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
         );
         String? thumbUrl;
         if (thumbFile != null) {
+          File thumbToUpload = thumbFile;
+          File? renderedThumb;
+          if (!widget.filter.isOriginal || widget.beauty.hasEffect) {
+            renderedThumb = await CameraEffectsService().renderPhoto(
+              source: thumbFile,
+              filter: widget.filter,
+              filterIntensity: widget.filterIntensity,
+              beauty: widget.beauty,
+            );
+            thumbToUpload = renderedThumb;
+          }
           try {
             thumbUrl = await photoService.uploadPhoto(
-              file: thumbFile,
+              file: thumbToUpload,
               userId: user.uid,
             );
             // Clean up temporary thumbnail
             try {
               await thumbFile.delete();
+              if (renderedThumb != null &&
+                  renderedThumb.path != thumbFile.path) {
+                await renderedThumb.delete();
+              }
             } catch (_) {}
           } catch (e) {
             debugPrint('Error uploading video thumbnail: $e');
@@ -183,11 +205,27 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
         // If thumbnail generation succeeded, use it for preview; otherwise fallback to videoUrl
         mediaUrl = thumbUrl ?? videoUrl;
       } else {
+        File photoToUpload = File(widget.filePath);
+        File? renderedPhoto;
+        if (!widget.filter.isOriginal || widget.beauty.hasEffect) {
+          renderedPhoto = await CameraEffectsService().renderPhoto(
+            source: photoToUpload,
+            filter: widget.filter,
+            filterIntensity: widget.filterIntensity,
+            beauty: widget.beauty,
+          );
+          photoToUpload = renderedPhoto;
+        }
         mediaUrl = await photoService.uploadPhoto(
-          file: File(widget.filePath),
+          file: photoToUpload,
           userId: user.uid,
           onProgress: (p) => setState(() => _uploadProgress = p),
         );
+        if (renderedPhoto != null && renderedPhoto.path != widget.filePath) {
+          try {
+            await renderedPhoto.delete();
+          } catch (_) {}
+        }
       }
 
       final finalRecipientIds = await ref
@@ -212,7 +250,7 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
             : null,
         mediaType: widget.isVideo ? 'video' : 'photo',
         isMirrored: widget.isMirrored,
-        filter: widget.filter.type != BeautyFilterType.normal,
+        filter: !widget.filter.isOriginal || widget.beauty.hasEffect,
       );
 
       // Note: User's own sent photos are not saved to their own home widget (widgets only show photos from friends)
@@ -288,7 +326,9 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                       ),
                       child: Icon(
                         LucideIcons.x,
-                        color: isDark ? AppColors.white : AppColors.lightTextPrimary,
+                        color: isDark
+                            ? AppColors.white
+                            : AppColors.lightTextPrimary,
                         size: 22,
                       ),
                     ),
@@ -313,7 +353,9 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                         children: [
                           Icon(
                             LucideIcons.play,
-                            color: isDark ? AppColors.white : AppColors.lightTextPrimary,
+                            color: isDark
+                                ? AppColors.white
+                                : AppColors.lightTextPrimary,
                             size: 14,
                           ),
                           const SizedBox(width: 4),
@@ -321,7 +363,9 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                             AppStrings.tr('home_video_badge', lang: lang),
                             style: AppTypography.bold.copyWith(
                               fontSize: 12,
-                              color: isDark ? AppColors.white : AppColors.lightTextPrimary,
+                              color: isDark
+                                  ? AppColors.white
+                                  : AppColors.lightTextPrimary,
                             ),
                           ),
                         ],
@@ -356,100 +400,44 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                               ? null
                               : [
                                   BoxShadow(
-                                    color: AppColors.primary.withValues(alpha: 0.08),
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.08,
+                                    ),
                                     blurRadius: 16,
                                     offset: const Offset(0, 4),
                                   ),
                                 ],
                         ),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            // 2.1 Media (Photo / Video)
-                            widget.isVideo
-                                ? (_videoController != null &&
-                                          _videoController!.value.isInitialized
-                                      ? FittedBox(
-                                          fit: BoxFit.cover,
-                                          child: SizedBox(
-                                            width: _videoController!
-                                                .value
-                                                .size
-                                                .width,
-                                            height: _videoController!
-                                                .value
-                                                .size
-                                                .height,
-                                            child:
-                                                widget.filter.colorFilter !=
-                                                    null
-                                                ? ColorFiltered(
-                                                    colorFilter: widget
-                                                        .filter
-                                                        .colorFilter!,
-                                                    child: VideoPlayer(
-                                                      _videoController!,
-                                                    ),
-                                                  )
-                                                : VideoPlayer(
-                                                    _videoController!,
-                                                  ),
-                                          ),
-                                        )
-                                      : const Center(
-                                          child: CircularProgressIndicator(
-                                            color: AppColors.primary,
-                                          ),
-                                        ))
-                                : (widget.filter.colorFilter != null
-                                      ? ColorFiltered(
-                                          colorFilter:
-                                              widget.filter.colorFilter!,
-                                          child: Image.file(
-                                            File(widget.filePath),
-                                            fit: BoxFit.cover,
-                                          ),
-                                        )
-                                      : Image.file(
-                                          File(widget.filePath),
-                                          fit: BoxFit.cover,
-                                        )),
-
-                            // 2.2 TikTok Skin-Smoothing & Blemish Softening Diffusion Layer
-                            if (widget.filter.blurSigma > 0)
-                              Positioned.fill(
-                                child: IgnorePointer(
-                                  child: Opacity(
-                                    opacity: widget.filter.blurOpacity,
-                                    child: BackdropFilter(
-                                      filter: ImageFilter.blur(
-                                        sigmaX: widget.filter.blurSigma,
-                                        sigmaY: widget.filter.blurSigma,
-                                      ),
-                                      child: Container(
-                                        color:
-                                            widget.filter.overlayColor !=
-                                                Colors.transparent
-                                            ? widget.filter.overlayColor
-                                            : Colors.transparent,
-                                      ),
-                                    ),
-                                  ),
+                        child: CameraEffectLayer(
+                          filter: widget.filter,
+                          filterIntensity: widget.filterIntensity,
+                          beauty: widget.beauty,
+                          child: widget.isVideo
+                              ? (_videoController != null &&
+                                        _videoController!.value.isInitialized
+                                    ? FittedBox(
+                                        fit: BoxFit.cover,
+                                        child: SizedBox(
+                                          width: _videoController!
+                                              .value
+                                              .size
+                                              .width,
+                                          height: _videoController!
+                                              .value
+                                              .size
+                                              .height,
+                                          child: VideoPlayer(_videoController!),
+                                        ),
+                                      )
+                                    : const Center(
+                                        child: CircularProgressIndicator(
+                                          color: AppColors.primary,
+                                        ),
+                                      ))
+                              : Image.file(
+                                  File(widget.filePath),
+                                  fit: BoxFit.cover,
                                 ),
-                              ),
-
-                            // 2.3 Beauty Filter Color Overlay
-                            if (widget.filter.blurSigma == 0 &&
-                                widget.filter.overlayColor !=
-                                    Colors.transparent)
-                              Positioned.fill(
-                                child: IgnorePointer(
-                                  child: Container(
-                                    color: widget.filter.overlayColor,
-                                  ),
-                                ),
-                              ),
-                          ],
                         ),
                       ),
                     ),
@@ -487,7 +475,9 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                     child: TextField(
                       controller: _captionController,
                       style: AppTypography.body(
-                        color: isDark ? AppColors.white : AppColors.lightTextPrimary,
+                        color: isDark
+                            ? AppColors.white
+                            : AppColors.lightTextPrimary,
                       ),
                       maxLength: 100,
                       decoration: InputDecoration(
@@ -546,7 +536,9 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                                   )
                                 : '${_selectedFriendIds.length} ${AppStrings.tr('home_selected', lang: lang)}',
                             style: AppTypography.medium.copyWith(
-                              color: isDark ? AppColors.white : AppColors.lightTextPrimary,
+                              color: isDark
+                                  ? AppColors.white
+                                  : AppColors.lightTextPrimary,
                               fontSize: 14,
                             ),
                           ),
@@ -557,7 +549,9 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                                 : LucideIcons.chevronUp,
                             color: isDark
                                 ? AppColors.white.withValues(alpha: 0.7)
-                                : AppColors.lightTextPrimary.withValues(alpha: 0.7),
+                                : AppColors.lightTextPrimary.withValues(
+                                    alpha: 0.7,
+                                  ),
                             size: 16,
                           ),
                         ],
