@@ -19,7 +19,7 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/location_provider.dart';
 import '../profile/location_privacy_screen.dart';
 
-enum MapStyle { dark, street, light }
+enum MapStyle { dark, street, satellite }
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -234,7 +234,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
               ),
               ListTile(
                 leading: const Icon(LucideIcons.map),
-                title: const Text('Đường phố chi tiết (Voyager)'),
+                title: const Text('Đường phố (Google Maps)'),
                 trailing: (_userMapStyle == MapStyle.street ||
                         (_userMapStyle == null && !isDark))
                     ? const Icon(LucideIcons.check, color: AppColors.primary)
@@ -245,13 +245,13 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 },
               ),
               ListTile(
-                leading: const Icon(LucideIcons.sun),
-                title: const Text('Giao diện sáng (Positron)'),
-                trailing: _userMapStyle == MapStyle.light
+                leading: const Icon(LucideIcons.satellite),
+                title: const Text('Ảnh vệ tinh (Satellite)'),
+                trailing: _userMapStyle == MapStyle.satellite
                     ? const Icon(LucideIcons.check, color: AppColors.primary)
                     : null,
                 onTap: () {
-                  setState(() => _userMapStyle = MapStyle.light);
+                  setState(() => _userMapStyle = MapStyle.satellite);
                   Navigator.pop(ctx);
                 },
               ),
@@ -349,21 +349,19 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final activeStyle = _userMapStyle ?? (isDark ? MapStyle.dark : MapStyle.street);
+    final isDarkMode = activeStyle == MapStyle.dark;
+
     final String urlTemplate = switch (activeStyle) {
-      MapStyle.dark =>
-        'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-      MapStyle.street =>
-        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-      MapStyle.light =>
-        'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+      MapStyle.dark || MapStyle.street =>
+        'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+      MapStyle.satellite =>
+        'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
     };
     final String fallbackUrl = switch (activeStyle) {
-      MapStyle.dark =>
-        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-      MapStyle.street =>
-        'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-      MapStyle.light =>
-        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+      MapStyle.dark || MapStyle.street =>
+        'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
+      MapStyle.satellite =>
+        'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
     };
 
     return Scaffold(
@@ -417,8 +415,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
               TileLayer(
                 urlTemplate: urlTemplate,
                 fallbackUrl: fallbackUrl,
-                subdomains: const ['a', 'b', 'c', 'd'],
-                retinaMode: RetinaMode.isHighDensity(context),
+                subdomains: const ['0', '1', '2', '3'],
+                tileBuilder: isDarkMode ? darkModeTileBuilder : null,
                 maxZoom: 20,
                 userAgentPackageName: 'com.heartpearl.heartpearl',
                 evictErrorTileStrategy: EvictErrorTileStrategy.none,
