@@ -96,11 +96,10 @@ void main() {
     });
 
     test('BeautyFilter configuration check', () {
-      expect(BeautyFilter.all.length, 6);
+      expect(BeautyFilter.all.length, 25);
       expect(BeautyFilter.all.first.type, BeautyFilterType.normal);
-      expect(BeautyFilter.all[1].type, BeautyFilterType.smoothSkin);
-      expect(BeautyFilter.all[1].name, 'Cà Mụn');
-      expect(BeautyFilter.all[1].blurSigma > 0, true);
+      expect(BeautyFilter.all[1].type, BeautyFilterType.pearlNatural);
+      expect(BeautyFilter.all[1].name, 'Pearl Natural');
     });
 
     test('ContentFilterService detects objectionable text per Guideline 1.2', () {

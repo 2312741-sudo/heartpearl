@@ -42,11 +42,10 @@ class WidgetService {
     'MAPBOX_ACCESS_TOKEN',
   );
 
-  /// Initialize HomeWidget and the platform scheduler. On iOS, the operating
-  /// system decides the actual BGTask execution time; 30 minutes is a hint.
+  /// Initialize HomeWidget App Group for iOS and periodic worker for Android
   static Future<void> initialize() async {
     await initializeHomeWidget();
-    if (Platform.isAndroid || Platform.isIOS) {
+    if (Platform.isAndroid) {
       try {
         await Workmanager().initialize(locationWidgetCallbackDispatcher);
         await Workmanager().registerPeriodicTask(
@@ -58,7 +57,7 @@ class WidgetService {
           existingWorkPolicy: ExistingPeriodicWorkPolicy.update,
         );
       } catch (e) {
-        debugPrint('Location widget scheduler init error: $e');
+        debugPrint('Workmanager Android init error: $e');
       }
     }
   }

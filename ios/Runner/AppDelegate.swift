@@ -4,6 +4,9 @@ import AVFoundation
 #if canImport(GoogleMaps)
 import GoogleMaps
 #endif
+#if canImport(workmanager_apple)
+import workmanager_apple
+#endif
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -17,6 +20,10 @@ import GoogleMaps
        !mapsApiKey.contains("$(") {
       GMSServices.provideAPIKey(mapsApiKey)
     }
+    #endif
+
+    #if canImport(workmanager_apple)
+    WorkmanagerPlugin.registerPeriodicTask(withIdentifier: "com.heartpearl.heartpearl.locationWidgetRefresh")
     #endif
 
     let result = super.application(application, didFinishLaunchingWithOptions: launchOptions)
