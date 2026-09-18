@@ -19,6 +19,8 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/location_provider.dart';
 import '../profile/location_privacy_screen.dart';
 
+enum MapStyle { dark, street, light }
+
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
 
@@ -46,6 +48,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
   bool _hasCentered = false;
   bool _isLocating = false;
+  MapStyle? _userMapStyle;
 
   @override
   void initState() {
@@ -194,6 +197,71 @@ class _MapScreenState extends ConsumerState<MapScreen>
     _mapController.move(_mapController.camera.center, (currentZoom - 1).clamp(3.0, 18.5));
   }
 
+  void _showMapStyleSheet() {
+    HapticHelper.selection();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppDimens.spaceLg,
+            vertical: AppDimens.spaceBase,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Kiểu bản đồ',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: const Icon(LucideIcons.moon),
+                title: const Text('Giao diện tối (Dark Mode)'),
+                trailing: (_userMapStyle == MapStyle.dark ||
+                        (_userMapStyle == null && isDark))
+                    ? const Icon(LucideIcons.check, color: AppColors.primary)
+                    : null,
+                onTap: () {
+                  setState(() => _userMapStyle = MapStyle.dark);
+                  Navigator.pop(ctx);
+                },
+              ),
+              ListTile(
+                leading: const Icon(LucideIcons.map),
+                title: const Text('Đường phố chi tiết (Voyager)'),
+                trailing: (_userMapStyle == MapStyle.street ||
+                        (_userMapStyle == null && !isDark))
+                    ? const Icon(LucideIcons.check, color: AppColors.primary)
+                    : null,
+                onTap: () {
+                  setState(() => _userMapStyle = MapStyle.street);
+                  Navigator.pop(ctx);
+                },
+              ),
+              ListTile(
+                leading: const Icon(LucideIcons.sun),
+                title: const Text('Giao diện sáng (Positron)'),
+                trailing: _userMapStyle == MapStyle.light
+                    ? const Icon(LucideIcons.check, color: AppColors.primary)
+                    : null,
+                onTap: () {
+                  setState(() => _userMapStyle = MapStyle.light);
+                  Navigator.pop(ctx);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _acceptLocations(List<FriendLocation> locations) {
     final nextIds = locations.map((item) => item.friend.uid).toSet();
     _friendData.removeWhere((uid, _) => !nextIds.contains(uid));
@@ -280,6 +348,23 @@ class _MapScreenState extends ConsumerState<MapScreen>
             : _fallbackCenter);
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final activeStyle = _userMapStyle ?? (isDark ? MapStyle.dark : MapStyle.street);
+    final String urlTemplate = switch (activeStyle) {
+      MapStyle.dark =>
+        'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+      MapStyle.street =>
+        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+      MapStyle.light =>
+        'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    };
+    final String fallbackUrl = switch (activeStyle) {
+      MapStyle.dark =>
+        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+      MapStyle.street =>
+        'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+      MapStyle.light =>
+        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    };
 
     return Scaffold(
       appBar: AppBar(
@@ -330,10 +415,17 @@ class _MapScreenState extends ConsumerState<MapScreen>
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                fallbackUrl: 'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.heartpearl.heartpearl',
-                maxZoom: 19,
+                urlTemplate: urlTemplate,
+                fallbackUrl: fallbackUrl,
+                subdomains: const ['a', 'b', 'c', 'd'],
+                retinaMode: RetinaMode.isHighDensity(context),
+                maxZoom: 20,
+                tileProvider: NetworkTileProvider(
+                  headers: const {
+                    'User-Agent': 'HeartPearl/2.0 (com.heartpearl.heartpearl)',
+                    'Accept': 'image/webp,image/png,image/*;q=0.8',
+                  },
+                ),
                 evictErrorTileStrategy: EvictErrorTileStrategy.none,
                 errorTileCallback: (tile, error, stackTrace) {
                   // Gracefully suppress network/DNS errors when offline
@@ -539,6 +631,13 @@ class _MapScreenState extends ConsumerState<MapScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Map Style Switcher (Layers)
+                  _FloatingMapButton(
+                    icon: LucideIcons.layers,
+                    onPressed: _showMapStyleSheet,
+                  ),
+                  const SizedBox(height: 8),
+
                   // Zoom In
                   _FloatingMapButton(
                     icon: LucideIcons.plus,
