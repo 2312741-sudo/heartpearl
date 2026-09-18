@@ -260,6 +260,21 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         _currentZoom = initialZoom;
       }
 
+      // Explicitly configure flashMode right after initialization.
+      // Native iOS and Android default to FlashMode.auto which causes
+      // the camera to flash automatically when taking photos in low light!
+      try {
+        if (!_isFlashOn || isFront) {
+          await newController.setFlashMode(FlashMode.off);
+        } else {
+          await newController.setFlashMode(FlashMode.torch);
+        }
+      } catch (_) {
+        try {
+          await newController.setFlashMode(FlashMode.off);
+        } catch (_) {}
+      }
+
       if (mounted) {
         setState(() {
           _controller = newController;
@@ -289,6 +304,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       try {
         await _controller?.setFlashMode(FlashMode.off);
       } catch (_) {}
+    }
+
+    if (_isFlashOn) {
+      setState(() => _isFlashOn = false);
     }
 
     final targetCamera = isCurrentlyFront ? _mainBackCamera : _frontCamera;
@@ -402,6 +421,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     if (isFront) {
       // Front camera Retina Screen Flash toggle
       setState(() => _isFlashOn = nextFlash);
+      try {
+        await _controller!.setFlashMode(FlashMode.off);
+      } catch (_) {}
       return;
     }
 
@@ -484,6 +506,15 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       _shutterAnimController
           .forward()
           .then((_) => _shutterAnimController.reverse());
+
+      // Strictly ensure native camera flash mode is off when flash is off or for front camera
+      if (!_isFlashOn || isFront) {
+        try {
+          if (_controller!.value.flashMode != FlashMode.off) {
+            await _controller!.setFlashMode(FlashMode.off);
+          }
+        } catch (_) {}
+      }
 
       // Retina Screen Flash for front camera selfie in the dark
       if (_isFlashOn && isFront) {

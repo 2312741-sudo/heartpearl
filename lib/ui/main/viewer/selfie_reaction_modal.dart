@@ -88,6 +88,9 @@ class _SelfieReactionModalState extends State<SelfieReactionModal>
 
     try {
       await newController.initialize();
+      try {
+        await newController.setFlashMode(FlashMode.off);
+      } catch (_) {}
       if (mounted) setState(() {});
     } catch (_) {}
   }
@@ -95,19 +98,25 @@ class _SelfieReactionModalState extends State<SelfieReactionModal>
   Future<void> _toggleCamera() async {
     if (_cameras.length < 2 || _controller == null) return;
     HapticHelper.light();
+    if (_isFlashOn) {
+      setState(() => _isFlashOn = false);
+    }
     _currentCameraIndex = (_currentCameraIndex + 1) % _cameras.length;
     await _initCameraController(_cameras[_currentCameraIndex]);
   }
 
   Future<void> _toggleFlash() async {
     HapticHelper.light();
-    setState(() => _isFlashOn = !_isFlashOn);
+    final nextFlash = !_isFlashOn;
+    setState(() => _isFlashOn = nextFlash);
     final isFront = _controller?.description.lensDirection == CameraLensDirection.front;
-    if (!isFront && _controller != null && _controller!.value.isInitialized) {
+    if (_controller != null && _controller!.value.isInitialized) {
       try {
-        await _controller!.setFlashMode(
-          _isFlashOn ? FlashMode.torch : FlashMode.off,
-        );
+        if (isFront || !nextFlash) {
+          await _controller!.setFlashMode(FlashMode.off);
+        } else {
+          await _controller!.setFlashMode(FlashMode.torch);
+        }
       } catch (_) {}
     }
   }
@@ -121,6 +130,15 @@ class _SelfieReactionModalState extends State<SelfieReactionModal>
     try {
       HapticHelper.medium();
       _shutterAnim.forward().then((_) => _shutterAnim.reverse());
+
+      // Strictly ensure native hardware flash is off when flash is off or for front camera
+      if (!_isFlashOn || isFront) {
+        try {
+          if (_controller!.value.flashMode != FlashMode.off) {
+            await _controller!.setFlashMode(FlashMode.off);
+          }
+        } catch (_) {}
+      }
 
       // Retina screen flash in the dark
       if (_isFlashOn && isFront) {
