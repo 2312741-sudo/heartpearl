@@ -23,6 +23,18 @@ class FriendService {
       await _db.collection('users').doc(currentUid).set({
         'blockedUsers': FieldValue.arrayUnion([cleanTargetUid]),
       }, SetOptions(merge: true));
+
+      // Apple Guideline 1.2: Blocking must automatically notify the developer
+      await _db.collection('reports').add({
+        'type': 'block_incident_report',
+        'reporterUid': currentUid,
+        'targetUid': cleanTargetUid,
+        'reason': 'abusive_behavior_blocked',
+        'note': 'Người dùng bị chặn do hành vi lạm dụng hoặc nội dung phản cảm. Đã gỡ khỏi bảng tin tức thì.',
+        'developerNotified': true,
+        'status': 'pending_24h_review',
+        'timestamp': FieldValue.serverTimestamp(),
+      });
     } catch (error) {
       throw Exception('Không thể chặn người dùng: $error');
     }
