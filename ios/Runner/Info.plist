@@ -60,9 +60,13 @@
 	<string>HeartPearl cần quyền micrô để quay video với âm thanh.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>HeartPearl cần quyền truy cập thư viện ảnh để bạn chọn ảnh đại diện và lưu ảnh.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>HeartPearl cần quyền lưu ảnh và video khoảnh khắc vào thư viện ảnh của bạn.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>HeartPearl cần vị trí của bạn để hiển thị trên bản đồ và chia sẻ với bạn bè khi mở ứng dụng.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>HeartPearl cần quyền truy cập vị trí liên tục để bạn bè có thể thấy bạn trên bản đồ và tiện ích màn hình chính ngay cả khi ứng dụng đang chạy ở nền.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
 	<string>HeartPearl cần quyền truy cập vị trí liên tục để bạn bè có thể thấy bạn trên bản đồ và tiện ích màn hình chính ngay cả khi ứng dụng đang chạy ở nền.</string>
 	<key>GOOGLE_MAPS_API_KEY</key>
 	<string>$(GOOGLE_MAPS_API_KEY)</string>

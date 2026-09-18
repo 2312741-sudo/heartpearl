@@ -647,6 +647,46 @@ class ProfileScreen extends ConsumerWidget {
                           ),
                           onTap: () => EulaModal.show(context),
                         ),
+
+                        Divider(
+                          color: isDark
+                              ? AppColors.darkBorder
+                              : AppColors.lightBorder,
+                          height: 1,
+                        ),
+
+                        // Contact & Support (Apple Guideline 1.2(d))
+                        ListTile(
+                          leading: const Icon(
+                            LucideIcons.headset,
+                            color: AppColors.primaryLight,
+                          ),
+                          title: Text(
+                            lang == 'vi'
+                                ? 'Liên hệ & Khiếu nại vi phạm'
+                                : 'Contact & Support',
+                            style: AppTypography.bodyBold(
+                              color: isDark
+                                  ? AppColors.darkTextPrimary
+                                  : AppColors.lightTextPrimary,
+                            ),
+                          ),
+                          subtitle: Text(
+                            lang == 'vi'
+                                ? 'Phản hồi trong 24h • contact@heartpearl.app'
+                                : '24h response • contact@heartpearl.app',
+                            style: AppTypography.caption(
+                              color: isDark
+                                  ? AppColors.darkTextMuted
+                                  : AppColors.lightTextMuted,
+                            ),
+                          ),
+                          trailing: const Icon(
+                            LucideIcons.chevronRight,
+                            size: 18,
+                          ),
+                          onTap: () => _showContactSupportDialog(context, lang, isDark),
+                        ),
                       ],
                     ),
                   ),
@@ -668,6 +708,43 @@ class ProfileScreen extends ConsumerWidget {
                     ),
                     child: Column(
                       children: [
+                        // Delete Account Permanently (Apple Guideline 5.1.1(v))
+                        ListTile(
+                          leading: const Icon(
+                            LucideIcons.trash2,
+                            color: AppColors.error,
+                          ),
+                          title: Text(
+                            lang == 'vi'
+                                ? 'Xóa tài khoản vĩnh viễn'
+                                : 'Delete Account Permanently',
+                            style: AppTypography.bodyBold(
+                              color: AppColors.error,
+                            ),
+                          ),
+                          subtitle: Text(
+                            lang == 'vi'
+                                ? 'Xóa toàn bộ ảnh, video, bạn bè và dữ liệu'
+                                : 'Permanently purge all photos, media & account',
+                            style: AppTypography.caption(
+                              color: AppColors.error.withValues(alpha: 0.75),
+                            ),
+                          ),
+                          trailing: const Icon(
+                            LucideIcons.chevronRight,
+                            color: AppColors.error,
+                            size: 18,
+                          ),
+                          onTap: () => _showDeleteAccountDialog(context, ref, lang, isDark),
+                        ),
+
+                        Divider(
+                          color: isDark
+                              ? AppColors.darkBorder
+                              : AppColors.lightBorder,
+                          height: 1,
+                        ),
+
                         // Logout
                         ListTile(
                           leading: const Icon(
@@ -1111,6 +1188,140 @@ class ProfileScreen extends ConsumerWidget {
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Đóng'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showContactSupportDialog(
+    BuildContext context,
+    String lang,
+    bool isDark,
+  ) {
+    HapticHelper.light();
+    final isVi = lang == 'vi';
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor:
+            isDark ? AppColors.darkSurface : AppColors.lightSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppDimens.radius2Xl),
+          side: BorderSide(
+            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+          ),
+        ),
+        title: Row(
+          children: [
+            const Icon(
+              LucideIcons.headset,
+              color: AppColors.primaryLight,
+              size: 22,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              isVi ? 'Liên hệ & Hỗ trợ' : 'Contact & Support',
+              style: AppTypography.h3(
+                color: isDark
+                    ? AppColors.darkTextPrimary
+                    : AppColors.lightTextPrimary,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isVi
+                  ? 'Đội ngũ hỗ trợ HeartPearl cam kết tiếp nhận và giải quyết mọi thắc mắc hoặc báo cáo vi phạm trong vòng 24 giờ.'
+                  : 'HeartPearl support team commits to review and resolve inquiries and content violation reports within 24 hours.',
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.45,
+                color: isDark
+                    ? AppColors.darkTextPrimary
+                    : AppColors.lightTextPrimary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildContactInfoTile(
+              icon: LucideIcons.mail,
+              title: isVi ? 'Email hỗ trợ kỹ thuật' : 'Technical Support Email',
+              value: 'contact@heartpearl.app',
+              isDark: isDark,
+            ),
+            const SizedBox(height: 8),
+            _buildContactInfoTile(
+              icon: LucideIcons.globe,
+              title: isVi ? 'Cổng web & Xóa tài khoản' : 'Web Portal & Data Deletion',
+              value: 'https://tamchau-865f3.web.app',
+              isDark: isDark,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              isVi ? 'Đóng' : 'Close',
+              style: const TextStyle(color: AppColors.primaryLight),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContactInfoTile({
+    required IconData icon,
+    required String title,
+    required String value,
+    required bool isDark,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: isDark
+            ? AppColors.darkSurfaceLight
+            : AppColors.lightSurfaceLight,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: AppColors.primaryLight),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark
+                        ? AppColors.darkTextMuted
+                        : AppColors.lightTextMuted,
+                  ),
+                ),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.bold,
+                    color: isDark
+                        ? AppColors.darkTextPrimary
+                        : AppColors.lightTextPrimary,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
