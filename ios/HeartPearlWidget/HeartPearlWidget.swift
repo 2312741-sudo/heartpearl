@@ -12,7 +12,9 @@ struct HeartPearlTimelineProvider: TimelineProvider {
             senderName: "Bạn bè",
             caption: "Khoảnh khắc mới",
             isMirrored: false,
-            updatedAt: Date()
+            updatedAt: Date(),
+            isLocation: false,
+            locationSummary: nil
         )
     }
 
@@ -23,7 +25,9 @@ struct HeartPearlTimelineProvider: TimelineProvider {
             senderName: "HeartPearl",
             caption: "Chia sẻ khoảnh khắc",
             isMirrored: false,
-            updatedAt: Date()
+            updatedAt: Date(),
+            isLocation: false,
+            locationSummary: nil
         )
         completion(entry)
     }
@@ -37,6 +41,27 @@ struct HeartPearlTimelineProvider: TimelineProvider {
         let isMirrored = sharedDefaults?.bool(forKey: "isMirrored") ?? false
         let updatedMillis = sharedDefaults?.double(forKey: "updatedAt") ?? 0
         let updatedDate = updatedMillis > 0 ? Date(timeIntervalSince1970: updatedMillis / 1000) : Date()
+        let isLocation = sharedDefaults?.string(forKey: "widgetMode") == "location"
+        let locationMapPath = sharedDefaults?.string(forKey: "locationMap") ?? ""
+        let locationFriend = sharedDefaults?.string(forKey: "locationFriend") ?? "Bạn bè"
+        let locationSummary = sharedDefaults?.string(forKey: "locationSummary")
+
+        if isLocation, !locationMapPath.isEmpty,
+           FileManager.default.fileExists(atPath: locationMapPath),
+           let mapImage = UIImage(contentsOfFile: locationMapPath) {
+            let entry = HeartPearlEntry(
+                date: Date(),
+                image: mapImage,
+                senderName: locationFriend,
+                caption: nil,
+                isMirrored: false,
+                updatedAt: updatedDate,
+                isLocation: true,
+                locationSummary: locationSummary
+            )
+            completion(Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(30 * 60))))
+            return
+        }
 
         // 1. Try loading from local App Group shared storage (Fastest & Zero Latency)
         if !photoUrlString.isEmpty && !localPath.isEmpty && FileManager.default.fileExists(atPath: localPath),
@@ -47,7 +72,9 @@ struct HeartPearlTimelineProvider: TimelineProvider {
                 senderName: senderName,
                 caption: caption,
                 isMirrored: isMirrored,
-                updatedAt: updatedDate
+                updatedAt: updatedDate,
+                isLocation: false,
+                locationSummary: nil
             )
             let timeline = Timeline(entries: [entry], policy: .atEnd)
             completion(timeline)
@@ -76,7 +103,9 @@ struct HeartPearlTimelineProvider: TimelineProvider {
                 senderName: senderName,
                 caption: caption,
                 isMirrored: isMirrored,
-                updatedAt: updatedDate
+                updatedAt: updatedDate,
+                isLocation: false,
+                locationSummary: nil
             )
             let timeline = Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(15 * 60)))
             completion(timeline)
@@ -92,6 +121,8 @@ struct HeartPearlEntry: TimelineEntry {
     let caption: String?
     let isMirrored: Bool
     let updatedAt: Date
+    let isLocation: Bool
+    let locationSummary: String?
 }
 
 // SwiftUI Widget View
@@ -133,7 +164,7 @@ struct HeartPearlWidgetEntryView: View {
                                 Image(systemName: "heart.fill")
                                     .font(.system(size: 9, weight: .bold))
                                     .foregroundColor(Color(red: 255/255, green: 74/255, blue: 110/255))
-                                Text("HeartPearl")
+                                Text(entry.isLocation ? "HeartPearl Map" : "HeartPearl")
                                     .font(.system(size: 10, weight: .bold, design: .rounded))
                                     .foregroundColor(.white)
                             }
@@ -150,7 +181,25 @@ struct HeartPearlWidgetEntryView: View {
                         Spacer()
 
                         // Caption & Sender Info (if available)
-                        if let caption = entry.caption, !caption.isEmpty {
+                        if entry.isLocation {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(entry.senderName)
+                                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                                        .foregroundColor(.white)
+                                        .lineLimit(1)
+                                    if let summary = entry.locationSummary {
+                                        Text(summary)
+                                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                                            .foregroundColor(.white.opacity(0.85))
+                                            .lineLimit(1)
+                                    }
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.bottom, 10)
+                        } else if let caption = entry.caption, !caption.isEmpty {
                             HStack {
                                 Text(caption)
                                     .font(.system(size: 12, weight: .semibold, design: .rounded))
@@ -217,7 +266,7 @@ struct HeartPearlWidget: Widget {
             }
         }
         .configurationDisplayName("HeartPearl")
-        .description("Xem ảnh và khoảnh khắc tức thì từ bạn bè ngay trên màn hình chính.")
+        .description("Xem khoảnh khắc và vị trí bạn bè được phép ngay trên màn hình chính.")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }

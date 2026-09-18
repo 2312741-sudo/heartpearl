@@ -1,0 +1,215 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+
+import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_dimens.dart';
+import '../../../core/l10n/app_strings.dart';
+import '../../../core/utils/haptic_helper.dart';
+import '../../../models/user_model.dart';
+import '../../../providers/friends_provider.dart';
+import '../../../providers/location_provider.dart';
+import '../../../providers/settings_provider.dart';
+import '../../common/user_avatar.dart';
+
+class LocationPrivacyScreen extends ConsumerStatefulWidget {
+  const LocationPrivacyScreen({super.key});
+
+  @override
+  ConsumerState<LocationPrivacyScreen> createState() =>
+      _LocationPrivacyScreenState();
+}
+
+class _LocationPrivacyScreenState
+    extends ConsumerState<LocationPrivacyScreen> {
+  bool _savingSharing = false;
+  final Set<String> _savingViewers = {};
+
+  Future<void> _changeSharing(bool enabled) async {
+    if (_savingSharing) return;
+    final lang = ref.read(settingsProvider).language;
+    if (enabled) {
+      final accepted = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(AppStrings.tr('location_disclosure_title', lang: lang)),
+          content: Text(
+            AppStrings.tr('location_disclosure_body', lang: lang),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(AppStrings.tr('safety_cancel', lang: lang)),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(AppStrings.tr('location_allow', lang: lang)),
+            ),
+          ],
+        ),
+      );
+      if (accepted != true || !mounted) return;
+    }
+
+    setState(() => _savingSharing = true);
+    try {
+      await ref.read(locationServiceProvider).setSharingEnabled(enabled);
+      HapticHelper.success();
+    } catch (error) {
+      if (!mounted) return;
+      _showError(error.toString());
+    } finally {
+      if (mounted) setState(() => _savingSharing = false);
+    }
+  }
+
+  Future<void> _changeViewer({
+    required UserModel friend,
+    required bool enabled,
+    required List<UserModel> friends,
+    required Set<String> selected,
+    required bool sharing,
+  }) async {
+    if (_savingViewers.contains(friend.uid)) return;
+    final next = {...selected};
+    if (enabled) {
+      next.add(friend.uid);
+    } else {
+      next.remove(friend.uid);
+    }
+
+    setState(() => _savingViewers.add(friend.uid));
+    try {
+      if (next.isEmpty && sharing) {
+        // Empty allowedViewers deliberately means all friends. Turning off the
+        // final viewer must therefore enter ghost mode instead of saving [].
+        await ref.read(locationServiceProvider).setSharingEnabled(false);
+      } else {
+        await ref
+            .read(locationServiceProvider)
+            .setAllowedViewers(next.toList(growable: false));
+      }
+      HapticHelper.selection();
+    } catch (error) {
+      if (mounted) _showError(error.toString());
+    } finally {
+      if (mounted) setState(() => _savingViewers.remove(friend.uid));
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: AppColors.error),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lang = ref.watch(settingsProvider).language;
+    final ownLocation = ref.watch(ownLocationProvider).value;
+    final friendsAsync = ref.watch(friendsListProvider);
+    final sharing = ownLocation?.isSharing == true;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(AppStrings.tr('location_privacy_title', lang: lang)),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(AppDimens.spaceBase),
+        children: [
+          Card(
+            child: SwitchListTile(
+              secondary: Icon(
+                sharing ? LucideIcons.mapPin : LucideIcons.ghost,
+                color: sharing ? Colors.green : AppColors.primaryLight,
+              ),
+              title: Text(
+                AppStrings.tr('location_ghost_mode', lang: lang),
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              subtitle: Text(
+                sharing
+                    ? AppStrings.tr('location_sharing_on', lang: lang)
+                    : AppStrings.tr('location_sharing_off', lang: lang),
+              ),
+              value: !sharing,
+              onChanged: _savingSharing
+                  ? null
+                  : (ghostMode) => _changeSharing(!ghostMode),
+            ),
+          ),
+          const SizedBox(height: AppDimens.spaceSm),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppDimens.spaceSm),
+            child: Text(
+              AppStrings.tr('location_viewers_explanation', lang: lang),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          const SizedBox(height: AppDimens.spaceBase),
+          Text(
+            AppStrings.tr('location_allowed_viewers', lang: lang),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppDimens.spaceSm),
+          friendsAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (error, _) => Text(error.toString()),
+            data: (friends) {
+              if (friends.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 32),
+                  child: Text(
+                    AppStrings.tr('friends_empty', lang: lang),
+                    textAlign: TextAlign.center,
+                  ),
+                );
+              }
+              final allowed = ownLocation?.allowedViewers ?? const <String>[];
+              final selected = allowed.isEmpty
+                  ? friends.map((friend) => friend.uid).toSet()
+                  : allowed.toSet();
+              return Card(
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  children: [
+                    for (var index = 0; index < friends.length; index++) ...[
+                      SwitchListTile(
+                        secondary: UserAvatar(
+                          imageUrl: friends[index].avatarUrl,
+                          name: friends[index].displayName,
+                          size: 42,
+                        ),
+                        title: Text(friends[index].displayName),
+                        subtitle: Text('@${friends[index].username}'),
+                        value: selected.contains(friends[index].uid),
+                        onChanged: _savingViewers.contains(friends[index].uid)
+                            ? null
+                            : (enabled) => _changeViewer(
+                                friend: friends[index],
+                                enabled: enabled,
+                                friends: friends,
+                                selected: selected,
+                                sharing: sharing,
+                              ),
+                      ),
+                      if (index < friends.length - 1) const Divider(height: 1),
+                    ],
+                  ],
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: AppDimens.spaceBase),
+          ListTile(
+            leading: const Icon(LucideIcons.shieldCheck),
+            title: Text(AppStrings.tr('location_privacy_note', lang: lang)),
+            subtitle: Text(AppStrings.tr('location_no_history', lang: lang)),
+          ),
+        ],
+      ),
+    );
+  }
+}

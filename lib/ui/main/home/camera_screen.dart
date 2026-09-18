@@ -15,6 +15,7 @@ import '../../common/app_badge.dart';
 import '../../../core/utils/media_helper.dart';
 import '../../common/frosted_container.dart';
 import '../chat/chat_list_screen.dart';
+import '../map/map_screen.dart';
 import 'preview_screen.dart';
 
 class CameraScreen extends ConsumerStatefulWidget {
@@ -714,9 +715,32 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                     ],
                   ),
 
-                  // Actions: Messages & Flash
+                  // Actions: Map, Messages & Flash
                   Row(
                     children: [
+                      // Map icon
+                      GestureDetector(
+                        onTap: () {
+                          HapticHelper.selection();
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const MapScreen(),
+                            ),
+                          );
+                        },
+                        child: FrostedContainer(
+                          borderRadius: AppDimens.radiusFull,
+                          padding: const EdgeInsets.all(10),
+                          child: const Icon(
+                            LucideIcons.mapPin,
+                            color: AppColors.white,
+                            size: 22,
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(width: AppDimens.spaceMd),
+
                       // Chat icon with unread badge
                       GestureDetector(
                         onTap: () {

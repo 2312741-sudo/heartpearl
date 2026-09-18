@@ -33,8 +33,8 @@ void main() async {
     debugPrint('Firebase initialization warning: $e');
   }
 
-  // Initialize HomeWidget
-  await WidgetService.initialize();
+  // Initialize HomeWidget asynchronously without blocking UI startup
+  WidgetService.initialize();
 
   runApp(
     const ProviderScope(

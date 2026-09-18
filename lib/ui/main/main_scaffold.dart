@@ -6,12 +6,14 @@ import '../../core/constants/app_dimens.dart';
 import '../../core/utils/haptic_helper.dart';
 import '../../providers/feed_provider.dart';
 import '../../providers/friends_provider.dart';
+import '../../providers/location_provider.dart';
 import '../common/app_badge.dart';
 import '../common/frosted_container.dart';
 import 'friends/friends_screen.dart';
 import 'history/history_screen.dart';
 import 'home/camera_screen.dart';
 import 'inbox/inbox_screen.dart';
+import 'map/map_screen.dart';
 import 'profile/profile_screen.dart';
 
 class MainScaffold extends ConsumerStatefulWidget {
@@ -21,19 +23,42 @@ class MainScaffold extends ConsumerStatefulWidget {
   ConsumerState<MainScaffold> createState() => _MainScaffoldState();
 }
 
-class _MainScaffoldState extends ConsumerState<MainScaffold> {
+class _MainScaffoldState extends ConsumerState<MainScaffold>
+    with WidgetsBindingObserver {
   int _currentIndex = 0;
 
   final List<Widget> _screens = const [
     CameraScreen(),
     InboxScreen(),
     FriendsScreen(),
+    MapScreen(),
     HistoryScreen(),
     ProfileScreen(),
   ];
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final background = state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused;
+    ref.read(locationServiceProvider).setBackgroundMode(background);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    ref.watch(locationTrackingBootstrapProvider);
     final unreadPhotos = ref.watch(unreadPhotosCountProvider);
     final unreadRequests = ref.watch(friendRequestsProvider).value?.length ?? 0;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -77,10 +102,14 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
                 ),
                 _buildNavItem(
                   index: 3,
-                  icon: LucideIcons.calendarHeart,
+                  icon: LucideIcons.mapPinned,
                 ),
                 _buildNavItem(
                   index: 4,
+                  icon: LucideIcons.calendarHeart,
+                ),
+                _buildNavItem(
+                  index: 5,
                   icon: LucideIcons.userCircle2,
                 ),
               ],

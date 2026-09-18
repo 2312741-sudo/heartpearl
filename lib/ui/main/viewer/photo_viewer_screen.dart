@@ -310,7 +310,9 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
       final lang = ref.read(settingsProvider).language;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(AppStrings.tr('safety_objectionable_warning', lang: lang)),
+          content: Text(
+            AppStrings.tr('safety_objectionable_warning', lang: lang),
+          ),
           backgroundColor: AppColors.error,
         ),
       );
@@ -508,7 +510,9 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
-        backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+        backgroundColor: isDark
+            ? AppColors.darkSurface
+            : AppColors.lightSurface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           '${AppStrings.tr('safety_menu_block', lang: lang)} $senderName?',
@@ -537,10 +541,7 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
     if (confirmed != true || !mounted) return;
 
     try {
-      await ref.read(friendServiceProvider).blockUser(
-        widget.photo.senderId,
-        photoId: widget.photo.id,
-      );
+      await ref.read(friendServiceProvider).blockUser(widget.photo.senderId);
       HapticHelper.success();
       if (!mounted) return;
 

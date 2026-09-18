@@ -12,11 +12,7 @@ class FriendService {
     : _db = firestore ?? FirebaseFirestore.instance,
       _auth = auth ?? FirebaseAuth.instance;
 
-  Future<void> blockUser(
-    String targetUid, {
-    String? reason,
-    String? photoId,
-  }) async {
+  Future<void> blockUser(String targetUid) async {
     final currentUid = _requireCurrentUid();
     final cleanTargetUid = targetUid.trim();
     if (cleanTargetUid.isEmpty || cleanTargetUid == currentUid) {
@@ -27,18 +23,6 @@ class FriendService {
       await _db.collection('users').doc(currentUid).set({
         'blockedUsers': FieldValue.arrayUnion([cleanTargetUid]),
       }, SetOptions(merge: true));
-
-      // Apple Guideline 1.2: Blocking must notify developer of inappropriate content
-      await _db.collection('reports').add({
-        'type': 'user_blocked_incident',
-        'reporterUid': currentUid,
-        'targetUid': cleanTargetUid,
-        'photoId': photoId,
-        'reason': reason ?? 'Người dùng bị chặn do hành vi/nội dung không phù hợp',
-        'developerNotified': true,
-        'status': 'pending_24h_review',
-        'timestamp': FieldValue.serverTimestamp(),
-      });
     } catch (error) {
       throw Exception('Không thể chặn người dùng: $error');
     }
@@ -108,11 +92,16 @@ class FriendService {
     final cleanReason = reason.trim();
     final cleanNote = note.trim();
 
-    if (cleanPhotoId.isEmpty || cleanTargetUid.isEmpty) {
+    if (cleanPhotoId.isEmpty ||
+        cleanTargetUid.isEmpty ||
+        cleanTargetUid == reporterUid) {
       throw ArgumentError('Thông tin báo cáo khoảnh khắc không hợp lệ.');
     }
     if (cleanReason.isEmpty) {
       throw ArgumentError('Vui lòng chọn lý do báo cáo.');
+    }
+    if (cleanNote.length > 500) {
+      throw ArgumentError('Mô tả báo cáo không được vượt quá 500 ký tự.');
     }
 
     try {

@@ -18,6 +18,7 @@ import '../../common/eula_modal.dart';
 import '../../common/user_avatar.dart';
 import 'blocked_users_screen.dart';
 import 'edit_profile_sheet.dart';
+import 'location_privacy_screen.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -481,6 +482,48 @@ class ProfileScreen extends ConsumerWidget {
 
                         ListTile(
                           leading: const Icon(
+                            LucideIcons.mapPinCheck,
+                            color: AppColors.primaryLight,
+                          ),
+                          title: Text(
+                            AppStrings.tr('location_privacy_title', lang: lang),
+                            style: AppTypography.bodyBold(
+                              color: isDark
+                                  ? AppColors.darkTextPrimary
+                                  : AppColors.lightTextPrimary,
+                            ),
+                          ),
+                          subtitle: Text(
+                            AppStrings.tr('location_ghost_mode', lang: lang),
+                            style: AppTypography.caption(
+                              color: isDark
+                                  ? AppColors.darkTextMuted
+                                  : AppColors.lightTextMuted,
+                            ),
+                          ),
+                          trailing: const Icon(
+                            LucideIcons.chevronRight,
+                            size: 18,
+                          ),
+                          onTap: () {
+                            HapticHelper.light();
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const LocationPrivacyScreen(),
+                              ),
+                            );
+                          },
+                        ),
+
+                        Divider(
+                          color: isDark
+                              ? AppColors.darkBorder
+                              : AppColors.lightBorder,
+                          height: 1,
+                        ),
+
+                        ListTile(
+                          leading: const Icon(
                             LucideIcons.userRoundX,
                             color: AppColors.primaryLight,
                           ),
@@ -614,49 +657,6 @@ class ProfileScreen extends ConsumerWidget {
                     ),
                     child: Column(
                       children: [
-                        // Standalone Delete Account Option (Apple Guideline 5.1.1(v))
-                        ListTile(
-                          leading: const Icon(
-                            LucideIcons.trash2,
-                            color: AppColors.error,
-                          ),
-                          title: Text(
-                            AppStrings.tr('profile_delete_account', lang: lang),
-                            style: AppTypography.bodyBold(
-                              color: AppColors.error,
-                            ),
-                          ),
-                          subtitle: Text(
-                            AppStrings.tr(
-                              'profile_delete_account_sub',
-                              lang: lang,
-                            ),
-                            style: AppTypography.caption(
-                              color: isDark
-                                  ? AppColors.darkTextMuted
-                                  : AppColors.lightTextMuted,
-                            ),
-                          ),
-                          trailing: const Icon(
-                            LucideIcons.chevronRight,
-                            size: 18,
-                            color: AppColors.error,
-                          ),
-                          onTap: () => _showDeleteAccountDialog(
-                            context,
-                            ref,
-                            lang,
-                            isDark,
-                          ),
-                        ),
-
-                        Divider(
-                          color: isDark
-                              ? AppColors.darkBorder
-                              : AppColors.lightBorder,
-                          height: 1,
-                        ),
-
                         // Logout
                         ListTile(
                           leading: const Icon(

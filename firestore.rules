@@ -6,7 +6,8 @@ service cloud.firestore {
     }
 
     function blockedBy(userId, otherUserId) {
-      return otherUserId in get(/databases/$(database)/documents/users/$(userId)).data.get('blockedUsers', []);
+      return exists(/databases/$(database)/documents/users/$(userId))
+        && otherUserId in get(/databases/$(database)/documents/users/$(userId)).data.get('blockedUsers', []);
     }
 
     function interactionAllowed(firstUserId, secondUserId) {
@@ -83,9 +84,17 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.reporterUid == request.auth.uid
         && request.resource.data.targetUid is string
+        && request.resource.data.targetUid != request.auth.uid
         && request.resource.data.reason is string
-        && request.resource.data.reason.size() > 0;
+        && request.resource.data.reason.size() > 0
+        && request.resource.data.note is string
+        && request.resource.data.note.size() <= 500
+        && request.resource.data.timestamp == request.time;
       allow read, update, delete: if false;
+    }
+    match /userLocations/{userId} {
+      allow read: if signedIn() && interactionAllowed(request.auth.uid, userId);
+      allow create, update, delete: if signedIn() && request.auth.uid == userId;
     }
   }
 }
