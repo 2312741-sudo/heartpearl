@@ -18,7 +18,9 @@ import '../chat/chat_room_screen.dart';
 import 'report_user_sheet.dart';
 
 class FriendsScreen extends ConsumerStatefulWidget {
-  const FriendsScreen({super.key});
+  final int initialIndex;
+
+  const FriendsScreen({super.key, this.initialIndex = 0});
 
   @override
   ConsumerState<FriendsScreen> createState() => _FriendsScreenState();
@@ -35,7 +37,11 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(
+      length: 3,
+      vsync: this,
+      initialIndex: widget.initialIndex.clamp(0, 2),
+    );
   }
 
   @override
@@ -171,6 +177,17 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
 
     return Scaffold(
       appBar: AppBar(
+        leading: Navigator.canPop(context)
+            ? IconButton(
+                icon: Icon(
+                  LucideIcons.arrowLeft,
+                  color: isDark
+                      ? AppColors.darkTextPrimary
+                      : AppColors.lightTextPrimary,
+                ),
+                onPressed: () => Navigator.pop(context),
+              )
+            : null,
         title: Text(
           AppStrings.tr('friends_title', lang: lang),
           style: AppTypography.h2(

@@ -19,6 +19,7 @@ import '../../common/user_avatar.dart';
 import 'blocked_users_screen.dart';
 import 'edit_profile_sheet.dart';
 import 'location_privacy_screen.dart';
+import '../friends/friends_screen.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -201,13 +202,23 @@ class ProfileScreen extends ConsumerWidget {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [
-                            _buildStatItem(
-                              label: AppStrings.tr(
-                                'profile_friends_stat',
-                                lang: lang,
+                            GestureDetector(
+                              onTap: () {
+                                HapticHelper.selection();
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (context) => const FriendsScreen(),
+                                  ),
+                                );
+                              },
+                              child: _buildStatItem(
+                                label: AppStrings.tr(
+                                  'profile_friends_stat',
+                                  lang: lang,
+                                ),
+                                value: user.friends.length.toString(),
+                                isDark: isDark,
                               ),
-                              value: user.friends.length.toString(),
-                              isDark: isDark,
                             ),
                             Container(
                               height: 30,

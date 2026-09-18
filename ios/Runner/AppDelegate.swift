@@ -12,7 +12,9 @@ import GoogleMaps
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     #if canImport(GoogleMaps)
-    if let mapsApiKey = Bundle.main.object(forInfoDictionaryKey: "GOOGLE_MAPS_API_KEY") as? String, !mapsApiKey.isEmpty {
+    if let mapsApiKey = Bundle.main.object(forInfoDictionaryKey: "GOOGLE_MAPS_API_KEY") as? String,
+       !mapsApiKey.isEmpty,
+       !mapsApiKey.contains("$(") {
       GMSServices.provideAPIKey(mapsApiKey)
     }
     #endif

@@ -113,9 +113,11 @@ class PhotoService {
     // Create in-app notifications for each recipient
     try {
       final senderDoc = await _db.collection('users').doc(senderId).get();
+      final senderData = senderDoc.data();
       final senderName = senderDoc.exists
-          ? (senderDoc.data()?['displayName'] as String? ?? 'Bạn bè')
+          ? (senderData?['displayName'] as String? ?? 'Bạn bè')
           : 'Bạn bè';
+      final senderAvatar = senderData?['avatarUrl'] as String?;
 
       final batch = _db.batch();
       for (final recipientId in recipientIds) {
@@ -123,9 +125,10 @@ class PhotoService {
         batch.set(notifRef, {
           'userId': recipientId,
           'senderId': senderId,
+          'senderName': senderName,
+          'senderAvatarUrl': ?senderAvatar,
           'type': 'photo',
           'title': 'HeartPearl',
-          'body:': '📸 $senderName vừa chia sẻ khoảnh khắc mới với bạn!',
           'body': '📸 $senderName vừa chia sẻ khoảnh khắc mới với bạn!',
           'read': false,
           'photoId': docRef.id,
@@ -136,6 +139,25 @@ class PhotoService {
     } catch (_) {}
 
     return docRef.id;
+  }
+
+  // Get a single photo by ID
+  Future<PhotoModel?> getPhotoById(String photoId) async {
+    try {
+      final doc = await _db.collection('photos').doc(photoId).get();
+      if (!doc.exists) return null;
+      final senderId = doc.data()?['senderId'] as String?;
+      UserModel? senderUser;
+      if (senderId != null) {
+        final userDoc = await _db.collection('users').doc(senderId).get();
+        if (userDoc.exists) {
+          senderUser = UserModel.fromFirestore(userDoc);
+        }
+      }
+      return PhotoModel.fromFirestore(doc, senderUser: senderUser);
+    } catch (_) {
+      return null;
+    }
   }
 
   // Stream Inbox Photos
@@ -207,6 +229,8 @@ class PhotoService {
       await _db.collection('notifications').add({
         'userId': photo.senderId,
         'senderId': currentUser.uid,
+        'senderName': currentUser.displayName,
+        'senderAvatarUrl': ?currentUser.avatarUrl,
         'type': 'reaction',
         'title': 'HeartPearl',
         'body': '❤️ ${currentUser.displayName} vừa thả selfie vào ảnh của bạn!',
@@ -243,6 +267,8 @@ class PhotoService {
       await _db.collection('notifications').add({
         'userId': photo.senderId,
         'senderId': currentUser.uid,
+        'senderName': currentUser.displayName,
+        'senderAvatarUrl': ?currentUser.avatarUrl,
         'type': 'message',
         'title': 'HeartPearl',
         'body': '💬 ${currentUser.displayName}: $trimmed',

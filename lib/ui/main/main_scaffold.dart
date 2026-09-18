@@ -5,11 +5,9 @@ import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_dimens.dart';
 import '../../core/utils/haptic_helper.dart';
 import '../../providers/feed_provider.dart';
-import '../../providers/friends_provider.dart';
 import '../../providers/location_provider.dart';
 import '../common/app_badge.dart';
 import '../common/frosted_container.dart';
-import 'friends/friends_screen.dart';
 import 'history/history_screen.dart';
 import 'home/camera_screen.dart';
 import 'inbox/inbox_screen.dart';
@@ -30,7 +28,6 @@ class _MainScaffoldState extends ConsumerState<MainScaffold>
   final List<Widget> _screens = const [
     CameraScreen(),
     InboxScreen(),
-    FriendsScreen(),
     MapScreen(),
     HistoryScreen(),
     ProfileScreen(),
@@ -60,7 +57,6 @@ class _MainScaffoldState extends ConsumerState<MainScaffold>
   Widget build(BuildContext context) {
     ref.watch(locationTrackingBootstrapProvider);
     final unreadPhotos = ref.watch(unreadPhotosCountProvider);
-    final unreadRequests = ref.watch(friendRequestsProvider).value?.length ?? 0;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -97,19 +93,14 @@ class _MainScaffoldState extends ConsumerState<MainScaffold>
                 ),
                 _buildNavItem(
                   index: 2,
-                  icon: LucideIcons.users,
-                  badgeCount: unreadRequests,
-                ),
-                _buildNavItem(
-                  index: 3,
                   icon: LucideIcons.mapPinned,
                 ),
                 _buildNavItem(
-                  index: 4,
+                  index: 3,
                   icon: LucideIcons.calendarHeart,
                 ),
                 _buildNavItem(
-                  index: 5,
+                  index: 4,
                   icon: LucideIcons.userCircle2,
                 ),
               ],

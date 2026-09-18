@@ -3,6 +3,7 @@ import 'package:heartpearl/models/user_model.dart';
 import 'package:heartpearl/models/photo_model.dart';
 import 'package:heartpearl/models/chat_model.dart';
 import 'package:heartpearl/models/friend_request_model.dart';
+import 'package:heartpearl/models/notification_model.dart';
 import 'package:heartpearl/core/utils/date_helper.dart';
 import 'package:heartpearl/core/utils/camera_filters.dart';
 import 'package:heartpearl/services/content_filter_service.dart';
@@ -108,6 +109,32 @@ void main() {
       expect(ContentFilterService.isObjectionable('fuck you'), isTrue);
       expect(ContentFilterService.isObjectionable('đụ má mày'), isTrue);
       expect(ContentFilterService.isObjectionable('chat sex gái gọi'), isTrue);
+    });
+
+    test('NotificationModel mapping and serialization test', () {
+      final now = DateTime(2026, 9, 18, 12, 0);
+      final notif = NotificationModel(
+        id: 'notif_001',
+        userId: 'user_recipient',
+        senderId: 'user_sender',
+        senderName: 'Lan Hương',
+        senderAvatarUrl: 'https://example.com/avatar.jpg',
+        type: 'photo',
+        title: 'HeartPearl',
+        body: '📸 Lan Hương vừa chia sẻ khoảnh khắc mới với bạn!',
+        read: false,
+        photoId: 'photo_999',
+        createdAt: now,
+      );
+
+      final map = notif.toMap();
+      expect(map['userId'], 'user_recipient');
+      expect(map['senderId'], 'user_sender');
+      expect(map['senderName'], 'Lan Hương');
+      expect(map['senderAvatarUrl'], 'https://example.com/avatar.jpg');
+      expect(map['type'], 'photo');
+      expect(map['read'], false);
+      expect(map['photoId'], 'photo_999');
     });
   });
 }

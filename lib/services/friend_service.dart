@@ -207,13 +207,17 @@ class FriendService {
     // In-app notification
     try {
       final senderDoc = await _db.collection('users').doc(fromUid).get();
+      final senderData = senderDoc.data();
       final senderName = senderDoc.exists
-          ? (senderDoc.data()?['displayName'] as String? ?? 'Ai đó')
+          ? (senderData?['displayName'] as String? ?? 'Ai đó')
           : 'Ai đó';
+      final senderAvatar = senderData?['avatarUrl'] as String?;
 
       await _db.collection('notifications').add({
         'userId': toUid,
         'senderId': fromUid,
+        'senderName': senderName,
+        'senderAvatarUrl': ?senderAvatar,
         'type': 'friend_request',
         'title': 'HeartPearl',
         'body': '👋 $senderName đã gửi cho bạn lời mời kết bạn!',
@@ -248,6 +252,29 @@ class FriendService {
     }, SetOptions(merge: true));
 
     await batch.commit();
+
+    // In-app notification for accept
+    try {
+      final toDoc = await _db.collection('users').doc(toUid).get();
+      final toData = toDoc.data();
+      final toName = toDoc.exists
+          ? (toData?['displayName'] as String? ?? 'Bạn bè')
+          : 'Bạn bè';
+      final toAvatar = toData?['avatarUrl'] as String?;
+
+      await _db.collection('notifications').add({
+        'userId': fromUid,
+        'senderId': toUid,
+        'senderName': toName,
+        'senderAvatarUrl': ?toAvatar,
+        'type': 'friend_accept',
+        'title': 'HeartPearl',
+        'body': '🎉 $toName đã đồng ý lời mời kết bạn của bạn!',
+        'read': false,
+        'requestId': requestId,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {}
   }
 
   // Reject friend request

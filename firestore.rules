@@ -29,6 +29,51 @@ service cloud.firestore {
         );
     }
 
+    function validLocationDocument(userId, locationData) {
+      return locationData.keys().hasOnly([
+          'ownerUid', 'geo', 'updatedAt', 'capturedAt', 'accuracy',
+          'speed', 'batteryLevel', 'isSharing', 'allowedViewers'
+        ])
+        && locationData.ownerUid == userId
+        && locationData.updatedAt == request.time
+        && (!('geo' in locationData) || locationData.geo is latlng)
+        && (!('capturedAt' in locationData) || locationData.capturedAt is timestamp)
+        && (!('accuracy' in locationData) || (
+          locationData.accuracy is number
+          && locationData.accuracy > 0
+          && locationData.accuracy <= 200
+        ))
+        && (!('speed' in locationData) || (
+          locationData.speed is number
+          && locationData.speed >= 0
+          && locationData.speed <= 200
+        ))
+        && (!('batteryLevel' in locationData) || (
+          locationData.batteryLevel is number
+          && locationData.batteryLevel >= 0
+          && locationData.batteryLevel <= 100
+        ))
+        && (!('isSharing' in locationData) || locationData.isSharing is bool)
+        && (!('allowedViewers' in locationData) || (
+          locationData.allowedViewers is list
+          && locationData.allowedViewers.size() <= 500
+        ));
+    }
+
+    function mayReadLocation(userId, locationData) {
+      let owner = get(/databases/$(database)/documents/users/$(userId));
+      return request.auth.uid == userId || (
+        exists(/databases/$(database)/documents/users/$(userId))
+        && locationData.get('isSharing', false) == true
+        && request.auth.uid in owner.data.get('friends', [])
+        && interactionAllowed(request.auth.uid, userId)
+        && (
+          locationData.get('allowedViewers', []).size() == 0
+          || request.auth.uid in locationData.get('allowedViewers', [])
+        )
+      );
+    }
+
     match /users/{userId} {
       allow read: if signedIn();
       allow create, delete: if signedIn() && request.auth.uid == userId;
@@ -93,8 +138,14 @@ service cloud.firestore {
       allow read, update, delete: if false;
     }
     match /userLocations/{userId} {
-      allow read: if signedIn() && interactionAllowed(request.auth.uid, userId);
-      allow create, update, delete: if signedIn() && request.auth.uid == userId;
+      // Clients subscribe directly to known friend document IDs. Collection
+      // queries are denied because Security Rules are not result filters.
+      allow get: if signedIn() && mayReadLocation(userId, resource.data);
+      allow list: if false;
+      allow create, update: if signedIn()
+        && request.auth.uid == userId
+        && validLocationDocument(userId, request.resource.data);
+      allow delete: if signedIn() && request.auth.uid == userId;
     }
   }
 }

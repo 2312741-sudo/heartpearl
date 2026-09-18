@@ -41,6 +41,15 @@ class NotificationService {
     });
   }
 
+  // Mark a single notification as read
+  Future<void> markAsRead(String notificationId) async {
+    try {
+      await _db.collection('notifications').doc(notificationId).update({
+        'read': true,
+      });
+    } catch (_) {}
+  }
+
   // Mark all unread notifications as read
   Future<void> markAllAsRead(String userId) async {
     try {
@@ -54,6 +63,31 @@ class NotificationService {
         final batch = _db.batch();
         for (final doc in snapshot.docs) {
           batch.update(doc.reference, {'read': true});
+        }
+        await batch.commit();
+      }
+    } catch (_) {}
+  }
+
+  // Delete a single notification
+  Future<void> deleteNotification(String notificationId) async {
+    try {
+      await _db.collection('notifications').doc(notificationId).delete();
+    } catch (_) {}
+  }
+
+  // Clear all notifications for user
+  Future<void> clearAllNotifications(String userId) async {
+    try {
+      final snapshot = await _db
+          .collection('notifications')
+          .where('userId', isEqualTo: userId)
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        final batch = _db.batch();
+        for (final doc in snapshot.docs) {
+          batch.delete(doc.reference);
         }
         await batch.commit();
       }

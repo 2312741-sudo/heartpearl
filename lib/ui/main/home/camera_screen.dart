@@ -11,11 +11,14 @@ import '../../../core/constants/app_typography.dart';
 import '../../../core/utils/camera_filters.dart';
 import '../../../core/utils/haptic_helper.dart';
 import '../../../providers/chat_provider.dart';
+import '../../../providers/friends_provider.dart';
+import '../../../providers/notifications_provider.dart';
 import '../../common/app_badge.dart';
 import '../../../core/utils/media_helper.dart';
 import '../../common/frosted_container.dart';
 import '../chat/chat_list_screen.dart';
-import '../map/map_screen.dart';
+import '../friends/friends_screen.dart';
+import '../notifications/notifications_screen.dart';
 import 'preview_screen.dart';
 
 class CameraScreen extends ConsumerStatefulWidget {
@@ -26,7 +29,7 @@ class CameraScreen extends ConsumerStatefulWidget {
 }
 
 class _CameraScreenState extends ConsumerState<CameraScreen>
-    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+    with WidgetsBindingObserver, TickerProviderStateMixin {
   final ImagePicker _imagePicker = ImagePicker();
   List<CameraDescription> _cameras = [];
   CameraController? _controller;
@@ -57,6 +60,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
   late AnimationController _shutterAnimController;
   late AnimationController _flipAnimController;
+  late AnimationController _recordProgressController;
+  late AnimationController _recPulseController;
   bool _isFlippingCamera = false;
   bool _isSwitchingCamera = false;
   bool _isTransitioningLens = false;
@@ -75,6 +80,19 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       vsync: this,
       duration: const Duration(milliseconds: 320),
     );
+    _recordProgressController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: maxVideoDuration),
+    );
+    _recordProgressController.addStatusListener((status) {
+      if (status == AnimationStatus.completed && mounted && _isRecording) {
+        _handleStopRecording();
+      }
+    });
+    _recPulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 750),
+    );
     _initCameras();
   }
 
@@ -86,6 +104,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     _controller?.dispose();
     _shutterAnimController.dispose();
     _flipAnimController.dispose();
+    _recordProgressController.dispose();
+    _recPulseController.dispose();
     super.dispose();
   }
 
@@ -576,6 +596,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         _recordSeconds = 0;
       });
 
+      _recordProgressController.reset();
+      _recordProgressController.forward();
+      _recPulseController.repeat(reverse: true);
+
       // If user released finger during the await of startVideoRecording:
       if (_stopRequestedWhileStarting || !_isButtonPressed) {
         await _handleStopRecording();
@@ -596,6 +620,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       });
     } catch (e) {
       debugPrint('Start video error: $e');
+      _recordProgressController.stop();
+      _recordProgressController.reset();
+      _recPulseController.stop();
+      _recPulseController.reset();
       if (mounted) {
         setState(() {
           _isRecording = false;
@@ -620,6 +648,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
     _recordTimer?.cancel();
     _recordTimer = null;
+    _recordProgressController.stop();
+    _recordProgressController.reset();
+    _recPulseController.stop();
+    _recPulseController.reset();
 
     try {
       // Ensure at least 600ms of recording to avoid corrupt 0-byte video
@@ -672,6 +704,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   @override
   Widget build(BuildContext context) {
     final unreadChats = ref.watch(totalUnreadChatsProvider);
+    final unreadRequests = ref.watch(friendRequestsProvider).value?.length ?? 0;
+    final unreadNotifications = ref.watch(unreadNotificationsCountProvider);
     final bottomInset = MediaQuery.of(context).padding.bottom;
     final navBarClearance = 80.0 + bottomInset + 16.0;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -718,42 +752,96 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                     ],
                   ),
 
-                  // Actions: Map, Messages & Flash
+                  // Actions: Friends, Notifications, Messages & Flash
                   Row(
                     children: [
-                      // Map icon
+                      // 1. Friends button with friend requests badge
                       GestureDetector(
                         onTap: () {
                           HapticHelper.selection();
                           Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (context) => const MapScreen(),
+                              builder: (context) => const FriendsScreen(),
                             ),
                           );
                         },
-                        child: FrostedContainer(
-                          borderRadius: AppDimens.radiusFull,
-                          padding: const EdgeInsets.all(10),
-                          backgroundColor: isDark
-                              ? const Color(0x331E0D26)
-                              : AppColors.lightSurface.withValues(alpha: 0.9),
-                          border: Border.all(
-                            color: isDark
-                                ? Colors.white.withValues(alpha: 0.12)
-                                : AppColors.lightBorder.withValues(alpha: 0.6),
-                            width: 1,
-                          ),
-                          child: Icon(
-                            LucideIcons.mapPin,
-                            color: isDark ? AppColors.white : AppColors.lightTextPrimary,
-                            size: 22,
-                          ),
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            FrostedContainer(
+                              borderRadius: AppDimens.radiusFull,
+                              padding: const EdgeInsets.all(9),
+                              backgroundColor: isDark
+                                  ? const Color(0x331E0D26)
+                                  : AppColors.lightSurface.withValues(alpha: 0.9),
+                              border: Border.all(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.12)
+                                    : AppColors.lightBorder.withValues(alpha: 0.6),
+                                width: 1,
+                              ),
+                              child: Icon(
+                                LucideIcons.users,
+                                color: isDark ? AppColors.white : AppColors.lightTextPrimary,
+                                size: 20,
+                              ),
+                            ),
+                            if (unreadRequests > 0)
+                              Positioned(
+                                top: -2,
+                                right: -2,
+                                child: AppBadge(count: unreadRequests),
+                              ),
+                          ],
                         ),
                       ),
 
-                      const SizedBox(width: AppDimens.spaceMd),
+                      const SizedBox(width: AppDimens.spaceSm),
 
-                      // Chat icon with unread badge
+                      // 2. Notifications bell with unread count badge
+                      GestureDetector(
+                        onTap: () {
+                          HapticHelper.selection();
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const NotificationsScreen(),
+                            ),
+                          );
+                        },
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            FrostedContainer(
+                              borderRadius: AppDimens.radiusFull,
+                              padding: const EdgeInsets.all(9),
+                              backgroundColor: isDark
+                                  ? const Color(0x331E0D26)
+                                  : AppColors.lightSurface.withValues(alpha: 0.9),
+                              border: Border.all(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.12)
+                                    : AppColors.lightBorder.withValues(alpha: 0.6),
+                                width: 1,
+                              ),
+                              child: Icon(
+                                LucideIcons.bell,
+                                color: isDark ? AppColors.white : AppColors.lightTextPrimary,
+                                size: 20,
+                              ),
+                            ),
+                            if (unreadNotifications > 0)
+                              Positioned(
+                                top: -2,
+                                right: -2,
+                                child: AppBadge(count: unreadNotifications),
+                              ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(width: AppDimens.spaceSm),
+
+                      // 3. Chat icon with unread badge
                       GestureDetector(
                         onTap: () {
                           HapticHelper.selection();
@@ -768,7 +856,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                           children: [
                             FrostedContainer(
                               borderRadius: AppDimens.radiusFull,
-                              padding: const EdgeInsets.all(10),
+                              padding: const EdgeInsets.all(9),
                               backgroundColor: isDark
                                   ? const Color(0x331E0D26)
                                   : AppColors.lightSurface.withValues(alpha: 0.9),
@@ -781,7 +869,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                               child: Icon(
                                 LucideIcons.messageCircle,
                                 color: isDark ? AppColors.white : AppColors.lightTextPrimary,
-                                size: 22,
+                                size: 20,
                               ),
                             ),
                             if (unreadChats > 0)
@@ -794,14 +882,14 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                         ),
                       ),
 
-                      const SizedBox(width: AppDimens.spaceMd),
+                      const SizedBox(width: AppDimens.spaceSm),
 
-                      // Flash Toggle
+                      // 4. Flash Toggle
                       GestureDetector(
                         onTap: _toggleFlash,
                         child: FrostedContainer(
                           borderRadius: AppDimens.radiusFull,
-                          padding: const EdgeInsets.all(10),
+                          padding: const EdgeInsets.all(9),
                           backgroundColor: isDark
                               ? const Color(0x331E0D26)
                               : AppColors.lightSurface.withValues(alpha: 0.9),
@@ -816,7 +904,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                             color: _isFlashOn
                                 ? AppColors.warning
                                 : (isDark ? AppColors.white : AppColors.lightTextPrimary),
-                            size: 22,
+                            size: 20,
                           ),
                         ),
                       ),
@@ -1041,6 +1129,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                                   ),
                                 ),
                               ),
+
+                            // 2.5 Dynamic Video Recording HUD: Shrinking Laser Progress Line & Island Countdown
+                            if (_isRecording)
+                              _buildRecordingHUD(),
                           ],
                         ),
                       ),
@@ -1172,17 +1264,22 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                           SizedBox(
                             width: 86,
                             height: 86,
-                            child: CircularProgressIndicator(
-                              value: _isRecording
-                                  ? (_recordSeconds / maxVideoDuration)
-                                  : 0.0,
-                              strokeWidth: 4,
-                              valueColor: const AlwaysStoppedAnimation<Color>(
-                                AppColors.primaryLight,
-                              ),
-                              backgroundColor: _isRecording
-                                  ? (isDark ? Colors.white24 : AppColors.lightBorder)
-                                  : Colors.transparent,
+                            child: AnimatedBuilder(
+                              animation: _recordProgressController,
+                              builder: (context, child) {
+                                return CircularProgressIndicator(
+                                  value: _isRecording
+                                      ? _recordProgressController.value
+                                      : 0.0,
+                                  strokeWidth: 4,
+                                  valueColor: const AlwaysStoppedAnimation<Color>(
+                                    AppColors.primaryLight,
+                                  ),
+                                  backgroundColor: _isRecording
+                                      ? (isDark ? Colors.white24 : AppColors.lightBorder)
+                                      : Colors.transparent,
+                                );
+                              },
                             ),
                           ),
 
@@ -1220,11 +1317,18 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                             ),
                             child: _isRecording
                                 ? Center(
-                                    child: Text(
-                                      '${maxVideoDuration - _recordSeconds}s',
-                                      style: AppTypography.bold.copyWith(
+                                    child: Container(
+                                      width: 18,
+                                      height: 18,
+                                      decoration: BoxDecoration(
                                         color: AppColors.white,
-                                        fontSize: 13,
+                                        borderRadius: BorderRadius.circular(4),
+                                        boxShadow: const [
+                                          BoxShadow(
+                                            color: Colors.black26,
+                                            blurRadius: 4,
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   )
@@ -1305,6 +1409,208 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             fontSize: 12,
           ),
         ),
+      ),
+    );
+  }
+
+  /// Dynamic Video Recording HUD: Shrinking Laser Progress Line & Island Countdown
+  Widget _buildRecordingHUD() {
+    return Positioned(
+      top: 14,
+      left: 16,
+      right: 16,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 1. Shrinking Laser Progress Line (from 100% width down to 0% width)
+          AnimatedBuilder(
+            animation: _recordProgressController,
+            builder: (context, child) {
+              final remainingFraction =
+                  (1.0 - _recordProgressController.value).clamp(0.0, 1.0);
+              final isUrgent = remainingFraction <= (3.0 / maxVideoDuration);
+
+              return Container(
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.38),
+                  borderRadius: BorderRadius.circular(3),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    width: 0.5,
+                  ),
+                ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final lineWidth = constraints.maxWidth * remainingFraction;
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        // Shrinking neon bar
+                        Container(
+                          width: lineWidth,
+                          height: double.infinity,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(3),
+                            gradient: LinearGradient(
+                              colors: isUrgent
+                                  ? const [
+                                      Color(0xFFFF1744),
+                                      Color(0xFFFF5252),
+                                      Color(0xFFFF8A80)
+                                    ]
+                                  : const [
+                                      AppColors.primary,
+                                      AppColors.primaryLight,
+                                      Color(0xFFFF9EBA)
+                                    ],
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: (isUrgent
+                                        ? const Color(0xFFFF1744)
+                                        : AppColors.primaryLight)
+                                    .withValues(alpha: 0.7),
+                                blurRadius: 6,
+                                spreadRadius: 0.5,
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // Glowing Pearl Tip at the leading edge of shrinking line
+                        if (lineWidth > 6)
+                          Positioned(
+                            left: lineWidth - 5,
+                            top: -2.5,
+                            child: Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: isUrgent
+                                        ? const Color(0xFFFF1744)
+                                        : AppColors.primaryLight,
+                                    blurRadius: 6,
+                                    spreadRadius: 1,
+                                  ),
+                                  const BoxShadow(
+                                    color: Colors.white,
+                                    blurRadius: 3,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+
+          const SizedBox(height: 10),
+
+          // 2. Dynamic Recording Island HUD
+          AnimatedBuilder(
+            animation: Listenable.merge(
+                [_recordProgressController, _recPulseController]),
+            builder: (context, child) {
+              final remainingSec =
+                  (maxVideoDuration * (1.0 - _recordProgressController.value))
+                      .ceil()
+                      .clamp(0, maxVideoDuration);
+              final isUrgent = remainingSec <= 3;
+              final pulseVal = _recPulseController.value;
+
+              return Center(
+                child: FrostedContainer(
+                  borderRadius: AppDimens.radiusFull,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  backgroundColor: const Color(0x80000000),
+                  border: Border.all(
+                    color: isUrgent
+                        ? Color.lerp(const Color(0xFFFF1744), Colors.white,
+                            pulseVal * 0.6)!
+                        : Colors.white.withValues(alpha: 0.25),
+                    width: 1.2,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // 🔴 Pulsing REC Dot
+                      Transform.scale(
+                        scale: 0.85 + (pulseVal * 0.3),
+                        child: Container(
+                          width: 9,
+                          height: 9,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: const Color(0xFFFF1744),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFFF1744)
+                                    .withValues(alpha: 0.85),
+                                blurRadius: 5 + (pulseVal * 5),
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+
+                      // REC label
+                      const Text(
+                        'REC',
+                        style: TextStyle(
+                          color: Color(0xFFFF5252),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+
+                      // Divider
+                      Container(
+                        width: 1,
+                        height: 12,
+                        color: Colors.white24,
+                      ),
+                      const SizedBox(width: 8),
+
+                      // Countdown text
+                      Text(
+                        '${remainingSec}s',
+                        style: AppTypography.bold.copyWith(
+                          color: isUrgent
+                              ? const Color(0xFFFF5252)
+                              : AppColors.white,
+                          fontSize: 14,
+                          letterSpacing: 0.5,
+                          shadows: const [
+                            Shadow(
+                              color: Colors.black87,
+                              blurRadius: 4,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
