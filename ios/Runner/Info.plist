@@ -54,20 +54,25 @@
 	<true/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>vi</string>
+	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>HeartPearl cần quyền truy cập máy ảnh để chụp và gửi ảnh khoảnh khắc cho bạn bè.</string>
+	<string>HeartPearl needs camera access to capture and share live moments with your friends.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>HeartPearl cần quyền micrô để quay video với âm thanh.</string>
+	<string>HeartPearl needs microphone access to record videos with audio for your moments.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>HeartPearl cần quyền truy cập thư viện ảnh để bạn chọn ảnh đại diện và lưu ảnh.</string>
+	<string>HeartPearl needs photo library access to choose your profile avatar and save photos.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>HeartPearl cần quyền lưu ảnh và video khoảnh khắc vào thư viện ảnh của bạn.</string>
+	<string>HeartPearl needs permission to save moment photos and videos to your photo library.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>HeartPearl cần vị trí của bạn để hiển thị trên bản đồ và chia sẻ với bạn bè khi mở ứng dụng.</string>
+	<string>HeartPearl needs your location to display on the map and share with your close friends while using the app.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>HeartPearl cần quyền truy cập vị trí liên tục để bạn bè có thể thấy bạn trên bản đồ và tiện ích màn hình chính ngay cả khi ứng dụng đang chạy ở nền.</string>
+	<string>HeartPearl uses continuous background location to display your real-time position on your friends' map and home screen widgets.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
-	<string>HeartPearl cần quyền truy cập vị trí liên tục để bạn bè có thể thấy bạn trên bản đồ và tiện ích màn hình chính ngay cả khi ứng dụng đang chạy ở nền.</string>
+	<string>HeartPearl uses continuous background location to display your real-time position on your friends' map and home screen widgets.</string>
 	<key>GOOGLE_MAPS_API_KEY</key>
 	<string>$(GOOGLE_MAPS_API_KEY)</string>
 	<key>UIApplicationSceneManifest</key>

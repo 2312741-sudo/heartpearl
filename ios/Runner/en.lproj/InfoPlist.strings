@@ -1,0 +1,9 @@
+"CFBundleDisplayName" = "Heartpearl";
+"CFBundleName" = "heartpearl";
+"NSCameraUsageDescription" = "HeartPearl needs camera access to capture and share live moments with your friends.";
+"NSMicrophoneUsageDescription" = "HeartPearl needs microphone access to record videos with audio for your moments.";
+"NSPhotoLibraryUsageDescription" = "HeartPearl needs photo library access to choose your profile avatar and save photos.";
+"NSPhotoLibraryAddUsageDescription" = "HeartPearl needs permission to save moment photos and videos to your photo library.";
+"NSLocationWhenInUseUsageDescription" = "HeartPearl needs your location to display on the map and share with your close friends while using the app.";
+"NSLocationAlwaysAndWhenInUseUsageDescription" = "HeartPearl uses continuous background location to display your real-time position on your friends' map and home screen widgets.";
+"NSLocationAlwaysUsageDescription" = "HeartPearl uses continuous background location to display your real-time position on your friends' map and home screen widgets.";

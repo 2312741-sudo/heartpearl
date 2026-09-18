@@ -837,6 +837,7 @@ class ProfileScreen extends ConsumerWidget {
 
         return StatefulBuilder(
           builder: (dialogContext, setState) {
+            final isVi = lang == 'vi';
             return AlertDialog(
               backgroundColor: isDark
                   ? AppColors.darkSurface
@@ -860,10 +861,10 @@ class ProfileScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'Xóa tài khoản vĩnh viễn',
-                      style: TextStyle(
+                      isVi ? 'Xóa tài khoản vĩnh viễn' : 'Permanently Delete Account',
+                      style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                         color: AppColors.error,
@@ -877,30 +878,44 @@ class ProfileScreen extends ConsumerWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Theo tiêu chuẩn quyền riêng tư của Apple, toàn bộ dữ liệu của bạn sẽ bị xóa hoàn toàn khỏi hệ thống HeartPearl và không thể hoàn tác:',
-                      style: TextStyle(fontSize: 14, height: 1.4),
+                    Text(
+                      isVi
+                          ? 'Theo tiêu chuẩn quyền riêng tư của Apple, toàn bộ dữ liệu của bạn sẽ bị xóa hoàn toàn khỏi hệ thống HeartPearl và không thể hoàn tác:'
+                          : 'In compliance with Apple privacy guidelines, all your personal data will be permanently and irreversibly deleted from HeartPearl:',
+                      style: const TextStyle(fontSize: 14, height: 1.4),
                     ),
                     const SizedBox(height: 12),
                     _buildDeleteWarningItem(
-                      'Toàn bộ ảnh và video khoảnh khắc bạn đã đăng.',
+                      isVi
+                          ? 'Toàn bộ ảnh và video khoảnh khắc bạn đã đăng.'
+                          : 'All posted photos and video moments.',
                     ),
                     _buildDeleteWarningItem(
-                      'Hồ sơ cá nhân, tên người dùng và ảnh đại diện.',
+                      isVi
+                          ? 'Hồ sơ cá nhân, tên người dùng và ảnh đại diện.'
+                          : 'Personal profile, username, and avatar.',
                     ),
                     _buildDeleteWarningItem(
-                      'Danh sách bạn bè và mọi lời mời kết bạn.',
+                      isVi
+                          ? 'Danh sách bạn bè và mọi lời mời kết bạn.'
+                          : 'Friends list and all friend requests.',
                     ),
                     _buildDeleteWarningItem(
-                      'Toàn bộ tin nhắn và lịch sử trò chuyện.',
+                      isVi
+                          ? 'Toàn bộ tin nhắn và lịch sử trò chuyện.'
+                          : 'All chat messages and conversations.',
                     ),
                     _buildDeleteWarningItem(
-                      'Tài khoản đăng nhập và dữ liệu tiện ích Home Widget.',
+                      isVi
+                          ? 'Tài khoản đăng nhập và dữ liệu tiện ích Home Widget.'
+                          : 'Login credentials and Home Widget cached data.',
                     ),
                     const SizedBox(height: 10),
-                    const Text(
-                      'Hoặc yêu cầu xóa tài khoản trực tuyến tại:\nhttps://tamchau-865f3.web.app/delete-account.html',
-                      style: TextStyle(
+                    Text(
+                      isVi
+                          ? 'Hoặc yêu cầu xóa tài khoản trực tuyến tại:\nhttps://tamchau-865f3.web.app/delete-account.html'
+                          : 'Or request online deletion at:\nhttps://tamchau-865f3.web.app/delete-account.html',
+                      style: const TextStyle(
                         fontSize: 12,
                         color: AppColors.primaryLight,
                         height: 1.35,
@@ -933,7 +948,7 @@ class ProfileScreen extends ConsumerWidget {
                 if (!isDeleting)
                   TextButton(
                     onPressed: () => Navigator.of(ctx).pop(),
-                    child: const Text('Hủy bỏ'),
+                    child: Text(isVi ? 'Hủy bỏ' : 'Cancel'),
                   ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
@@ -961,11 +976,13 @@ class ProfileScreen extends ConsumerWidget {
                             }
                             if (context.mounted) {
                               Navigator.of(context)
-                                  .popUntil((route) => route.isFirst);
+                                   .popUntil((route) => route.isFirst);
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
+                                SnackBar(
                                   content: Text(
-                                    'Tài khoản và toàn bộ dữ liệu của bạn đã được xóa hoàn tất.',
+                                    isVi
+                                        ? 'Tài khoản và toàn bộ dữ liệu của bạn đã được xóa hoàn tất.'
+                                        : 'Your account and all associated data have been permanently deleted.',
                                   ),
                                   backgroundColor: AppColors.success,
                                 ),
@@ -976,9 +993,11 @@ class ProfileScreen extends ConsumerWidget {
                               setState(() {
                                 isDeleting = false;
                                 if (e.code == 'requires-recent-login') {
-                                  errorText = 'Để bảo vệ tài khoản, Apple & Firebase yêu cầu bạn phải vừa đăng nhập mới có thể xóa. Vui lòng đăng xuất, đăng nhập lại và thực hiện lại thao tác xóa này.';
+                                  errorText = isVi
+                                      ? 'Để bảo vệ tài khoản, Apple & Firebase yêu cầu bạn phải vừa đăng nhập mới có thể xóa. Vui lòng đăng xuất, đăng nhập lại và thực hiện lại thao tác xóa này.'
+                                      : 'For security reasons, Apple & Firebase require a recent sign-in before deleting your account. Please log out, log back in, and try again.';
                                 } else {
-                                  errorText = 'Lỗi: ${e.message ?? e.code}';
+                                  errorText = isVi ? 'Lỗi: ${e.message ?? e.code}' : 'Error: ${e.message ?? e.code}';
                                 }
                               });
                             }
@@ -986,8 +1005,9 @@ class ProfileScreen extends ConsumerWidget {
                             if (ctx.mounted) {
                               setState(() {
                                 isDeleting = false;
-                                errorText =
-                                    'Lỗi xóa tài khoản: ${e.toString()}';
+                                errorText = isVi
+                                    ? 'Lỗi xóa tài khoản: ${e.toString()}'
+                                    : 'Account deletion error: ${e.toString()}';
                               });
                             }
                           }
@@ -1001,9 +1021,9 @@ class ProfileScreen extends ConsumerWidget {
                             color: Colors.white,
                           ),
                         )
-                      : const Text(
-                          'Xác nhận xóa',
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                      : Text(
+                          isVi ? 'Xác nhận xóa' : 'Confirm Delete',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                 ),
               ],
@@ -1045,6 +1065,7 @@ class ProfileScreen extends ConsumerWidget {
     bool isDark,
   ) {
     HapticHelper.light();
+    final isVi = lang == 'vi';
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1057,11 +1078,11 @@ class ProfileScreen extends ConsumerWidget {
             color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
           ),
         ),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(LucideIcons.shieldCheck, color: AppColors.primaryLight),
-            SizedBox(width: 10),
-            Text('Quyền riêng tư & Bảo mật'),
+            const Icon(LucideIcons.shieldCheck, color: AppColors.primaryLight),
+            const SizedBox(width: 10),
+            Text(isVi ? 'Quyền riêng tư & Bảo mật' : 'Privacy & Security'),
           ],
         ),
         content: SingleChildScrollView(
@@ -1069,39 +1090,70 @@ class ProfileScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'HeartPearl cam kết bảo vệ dữ liệu cá nhân theo tiêu chuẩn của Apple App Store:',
-                style: TextStyle(fontWeight: FontWeight.bold),
+              Text(
+                isVi
+                    ? 'HeartPearl cam kết bảo vệ dữ liệu cá nhân theo tiêu chuẩn của Apple App Store:'
+                    : 'HeartPearl protects your personal data adhering to Apple App Store standards:',
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 10),
-              const Text(
-                '• Ảnh & Video: Chỉ chia sẻ trực tiếp với bạn bè mà bạn kết nối.',
+              Text(
+                isVi
+                    ? '• Ảnh & Video: Chỉ chia sẻ trực tiếp với bạn bè mà bạn kết nối.'
+                    : '• Photos & Videos: Shared exclusively with approved friends.',
               ),
               const SizedBox(height: 6),
-              const Text(
-                '• Máy ảnh & Micrô: Chỉ hoạt động khi bạn chủ động chụp ảnh hoặc quay video.',
+              Text(
+                isVi
+                    ? '• Máy ảnh & Micrô: Chỉ hoạt động khi bạn chủ động chụp ảnh hoặc quay video.'
+                    : '• Camera & Microphone: Accessed only when you actively capture photos or record videos.',
               ),
               const SizedBox(height: 6),
-              const Text(
-                '• Widget màn hình chính: Cập nhật tự động những khoảnh khắc mới nhất từ bạn bè.',
+              Text(
+                isVi
+                    ? '• Widget màn hình chính: Cập nhật tự động những khoảnh khắc mới nhất từ bạn bè.'
+                    : '• Home Widgets: Automatically updates with the latest moments from friends.',
               ),
               const SizedBox(height: 6),
-              const Text(
-                '• Quyền làm chủ dữ liệu: Bạn có toàn quyền quản lý, xóa khoảnh khắc hoặc xóa vĩnh viễn tài khoản.',
+              Text(
+                isVi
+                    ? '• Vị trí & Radar: Chỉ chia sẻ vị trí với bạn bè được chọn; bạn có thể bật Ghost mode bất cứ lúc nào.'
+                    : '• Location & Radar: Shared only with selected friends; you can toggle Ghost mode at any time.',
+              ),
+              const SizedBox(height: 6),
+              Text(
+                isVi
+                    ? '• Quyền làm chủ dữ liệu: Bạn có toàn quyền quản lý, xóa khoảnh khắc hoặc xóa vĩnh viễn tài khoản.'
+                    : '• Data Ownership: You have complete control to delete moments or erase your account permanently.',
               ),
               const SizedBox(height: 14),
-              const Text(
-                'Trang chính sách trực tuyến:\nhttps://tamchau-865f3.web.app/privacy-policy.html',
-                style: TextStyle(
+              Text(
+                isVi
+                    ? 'Trang chính sách trực tuyến:\nhttps://tamchau-865f3.web.app/privacy-policy.html'
+                    : 'Online Privacy Policy:\nhttps://tamchau-865f3.web.app/privacy-policy.html',
+                style: const TextStyle(
                   fontSize: 12,
                   color: AppColors.primaryLight,
                   height: 1.4,
                 ),
               ),
               const SizedBox(height: 6),
-              const Text(
-                'Yêu cầu xóa dữ liệu trực tuyến:\nhttps://tamchau-865f3.web.app/delete-account.html',
-                style: TextStyle(
+              Text(
+                isVi
+                    ? 'Thỏa thuận người dùng (EULA):\nhttps://tamchau-865f3.web.app/eula.html'
+                    : 'End User License Agreement (EULA):\nhttps://tamchau-865f3.web.app/eula.html',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.primaryLight,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                isVi
+                    ? 'Yêu cầu xóa dữ liệu trực tuyến:\nhttps://tamchau-865f3.web.app/delete-account.html'
+                    : 'Request Online Deletion:\nhttps://tamchau-865f3.web.app/delete-account.html',
+                style: const TextStyle(
                   fontSize: 12,
                   color: AppColors.primaryLight,
                   height: 1.4,
@@ -1125,17 +1177,17 @@ class ProfileScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Row(
+                    Row(
                       children: [
-                        Icon(
+                        const Icon(
                           LucideIcons.alertTriangle,
                           color: AppColors.error,
                           size: 16,
                         ),
-                        SizedBox(width: 8),
+                        const SizedBox(width: 8),
                         Text(
-                          'Quản lý tài khoản',
-                          style: TextStyle(
+                          isVi ? 'Quản lý tài khoản' : 'Account Management',
+                          style: const TextStyle(
                             color: AppColors.error,
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
@@ -1144,9 +1196,11 @@ class ProfileScreen extends ConsumerWidget {
                       ],
                     ),
                     const SizedBox(height: 6),
-                    const Text(
-                      'Nếu không còn nhu cầu sử dụng, bạn có thể xóa vĩnh viễn tài khoản và toàn bộ dữ liệu theo Apple Guideline 5.1.1(v).',
-                      style: TextStyle(
+                    Text(
+                      isVi
+                          ? 'Nếu không còn nhu cầu sử dụng, bạn có thể xóa vĩnh viễn tài khoản và toàn bộ dữ liệu theo Apple Guideline 5.1.1(v).'
+                          : 'If you no longer wish to use the service, you can permanently delete your account and all data per Apple Guideline 5.1.1(v).',
+                      style: const TextStyle(
                         fontSize: 12,
                         color: Colors.white70,
                         height: 1.3,
@@ -1165,9 +1219,9 @@ class ProfileScreen extends ConsumerWidget {
                           padding: const EdgeInsets.symmetric(vertical: 8),
                         ),
                         icon: const Icon(LucideIcons.trash2, size: 14),
-                        label: const Text(
-                          'Xóa tài khoản vĩnh viễn',
-                          style: TextStyle(
+                        label: Text(
+                          isVi ? 'Xóa tài khoản vĩnh viễn' : 'Permanently Delete Account',
+                          style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
                           ),
@@ -1187,7 +1241,7 @@ class ProfileScreen extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Đóng'),
+            child: Text(isVi ? 'Đóng' : 'Close'),
           ),
         ],
       ),
