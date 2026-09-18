@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -25,7 +26,8 @@ class MapScreen extends ConsumerStatefulWidget {
   ConsumerState<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends ConsumerState<MapScreen> {
+class _MapScreenState extends ConsumerState<MapScreen>
+    with WidgetsBindingObserver {
   static const _fallbackCenter = LatLng(10.7769, 106.7009); // TP. Hồ Chí Minh
   static const _animationDuration = Duration(milliseconds: 1200);
 
@@ -48,15 +50,32 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initUserLocation();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _animationTimer?.cancel();
     _positionSub?.cancel();
     _mapController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden) {
+      // Immediately cancel local GPS stream when app is not in foreground
+      _positionSub?.cancel();
+      _positionSub = null;
+    } else if (state == AppLifecycleState.resumed) {
+      if (mounted) {
+        _initUserLocation();
+      }
+    }
   }
 
   Future<void> _initUserLocation() async {
@@ -100,13 +119,23 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         _centerOnMeOnce();
       }
 
-      // 3. Listen to live position changes
+      // 3. Listen to live position changes while actively viewing the map
       _positionSub?.cancel();
+      final streamSettings = Platform.isIOS
+          ? AppleSettings(
+              accuracy: LocationAccuracy.high,
+              distanceFilter: 10,
+              pauseLocationUpdatesAutomatically: true,
+              showBackgroundLocationIndicator: false,
+              allowBackgroundLocationUpdates: false,
+            )
+          : const LocationSettings(
+              accuracy: LocationAccuracy.high,
+              distanceFilter: 10,
+            );
+
       _positionSub = Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          distanceFilter: 8,
-        ),
+        locationSettings: streamSettings,
       ).listen((pos) {
         if (mounted) {
           setState(() {

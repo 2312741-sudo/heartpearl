@@ -262,8 +262,14 @@ class LocationService {
     if (_positionSubscription == null || _restartInProgress) return;
     _restartInProgress = true;
     try {
-      await stopTracking();
-      await startTracking();
+      final permission = await Geolocator.checkPermission();
+      if (background && permission != LocationPermission.always) {
+        // Release GPS completely when going to background without 'always' permission
+        await stopTracking();
+      } else {
+        await stopTracking();
+        await startTracking();
+      }
     } catch (e) {
       debugPrint('setBackgroundMode error: $e');
     } finally {
@@ -298,7 +304,7 @@ class LocationService {
         accuracy: accuracy,
         distanceFilter: distanceFilter,
         pauseLocationUpdatesAutomatically: true,
-        showBackgroundLocationIndicator: canBackground,
+        showBackgroundLocationIndicator: false,
         allowBackgroundLocationUpdates: canBackground,
       );
     }
