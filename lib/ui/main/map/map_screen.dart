@@ -420,12 +420,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 subdomains: const ['a', 'b', 'c', 'd'],
                 retinaMode: RetinaMode.isHighDensity(context),
                 maxZoom: 20,
-                tileProvider: NetworkTileProvider(
-                  headers: const {
-                    'User-Agent': 'HeartPearl/2.0 (com.heartpearl.heartpearl)',
-                    'Accept': 'image/webp,image/png,image/*;q=0.8',
-                  },
-                ),
+                userAgentPackageName: 'com.heartpearl.heartpearl',
                 evictErrorTileStrategy: EvictErrorTileStrategy.none,
                 errorTileCallback: (tile, error, stackTrace) {
                   // Gracefully suppress network/DNS errors when offline
