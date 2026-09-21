@@ -1,10 +1,8 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:battery_plus/battery_plus.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../models/location_model.dart';
@@ -40,12 +38,8 @@ class LocationService {
       StreamController<LocationTrackingStatus>.broadcast();
 
   StreamSubscription<Position>? _positionSubscription;
-  DateTime? _lastCapturedAt;
-  DateTime? _lastSuccessfulWriteAt;
   DateTime? _lastBatteryReadAt;
   int? _cachedBatteryLevel;
-  bool _backgroundMode = false;
-  bool _restartInProgress = false;
 
   LocationService({
     FirebaseFirestore? firestore,
@@ -148,29 +142,87 @@ class LocationService {
   Future<void> startSharing() => setSharingEnabled(true);
   Future<void> stopSharing() => setSharingEnabled(false);
 
-  Future<void> setSharingEnabled(bool enabled) async {
+  /// Manual Check-in per Apple Guideline 5.1.2(i):
+  /// Captures single current GPS fix and shares it with close friends on the map.
+  /// No automatic check-in or continuous background loop.
+  Future<LocationModel> checkIn() async {
     final uid = _requireCurrentUid();
+    await requestSharingPermission();
+
+    final position = await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        timeLimit: Duration(seconds: 15),
+      ),
+    );
+
+    if (!LocationPolicy.isValidFix(
+      lat: position.latitude,
+      lng: position.longitude,
+      accuracy: position.accuracy,
+    )) {
+      throw Exception('Tọa độ GPS không hợp lệ. Vui lòng kiểm tra lại kết nối GPS.');
+    }
+
+    final battery = await _readBatteryLevel();
+    final now = DateTime.now();
+
+    final data = <String, dynamic>{
+      'ownerUid': uid,
+      'isSharing': true,
+      'geo': GeoPoint(position.latitude, position.longitude),
+      'lat': position.latitude,
+      'lng': position.longitude,
+      'accuracy': position.accuracy,
+      'speed': position.speed.isFinite && position.speed > 0
+          ? position.speed.clamp(0, 200).toDouble()
+          : 0.0,
+      'batteryLevel': ?battery,
+      'capturedAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    await _locationRef(uid).set(data, SetOptions(merge: true));
+
+    final model = LocationModel(
+      uid: uid,
+      lat: position.latitude,
+      lng: position.longitude,
+      timestamp: now,
+      accuracy: position.accuracy,
+      speed: position.speed,
+      batteryLevel: battery,
+      isSharing: true,
+    );
+
+    _statusController.add(LocationTrackingStatus.tracking);
+    return model;
+  }
+
+  /// Removes the user's location from the map (Ghost Mode / Clear Check-In).
+  Future<void> clearCheckIn() async {
+    final uid = _requireCurrentUid();
+    await _locationRef(uid).set({
+      'ownerUid': uid,
+      'isSharing': false,
+      'geo': FieldValue.delete(),
+      'lat': FieldValue.delete(),
+      'lng': FieldValue.delete(),
+      'capturedAt': FieldValue.delete(),
+      'accuracy': FieldValue.delete(),
+      'speed': FieldValue.delete(),
+      'batteryLevel': FieldValue.delete(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    _statusController.add(LocationTrackingStatus.idle);
+  }
+
+  Future<void> setSharingEnabled(bool enabled) async {
     try {
       if (enabled) {
-        await requestSharingPermission();
-        await _locationRef(uid).set({
-          'ownerUid': uid,
-          'isSharing': true,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-        await startTracking();
+        await checkIn();
       } else {
-        await stopTracking();
-        await _locationRef(uid).set({
-          'ownerUid': uid,
-          'isSharing': false,
-          'geo': FieldValue.delete(),
-          'capturedAt': FieldValue.delete(),
-          'accuracy': FieldValue.delete(),
-          'speed': FieldValue.delete(),
-          'batteryLevel': FieldValue.delete(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+        await clearCheckIn();
       }
     } on LocationTrackingException {
       rethrow;
@@ -211,41 +263,19 @@ class LocationService {
   }
 
   Future<void> startTracking() async {
-    if (_positionSubscription != null) return;
+    // Per Apple Guideline 5.1.2(i), automatic continuous tracking is disabled.
+    // Users must manually check in each time they wish to display location on a map.
     final uid = _auth.currentUser?.uid;
     if (uid == null || uid.isEmpty) return;
-
     try {
       final existing = await _locationRef(uid).get();
-      if (existing.exists) {
-        final data = existing.data();
-        if (data?['isSharing'] != true) return;
-        final capturedAt = data?['capturedAt'];
-        if (capturedAt is Timestamp) _lastCapturedAt = capturedAt.toDate();
-        final updatedAt = data?['updatedAt'];
-        if (updatedAt is Timestamp) _lastSuccessfulWriteAt = updatedAt.toDate();
+      if (existing.exists && existing.data()?['isSharing'] == true) {
+        _statusController.add(LocationTrackingStatus.tracking);
+      } else {
+        _statusController.add(LocationTrackingStatus.idle);
       }
-
-      final permission = await Geolocator.checkPermission();
-      if (permission != LocationPermission.always &&
-          permission != LocationPermission.whileInUse) {
-        _statusController.add(LocationTrackingStatus.permissionDenied);
-        return;
-      }
-
-      _positionSubscription = Geolocator.getPositionStream(
-        locationSettings: _buildSettings(permission),
-      ).listen(
-        (position) => unawaited(_publishPosition(uid, position)),
-        onError: (Object error, StackTrace stackTrace) {
-          debugPrint('Location stream error: $error');
-          _statusController.add(LocationTrackingStatus.error);
-        },
-      );
-      _statusController.add(LocationTrackingStatus.tracking);
-    } catch (error) {
-      debugPrint('startTracking error: $error');
-      _statusController.add(LocationTrackingStatus.error);
+    } catch (_) {
+      _statusController.add(LocationTrackingStatus.idle);
     }
   }
 
@@ -257,103 +287,7 @@ class LocationService {
   }
 
   Future<void> setBackgroundMode(bool background) async {
-    if (_backgroundMode == background) return;
-    _backgroundMode = background;
-    if (_positionSubscription == null || _restartInProgress) return;
-    _restartInProgress = true;
-    try {
-      final permission = await Geolocator.checkPermission();
-      if (background && permission != LocationPermission.always) {
-        // Release GPS completely when going to background without 'always' permission
-        await stopTracking();
-      } else {
-        await stopTracking();
-        await startTracking();
-      }
-    } catch (e) {
-      debugPrint('setBackgroundMode error: $e');
-    } finally {
-      _restartInProgress = false;
-    }
-  }
-
-  LocationSettings _buildSettings(LocationPermission permission) {
-    final lowPower = _backgroundMode || (_cachedBatteryLevel ?? 100) <= 20;
-    final accuracy = lowPower ? LocationAccuracy.medium : LocationAccuracy.high;
-    final distanceFilter = lowPower ? 50 : 20;
-
-    if (Platform.isAndroid) {
-      return AndroidSettings(
-        accuracy: accuracy,
-        distanceFilter: distanceFilter,
-        intervalDuration: const Duration(seconds: 15),
-        foregroundNotificationConfig: const ForegroundNotificationConfig(
-          notificationTitle: 'HeartPearl',
-          notificationText: 'Đang chia sẻ vị trí với bạn bè',
-          notificationChannelName: 'Chia sẻ vị trí',
-          enableWakeLock: false,
-          setOngoing: true,
-        ),
-      );
-    }
-    if (Platform.isIOS) {
-      // ONLY allow background location updates if permission is explicitly ALWAYS
-      // and app is in background mode; otherwise iOS throws NSInternalInconsistencyException
-      final canBackground = _backgroundMode && permission == LocationPermission.always;
-      return AppleSettings(
-        accuracy: accuracy,
-        distanceFilter: distanceFilter,
-        pauseLocationUpdatesAutomatically: true,
-        showBackgroundLocationIndicator: false,
-        allowBackgroundLocationUpdates: canBackground,
-      );
-    }
-    return LocationSettings(
-      accuracy: accuracy,
-      distanceFilter: distanceFilter,
-    );
-  }
-
-  Future<void> _publishPosition(String uid, Position position) async {
-    if (!LocationPolicy.isValidFix(
-      lat: position.latitude,
-      lng: position.longitude,
-      accuracy: position.accuracy,
-    )) {
-      return;
-    }
-    if (!LocationPolicy.shouldPublish(
-      capturedAt: position.timestamp,
-      lastCapturedAt: _lastCapturedAt,
-      lastSuccessfulWriteAt: _lastSuccessfulWriteAt,
-    )) {
-      return;
-    }
-
-    _lastCapturedAt = position.timestamp;
-    final batteryLevel = await _readBatteryLevel();
-    final speed = position.speed.isFinite && position.speed > 0
-        ? position.speed.clamp(0, 200).toDouble()
-        : 0.0;
-    try {
-      final payload = <String, dynamic>{
-        'ownerUid': uid,
-        'geo': GeoPoint(position.latitude, position.longitude),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'capturedAt': Timestamp.fromDate(position.timestamp),
-        'accuracy': position.accuracy,
-        'speed': speed,
-        'isSharing': true,
-      };
-      if (batteryLevel != null) {
-        payload['batteryLevel'] = batteryLevel;
-      }
-      await _locationRef(uid).set(payload, SetOptions(merge: true));
-      _lastSuccessfulWriteAt = position.timestamp;
-    } catch (error) {
-      debugPrint('Location write failed: $error');
-      _statusController.add(LocationTrackingStatus.error);
-    }
+    // No-op per Apple Guideline 5.1.2(i): automatic background location is removed.
   }
 
   Future<int?> _readBatteryLevel() async {

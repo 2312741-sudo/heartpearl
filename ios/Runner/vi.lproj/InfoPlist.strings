@@ -4,6 +4,6 @@
 "NSMicrophoneUsageDescription" = "HeartPearl cần quyền micrô để quay video cùng âm thanh.";
 "NSPhotoLibraryUsageDescription" = "HeartPearl cần quyền truy cập thư viện ảnh để chọn ảnh đại diện và lưu ảnh khoảnh khắc.";
 "NSPhotoLibraryAddUsageDescription" = "HeartPearl cần quyền lưu ảnh và video khoảnh khắc vào thư viện ảnh của bạn.";
-"NSLocationWhenInUseUsageDescription" = "HeartPearl cần vị trí của bạn để hiển thị trên bản đồ và chia sẻ với bạn bè khi mở ứng dụng.";
-"NSLocationAlwaysAndWhenInUseUsageDescription" = "HeartPearl cần quyền vị trí nền để cập nhật vị trí của bạn trên bản đồ và widget màn hình chính của bạn bè.";
-"NSLocationAlwaysUsageDescription" = "HeartPearl cần quyền vị trí nền để cập nhật vị trí của bạn trên bản đồ và widget màn hình chính của bạn bè.";
+"NSLocationWhenInUseUsageDescription" = "HeartPearl cần quyền truy cập vị trí để bạn check-in thủ công và hiển thị vị trí của mình trên bản đồ bạn bè.";
+"NSLocationAlwaysAndWhenInUseUsageDescription" = "HeartPearl cần quyền truy cập vị trí để bạn check-in thủ công và hiển thị vị trí trên bản đồ và widget bạn bè.";
+"NSLocationAlwaysUsageDescription" = "HeartPearl cần quyền truy cập vị trí để bạn check-in thủ công và hiển thị vị trí trên bản đồ và widget bạn bè.";

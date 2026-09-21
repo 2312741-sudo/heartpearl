@@ -4,6 +4,6 @@
 "NSMicrophoneUsageDescription" = "HeartPearl needs microphone access to record videos with audio for your moments.";
 "NSPhotoLibraryUsageDescription" = "HeartPearl needs photo library access to choose your profile avatar and save photos.";
 "NSPhotoLibraryAddUsageDescription" = "HeartPearl needs permission to save moment photos and videos to your photo library.";
-"NSLocationWhenInUseUsageDescription" = "HeartPearl needs your location to display on the map and share with your close friends while using the app.";
-"NSLocationAlwaysAndWhenInUseUsageDescription" = "HeartPearl uses continuous background location to display your real-time position on your friends' map and home screen widgets.";
-"NSLocationAlwaysUsageDescription" = "HeartPearl uses continuous background location to display your real-time position on your friends' map and home screen widgets.";
+"NSLocationWhenInUseUsageDescription" = "HeartPearl needs your location so you can manually check in and display your position on your close friends' map.";
+"NSLocationAlwaysAndWhenInUseUsageDescription" = "HeartPearl needs your location so you can manually check in and display your position on your close friends' map and widgets.";
+"NSLocationAlwaysUsageDescription" = "HeartPearl needs your location so you can manually check in and display your position on your close friends' map and widgets.";

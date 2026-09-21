@@ -49,7 +49,66 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
   bool _hasCentered = false;
   bool _isLocating = false;
+  bool _isCheckingIn = false;
   MapStyle? _userMapStyle;
+
+  Future<void> _performManualCheckIn() async {
+    if (_isCheckingIn) return;
+    setState(() => _isCheckingIn = true);
+    HapticHelper.medium();
+
+    try {
+      final locationService = ref.read(locationServiceProvider);
+      await locationService.checkIn();
+      HapticHelper.success();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đã check-in thành công! Vị trí của bạn đang hiển thị cho bạn bè.'),
+            backgroundColor: AppColors.success,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Không thể check-in: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isCheckingIn = false);
+    }
+  }
+
+  Future<void> _clearCheckIn() async {
+    HapticHelper.light();
+    try {
+      final locationService = ref.read(locationServiceProvider);
+      await locationService.clearCheckIn();
+      HapticHelper.success();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đã gỡ vị trí của bạn khỏi bản đồ bạn bè.'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   void initState() {
@@ -481,98 +540,136 @@ class _MapScreenState extends ConsumerState<MapScreen>
             ],
           ),
 
-          // 2. Top Warning Banner when sharing is OFF
-          if (!isSharing)
-            Positioned(
-              top: AppDimens.spaceSm,
-              left: AppDimens.spaceBase,
-              right: AppDimens.spaceBase,
-              child: SafeArea(
-                bottom: false,
-                child: Material(
-                  elevation: 4,
-                  borderRadius: BorderRadius.circular(16),
-                  color: isDark
-                      ? AppColors.darkSurface.withValues(alpha: 0.95)
-                      : Colors.white.withValues(alpha: 0.95),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const LocationPrivacyScreen(),
+          // 2. Manual Check-in Control Bar (Apple Guideline 5.1.2(i) Compliant)
+          Positioned(
+            top: AppDimens.spaceSm,
+            left: AppDimens.spaceBase,
+            right: AppDimens.spaceBase,
+            child: SafeArea(
+              bottom: false,
+              child: Material(
+                elevation: 4,
+                borderRadius: BorderRadius.circular(16),
+                color: isDark
+                    ? AppColors.darkSurface.withValues(alpha: 0.95)
+                    : Colors.white.withValues(alpha: 0.95),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: isSharing
+                              ? AppColors.success.withValues(alpha: 0.15)
+                              : AppColors.primary.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          isSharing ? LucideIcons.mapPinCheck : LucideIcons.mapPin,
+                          size: 18,
+                          color: isSharing ? AppColors.success : AppColors.primary,
+                        ),
                       ),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              isSharing
+                                  ? 'Đang hiển thị vị trí (Check-in)'
+                                  : 'Vị trí đang ẩn (Chưa Check-in)',
+                              style: AppTypography.caption(
+                                color: isDark
+                                    ? AppColors.darkTextPrimary
+                                    : AppColors.lightTextPrimary,
+                              ).copyWith(fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              isSharing
+                                  ? 'Check-in thủ công • Không chạy ngầm'
+                                  : 'Bấm Check-in để hiển thị vị trí với bạn bè',
+                              style: AppTypography.caption(
+                                color: isDark
+                                    ? AppColors.darkTextMuted
+                                    : AppColors.lightTextMuted,
+                              ).copyWith(fontSize: 11),
+                            ),
+                          ],
+                        ),
                       ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withValues(alpha: 0.15),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              LucideIcons.mapPinOff,
-                              size: 18,
-                              color: AppColors.primary,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  'Chia sẻ vị trí đang tắt',
-                                  style: AppTypography.caption(
-                                    color: isDark
-                                        ? AppColors.darkTextPrimary
-                                        : AppColors.lightTextPrimary,
-                                  ).copyWith(fontWeight: FontWeight.bold),
-                                ),
-                                Text(
-                                  'Bật chia sẻ để bạn bè thấy bạn trên bản đồ.',
-                                  style: AppTypography.caption(
-                                    color: isDark
-                                        ? AppColors.darkTextMuted
-                                        : AppColors.lightTextMuted,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
+                      const SizedBox(width: 8),
+                      if (!isSharing)
+                        FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 5,
+                              horizontal: 12,
+                              vertical: 6,
                             ),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary,
+                            minimumSize: const Size(0, 34),
+                            shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Text(
-                              'Bật ngay',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                              ),
+                          ),
+                          onPressed: _isCheckingIn ? null : _performManualCheckIn,
+                          child: _isCheckingIn
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text(
+                                  'Check-in',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                        )
+                      else ...[
+                        OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                            side: const BorderSide(color: AppColors.primaryLight),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            minimumSize: const Size(0, 32),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                        ],
-                      ),
-                    ),
+                          onPressed: _isCheckingIn ? null : _performManualCheckIn,
+                          child: const Text(
+                            'Cập nhật',
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        IconButton(
+                          tooltip: 'Ẩn khỏi bản đồ',
+                          icon: const Icon(LucideIcons.ghost, size: 18),
+                          color: AppColors.darkTextMuted,
+                          onPressed: _clearCheckIn,
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ),
             ),
+          ),
 
           // 3. Subtle empty friends indicator
           if (items.isEmpty && isSharing)
@@ -747,8 +844,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 ),
                 subtitle: Text(
                   location?.isSharing == true
-                      ? 'Đang chia sẻ trực tiếp với bạn bè'
-                      : 'Đang ở chế độ riêng tư (không chia sẻ)',
+                      ? 'Đang hiển thị vị trí (Check-in thủ công)'
+                      : 'Đang ở chế độ riêng tư (Chưa Check-in)',
                   style: TextStyle(
                     color: location?.isSharing == true
                         ? Colors.green
@@ -778,7 +875,41 @@ class _MapScreenState extends ConsumerState<MapScreen>
                   ],
                 ),
               const SizedBox(height: 20),
-              FilledButton.icon(
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                      ),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _performManualCheckIn();
+                      },
+                      icon: const Icon(LucideIcons.mapPin, size: 18),
+                      label: Text(
+                        location?.isSharing == true
+                            ? 'Cập nhật Check-in'
+                            : 'Check-in vị trí ngay',
+                      ),
+                    ),
+                  ),
+                  if (location?.isSharing == true) ...[
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _clearCheckIn();
+                      },
+                      icon: const Icon(LucideIcons.ghost, size: 18),
+                      label: const Text('Ẩn vị trí'),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
                 onPressed: () {
                   Navigator.pop(ctx);
                   Navigator.push(
@@ -789,7 +920,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                   );
                 },
                 icon: const Icon(LucideIcons.shieldCheck),
-                label: const Text('Cài đặt chia sẻ vị trí'),
+                label: const Text('Cài đặt quyền riêng tư vị trí'),
               ),
             ],
           ),

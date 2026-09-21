@@ -118,6 +118,70 @@ class _LocationPrivacyScreenState
         padding: const EdgeInsets.all(AppDimens.spaceBase),
         children: [
           Card(
+            child: Padding(
+              padding: const EdgeInsets.all(AppDimens.spaceBase),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(LucideIcons.mapPinCheck, color: AppColors.primary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          AppStrings.tr('location_disclosure_title', lang: lang),
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    AppStrings.tr('location_disclosure_body', lang: lang),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.4),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                      ),
+                      onPressed: _savingSharing
+                          ? null
+                          : () async {
+                              final messenger = ScaffoldMessenger.of(context);
+                              setState(() => _savingSharing = true);
+                              try {
+                                await ref.read(locationServiceProvider).checkIn();
+                                HapticHelper.success();
+                                if (mounted) {
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        AppStrings.tr('location_checkin_success', lang: lang),
+                                      ),
+                                      backgroundColor: AppColors.success,
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
+                                if (mounted) _showError(e.toString());
+                              } finally {
+                                if (mounted) setState(() => _savingSharing = false);
+                              }
+                            },
+                      icon: const Icon(LucideIcons.mapPin, size: 18),
+                      label: Text(AppStrings.tr('location_checkin_btn', lang: lang)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: AppDimens.spaceSm),
+          Card(
             child: SwitchListTile(
               secondary: Icon(
                 sharing ? LucideIcons.mapPin : LucideIcons.ghost,
