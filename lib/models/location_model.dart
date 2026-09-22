@@ -11,6 +11,12 @@ class LocationModel {
   final bool isSharing;
   final List<String> allowedViewers;
 
+  /// True while a timed Live Location session is actively streaming.
+  final bool liveSessionActive;
+
+  /// When the live session expires (null = unlimited / not live).
+  final DateTime? shareExpiresAt;
+
   const LocationModel({
     required this.uid,
     required this.lat,
@@ -21,6 +27,8 @@ class LocationModel {
     required this.isSharing,
     this.batteryLevel,
     this.allowedViewers = const [],
+    this.liveSessionActive = false,
+    this.shareExpiresAt,
   });
 
   factory LocationModel.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -58,6 +66,10 @@ class LocationModel {
     final speed = _asDouble(data['speed']).clamp(0.0, 200.0);
     final battery = _asInt(data['batteryLevel'])?.clamp(0, 100);
 
+    DateTime? shareExpiresAt;
+    final raw = data['shareExpiresAt'];
+    if (raw is Timestamp) shareExpiresAt = raw.toDate();
+
     return LocationModel(
       uid: data['uid']?.toString() ?? data['ownerUid']?.toString() ?? uid,
       lat: lat,
@@ -68,6 +80,8 @@ class LocationModel {
       batteryLevel: battery,
       isSharing: _asBool(data['isSharing']),
       allowedViewers: _readStringList(data['allowedViewers']),
+      liveSessionActive: _asBool(data['liveSessionActive']),
+      shareExpiresAt: shareExpiresAt,
     );
   }
 
@@ -83,12 +97,24 @@ class LocationModel {
       'batteryLevel': batteryLevel,
       'isSharing': isSharing,
       'allowedViewers': allowedViewers,
+      'liveSessionActive': liveSessionActive,
+      'shareExpiresAt': shareExpiresAt?.millisecondsSinceEpoch,
     };
   }
 
   bool get hasCoordinate =>
       lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180 &&
       !(lat == 0 && lng == 0);
+
+  /// True when this model represents an active live streaming session.
+  bool get isLive => isSharing && liveSessionActive;
+
+  /// True when the live session has a deadline that has already passed.
+  bool get isExpired {
+    final exp = shareExpiresAt;
+    if (exp == null) return false;
+    return DateTime.now().isAfter(exp);
+  }
 
   bool isStale({DateTime? now, Duration maxAge = const Duration(minutes: 10)}) {
     final effectiveNow = now ?? DateTime.now();
@@ -106,6 +132,7 @@ class LocationModel {
       'batteryLevel': batteryLevel,
       'isSharing': isSharing,
       'allowedViewers': allowedViewers,
+      'liveSessionActive': liveSessionActive,
     };
   }
 
@@ -118,6 +145,8 @@ class LocationModel {
     int? batteryLevel,
     bool? isSharing,
     List<String>? allowedViewers,
+    bool? liveSessionActive,
+    Object? shareExpiresAt = _sentinel,
   }) {
     return LocationModel(
       uid: uid,
@@ -129,9 +158,16 @@ class LocationModel {
       batteryLevel: batteryLevel ?? this.batteryLevel,
       isSharing: isSharing ?? this.isSharing,
       allowedViewers: allowedViewers ?? this.allowedViewers,
+      liveSessionActive: liveSessionActive ?? this.liveSessionActive,
+      shareExpiresAt: shareExpiresAt == _sentinel
+          ? this.shareExpiresAt
+          : shareExpiresAt as DateTime?,
     );
   }
 }
+
+// Sentinel for copyWith nullable field support.
+const Object _sentinel = Object();
 
 List<String> _readStringList(dynamic value) {
   if (value is! Iterable) return const [];
@@ -155,3 +191,4 @@ bool _asBool(dynamic value, [bool fallback = false]) {
   if (value is String) return value.toLowerCase() == 'true';
   return fallback;
 }
+

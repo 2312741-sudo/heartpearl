@@ -12,12 +12,15 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_dimens.dart';
 import '../../../core/constants/app_typography.dart';
+import '../../../core/l10n/app_strings.dart';
 import '../../../core/utils/haptic_helper.dart';
 import '../../../models/location_model.dart';
 import '../../../models/user_model.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/location_provider.dart';
+import '../../../providers/settings_provider.dart';
 import '../../../services/widget_service.dart';
+import 'live_location_sheet.dart';
 import '../profile/location_privacy_screen.dart';
 
 enum MapStyle { dark, street, satellite }
@@ -86,15 +89,16 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
   Future<void> _clearCheckIn() async {
     HapticHelper.light();
+    final lang = ref.read(settingsProvider).language;
     try {
       final locationService = ref.read(locationServiceProvider);
       await locationService.clearCheckIn();
       HapticHelper.success();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Đã gỡ vị trí của bạn khỏi bản đồ bạn bè.'),
-            duration: Duration(seconds: 2),
+          SnackBar(
+            content: Text(AppStrings.tr('location_clear_success', lang: lang)),
+            duration: const Duration(seconds: 2),
           ),
         );
       }
@@ -107,6 +111,53 @@ class _MapScreenState extends ConsumerState<MapScreen>
           ),
         );
       }
+    }
+  }
+
+  /// Opens the Live Location sheet to start a timed session.
+  void _showLiveSheet() {
+    HapticHelper.medium();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => const LiveLocationSheet(),
+    );
+  }
+
+  /// Confirms and stops an active live session.
+  Future<void> _stopLive() async {
+    final lang = ref.read(settingsProvider).language;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(AppStrings.tr('live_stop_title', lang: lang)),
+        content: Text(AppStrings.tr('live_stop_body', lang: lang)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(AppStrings.tr('safety_cancel', lang: lang)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(AppStrings.tr('live_stop_btn', lang: lang)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    HapticHelper.light();
+    await ref.read(locationServiceProvider).stopLiveSharing(clearFirestore: true);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppStrings.tr('live_stopped', lang: lang)),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -395,6 +446,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
     final userProfile = ref.watch(userProfileProvider).value;
     final status = ref.watch(locationTrackingStatusProvider).value;
     final isSharing = ownLocation?.isSharing == true;
+    final isLive = ownLocation?.isLive == true;
+    final lang = ref.watch(settingsProvider).language;
 
     // Use own location from provider if local GPS hasn't updated yet
     if (_myPosition == null && ownLocation != null && ownLocation.hasCoordinate) {
@@ -540,133 +593,161 @@ class _MapScreenState extends ConsumerState<MapScreen>
             ],
           ),
 
-          // 2. Manual Check-in Control Bar (Apple Guideline 5.1.2(i) Compliant)
+          // 2. Location Control Bar (Manual Check-in + Live Location)
           Positioned(
             top: AppDimens.spaceSm,
             left: AppDimens.spaceBase,
             right: AppDimens.spaceBase,
             child: SafeArea(
               bottom: false,
-              child: Material(
-                elevation: 4,
-                borderRadius: BorderRadius.circular(16),
-                color: isDark
-                    ? AppColors.darkSurface.withValues(alpha: 0.95)
-                    : Colors.white.withValues(alpha: 0.95),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: isSharing
-                              ? AppColors.success.withValues(alpha: 0.15)
-                              : AppColors.primary.withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          isSharing ? LucideIcons.mapPinCheck : LucideIcons.mapPin,
-                          size: 18,
-                          color: isSharing ? AppColors.success : AppColors.primary,
-                        ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Live status banner (shown only when live is active)
+                  if (isLive) ...[
+                    _LiveBanner(
+                      ownLocation: ownLocation,
+                      lang: lang,
+                      onStop: _stopLive,
+                      isDark: isDark,
+                    ),
+                    const SizedBox(height: AppDimens.spaceSm),
+                  ],
+                  // Main control bar
+                  Material(
+                    elevation: 4,
+                    borderRadius: BorderRadius.circular(16),
+                    color: isDark
+                        ? AppColors.darkSurface.withValues(alpha: 0.95)
+                        : Colors.white.withValues(alpha: 0.95),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              isSharing
-                                  ? 'Đang hiển thị vị trí (Check-in)'
-                                  : 'Vị trí đang ẩn (Chưa Check-in)',
-                              style: AppTypography.caption(
-                                color: isDark
-                                    ? AppColors.darkTextPrimary
-                                    : AppColors.lightTextPrimary,
-                              ).copyWith(fontWeight: FontWeight.bold),
+                      child: Row(
+                        children: [
+                          // Status icon
+                          Container(
+                            padding: const EdgeInsets.all(7),
+                            decoration: BoxDecoration(
+                              color: isLive
+                                  ? Colors.red.withValues(alpha: 0.12)
+                                  : isSharing
+                                      ? AppColors.success.withValues(alpha: 0.15)
+                                      : AppColors.primary.withValues(alpha: 0.15),
+                              shape: BoxShape.circle,
                             ),
-                            Text(
-                              isSharing
-                                  ? 'Check-in thủ công • Không chạy ngầm'
-                                  : 'Bấm Check-in để hiển thị vị trí với bạn bè',
-                              style: AppTypography.caption(
-                                color: isDark
-                                    ? AppColors.darkTextMuted
-                                    : AppColors.lightTextMuted,
-                              ).copyWith(fontSize: 11),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      if (!isSharing)
-                        FilledButton(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            minimumSize: const Size(0, 34),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                            child: Icon(
+                              isLive
+                                  ? LucideIcons.radio
+                                  : isSharing
+                                      ? LucideIcons.mapPinCheck
+                                      : LucideIcons.mapPin,
+                              size: 16,
+                              color: isLive
+                                  ? Colors.red
+                                  : isSharing
+                                      ? AppColors.success
+                                      : AppColors.primary,
                             ),
                           ),
-                          onPressed: _isCheckingIn ? null : _performManualCheckIn,
-                          child: _isCheckingIn
-                              ? const SizedBox(
-                                  width: 14,
-                                  height: 14,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Text(
-                                  'Check-in',
-                                  style: TextStyle(
-                                    fontSize: 12,
+                          const SizedBox(width: 8),
+                          // Status text
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  isLive
+                                      ? AppStrings.tr('live_share_title', lang: lang)
+                                      : isSharing
+                                          ? 'Check-in thủ công'
+                                          : 'Vị trí đang ẩn',
+                                  style: AppTypography.caption(
+                                    color: isDark
+                                        ? AppColors.darkTextPrimary
+                                        : AppColors.lightTextPrimary,
+                                  ).copyWith(
                                     fontWeight: FontWeight.bold,
+                                    fontSize: 12,
                                   ),
                                 ),
-                        )
-                      else ...[
-                        OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.primary,
-                            side: const BorderSide(color: AppColors.primaryLight),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            minimumSize: const Size(0, 32),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                                Text(
+                                  isLive
+                                      ? 'Cập nhật liên tục với bạn bè'
+                                      : isSharing
+                                          ? 'Không chạy ngầm tự động'
+                                          : 'Bấm để chia sẻ vị trí',
+                                  style: AppTypography.caption(
+                                    color: isDark
+                                        ? AppColors.darkTextMuted
+                                        : AppColors.lightTextMuted,
+                                  ).copyWith(fontSize: 10),
+                                ),
+                              ],
                             ),
                           ),
-                          onPressed: _isCheckingIn ? null : _performManualCheckIn,
-                          child: const Text(
-                            'Cập nhật',
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        IconButton(
-                          tooltip: 'Ẩn khỏi bản đồ',
-                          icon: const Icon(LucideIcons.ghost, size: 18),
-                          color: AppColors.darkTextMuted,
-                          onPressed: _clearCheckIn,
-                        ),
-                      ],
-                    ],
+                          const SizedBox(width: 6),
+                          // Action buttons
+                          if (!isSharing) ...[
+                            // Check-in button
+                            _ActionChip(
+                              label: 'Check-in',
+                              icon: LucideIcons.mapPin,
+                              color: AppColors.primary,
+                              loading: _isCheckingIn,
+                              onTap: _isCheckingIn ? null : _performManualCheckIn,
+                            ),
+                            const SizedBox(width: 4),
+                            // Live button
+                            _ActionChip(
+                              label: 'Live',
+                              icon: LucideIcons.radio,
+                              color: Colors.red.shade600,
+                              onTap: _showLiveSheet,
+                            ),
+                          ] else if (isLive) ...[
+                            // Stop live
+                            _ActionChip(
+                              label: 'Dừng',
+                              icon: LucideIcons.squareX,
+                              color: Colors.red.shade600,
+                              onTap: _stopLive,
+                            ),
+                            const SizedBox(width: 4),
+                            // Ghost Mode
+                            IconButton(
+                              tooltip: 'Ẩn vị trí (Ghost Mode)',
+                              icon: const Icon(LucideIcons.ghost, size: 17),
+                              color: AppColors.darkTextMuted,
+                              visualDensity: VisualDensity.compact,
+                              onPressed: _clearCheckIn,
+                            ),
+                          ] else ...[
+                            // Update check-in
+                            _ActionChip(
+                              label: 'Live',
+                              icon: LucideIcons.radio,
+                              color: Colors.red.shade600,
+                              onTap: _showLiveSheet,
+                            ),
+                            const SizedBox(width: 4),
+                            // Ghost Mode
+                            IconButton(
+                              tooltip: 'Ẩn vị trí (Ghost Mode)',
+                              icon: const Icon(LucideIcons.ghost, size: 17),
+                              color: AppColors.darkTextMuted,
+                              visualDensity: VisualDensity.compact,
+                              onPressed: _clearCheckIn,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
@@ -1610,6 +1691,209 @@ class _LiveStatus extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Red banner displayed above the main control bar when a live session is active.
+class _LiveBanner extends StatefulWidget {
+  final LocationModel? ownLocation;
+  final String lang;
+  final VoidCallback onStop;
+  final bool isDark;
+
+  const _LiveBanner({
+    required this.ownLocation,
+    required this.lang,
+    required this.onStop,
+    required this.isDark,
+  });
+
+  @override
+  State<_LiveBanner> createState() => _LiveBannerState();
+}
+
+class _LiveBannerState extends State<_LiveBanner> {
+  late Timer _ticker;
+  String _countdown = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _update();
+    _ticker = Timer.periodic(const Duration(seconds: 30), (_) => _update());
+  }
+
+  void _update() {
+    final exp = widget.ownLocation?.shareExpiresAt;
+    if (!mounted) return;
+    if (exp == null) {
+      setState(() => _countdown = '');
+      return;
+    }
+    final diff = exp.difference(DateTime.now());
+    if (diff.isNegative) {
+      setState(() => _countdown = '');
+      return;
+    }
+    final h = diff.inHours;
+    final m = diff.inMinutes.remainder(60);
+    if (widget.lang == 'vi') {
+      setState(() => _countdown = h > 0 ? '· Còn ${h}g ${m}p' : '· Còn ${m}p');
+    } else {
+      setState(() => _countdown = h > 0 ? '· ${h}h ${m}m left' : '· ${m}m left');
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      elevation: 3,
+      borderRadius: BorderRadius.circular(12),
+      color: Colors.red.shade700.withValues(alpha: 0.92),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        child: Row(
+          children: [
+            // Pulsing dot
+            const _PulsingDot(),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '${AppStrings.tr('live_active_prefix', lang: widget.lang)} $_countdown',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            GestureDetector(
+              onTap: widget.onStop,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  AppStrings.tr('live_stop_btn', lang: widget.lang),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Animated pulsing red dot shown in the live banner.
+class _PulsingDot extends StatefulWidget {
+  const _PulsingDot();
+  @override
+  State<_PulsingDot> createState() => _PulsingDotState();
+}
+
+class _PulsingDotState extends State<_PulsingDot>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _scale = Tween<double>(begin: 0.7, end: 1.0).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _scale,
+      child: Container(
+        width: 8,
+        height: 8,
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white,
+        ),
+      ),
+    );
+  }
+}
+
+/// Small pill-shaped action button for the control bar.
+class _ActionChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback? onTap;
+  final bool loading;
+
+  const _ActionChip({
+    required this.label,
+    required this.icon,
+    required this.color,
+    this.onTap,
+    this.loading = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: loading
+            ? SizedBox(
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(strokeWidth: 2, color: color),
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 12, color: color),
+                  const SizedBox(width: 4),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }

@@ -10,6 +10,7 @@ import '../../../models/user_model.dart';
 import '../../../providers/friends_provider.dart';
 import '../../../providers/location_provider.dart';
 import '../../../providers/settings_provider.dart';
+import '../../../services/location_sharing_duration.dart';
 import '../../common/user_avatar.dart';
 
 class LocationPrivacyScreen extends ConsumerStatefulWidget {
@@ -109,6 +110,7 @@ class _LocationPrivacyScreenState
     final ownLocation = ref.watch(ownLocationProvider).value;
     final friendsAsync = ref.watch(friendsListProvider);
     final sharing = ownLocation?.isSharing == true;
+    final isLive = ownLocation?.isLive == true;
 
     return Scaffold(
       appBar: AppBar(
@@ -117,6 +119,7 @@ class _LocationPrivacyScreenState
       body: ListView(
         padding: const EdgeInsets.all(AppDimens.spaceBase),
         children: [
+          // Manual Check-in Card
           Card(
             child: Padding(
               padding: const EdgeInsets.all(AppDimens.spaceBase),
@@ -176,6 +179,105 @@ class _LocationPrivacyScreenState
                       label: Text(AppStrings.tr('location_checkin_btn', lang: lang)),
                     ),
                   ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: AppDimens.spaceSm),
+
+          // Live Location Card
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(AppDimens.spaceBase),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        LucideIcons.radio,
+                        color: isLive ? Colors.red : AppColors.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          AppStrings.tr('live_section_title', lang: lang),
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                      ),
+                      if (isLive)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            '● LIVE',
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    AppStrings.tr('live_share_subtitle', lang: lang),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.4),
+                  ),
+                  const SizedBox(height: 12),
+                  if (isLive) ...[
+                    // Currently live: show stop button
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.red.shade600,
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: () async {
+                          final messenger = ScaffoldMessenger.of(context);
+                          final confirmed = await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: Text(AppStrings.tr('live_stop_title', lang: lang)),
+                              content: Text(AppStrings.tr('live_stop_body', lang: lang)),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx, false),
+                                  child: Text(AppStrings.tr('safety_cancel', lang: lang)),
+                                ),
+                                FilledButton(
+                                  style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                                  onPressed: () => Navigator.pop(ctx, true),
+                                  child: Text(AppStrings.tr('live_stop_btn', lang: lang)),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (confirmed != true || !mounted) return;
+                          await ref.read(locationServiceProvider).stopLiveSharing(clearFirestore: true);
+                          if (mounted) {
+                            messenger.showSnackBar(
+                              SnackBar(content: Text(AppStrings.tr('live_stopped', lang: lang))),
+                            );
+                          }
+                        },
+                        icon: const Icon(LucideIcons.squareX, size: 18),
+                        label: Text(AppStrings.tr('live_stop_btn', lang: lang)),
+                      ),
+                    ),
+                  ] else ...[
+                    // Not live: show duration options
+                    for (final dur in LocationSharingDuration.values) ...[
+                      _LiveOptionTile(duration: dur, lang: lang),
+                      if (dur != LocationSharingDuration.values.last)
+                        const Divider(height: 1),
+                    ],
+                  ],
                 ],
               ),
             ),
@@ -274,6 +376,74 @@ class _LocationPrivacyScreenState
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Compact tile for a single duration option inside the Live Location card.
+class _LiveOptionTile extends ConsumerWidget {
+  final LocationSharingDuration duration;
+  final String lang;
+
+  const _LiveOptionTile({required this.duration, required this.lang});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final (icon, color) = switch (duration) {
+      LocationSharingDuration.oneHour => (LucideIcons.clock, Colors.blue),
+      LocationSharingDuration.untilEndOfDay => (LucideIcons.sunset, Colors.orange),
+      LocationSharingDuration.unlimited => (LucideIcons.infinity, AppColors.primary),
+    };
+
+    return ListTile(
+      leading: Icon(icon, color: color, size: 20),
+      title: Text(duration.label(lang), style: const TextStyle(fontWeight: FontWeight.w600)),
+      subtitle: Text(duration.subtitle(lang), style: const TextStyle(fontSize: 12)),
+      trailing: Icon(LucideIcons.chevronRight, size: 16, color: Colors.grey.shade400),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+      onTap: () async {
+        HapticHelper.selection();
+        // Unlimited requires explicit consent dialog.
+        if (duration == LocationSharingDuration.unlimited) {
+          final confirmed = await showDialog<bool>(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              title: Text(AppStrings.tr('live_confirm_unlimited_title', lang: lang)),
+              content: Text(AppStrings.tr('live_confirm_unlimited_body', lang: lang)),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text(AppStrings.tr('safety_cancel', lang: lang)),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: Text(AppStrings.tr('live_confirm_btn', lang: lang)),
+                ),
+              ],
+            ),
+          );
+          if (confirmed != true || !context.mounted) return;
+        }
+        try {
+          await ref.read(locationServiceProvider).startLiveSharing(duration);
+          HapticHelper.success();
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(AppStrings.tr('live_started', lang: lang)),
+                backgroundColor: AppColors.success,
+              ),
+            );
+          }
+        } catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error),
+            );
+          }
+        }
+      },
     );
   }
 }
