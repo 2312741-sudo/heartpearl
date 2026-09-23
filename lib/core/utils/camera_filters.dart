@@ -65,17 +65,19 @@ class FilterTuning {
     const lg = 0.715;
     const lb = 0.072;
     final inverseSaturation = 1 - saturation;
-    final redGain = 1 + warmth * 0.09 + tint * 0.035;
-    final greenGain = 1 - tint * 0.045;
-    final blueGain = 1 - warmth * 0.09 + tint * 0.025;
-    final bias = brightness * 22 + 128 * (1 - contrast) + fade * 16;
+    // Boost gains so color temperature (warmth) and tint are clearly visible
+    final redGain = 1 + warmth * 0.20 + tint * 0.10;
+    final greenGain = 1 - tint * 0.08;
+    final blueGain = 1 - warmth * 0.20 + tint * 0.06;
+    // Bias scaling: brightness and fade visibly shift values in 0-255 scale
+    final bias = brightness * 60 + 128 * (1 - contrast) + fade * 24;
 
     return [
       (lr * inverseSaturation + saturation) * contrast * redGain,
       lg * inverseSaturation * contrast * redGain,
       lb * inverseSaturation * contrast * redGain,
       0,
-      bias + warmth * 3,
+      bias + warmth * 8,
       lr * inverseSaturation * contrast * greenGain,
       (lg * inverseSaturation + saturation) * contrast * greenGain,
       lb * inverseSaturation * contrast * greenGain,
@@ -85,7 +87,7 @@ class FilterTuning {
       lg * inverseSaturation * contrast * blueGain,
       (lb * inverseSaturation + saturation) * contrast * blueGain,
       0,
-      bias - warmth * 3,
+      bias - warmth * 8,
       0,
       0,
       0,
@@ -532,13 +534,13 @@ class BeautySettings {
 
   const BeautySettings({
     this.enabled = true,
-    this.overall = .34,
-    this.smoothing = .32,
-    this.toneEvenness = .22,
-    this.blemishReduction = .2,
-    this.brightness = .1,
-    this.vitality = .16,
-    this.highlightReduction = .18,
+    this.overall = .52,
+    this.smoothing = .48,
+    this.toneEvenness = .32,
+    this.blemishReduction = .28,
+    this.brightness = .22,
+    this.vitality = .26,
+    this.highlightReduction = .22,
   });
 
   static const off = BeautySettings(enabled: false, overall: 0);
@@ -581,13 +583,13 @@ class BeautySettings {
         ((map[key] as num?)?.toDouble() ?? fallback).clamp(0, 1);
     return BeautySettings(
       enabled: map['enabled'] as bool? ?? true,
-      overall: read('overall', .34),
-      smoothing: read('smoothing', .32),
-      toneEvenness: read('toneEvenness', .22),
-      blemishReduction: read('blemishReduction', .2),
-      brightness: read('brightness', .1),
-      vitality: read('vitality', .16),
-      highlightReduction: read('highlightReduction', .18),
+      overall: read('overall', .52),
+      smoothing: read('smoothing', .48),
+      toneEvenness: read('toneEvenness', .32),
+      blemishReduction: read('blemishReduction', .28),
+      brightness: read('brightness', .22),
+      vitality: read('vitality', .26),
+      highlightReduction: read('highlightReduction', .22),
     );
   }
 }

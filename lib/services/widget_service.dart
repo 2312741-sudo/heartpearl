@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -170,6 +171,7 @@ class WidgetService {
     LocationModel? ownLocation,
   }) async {
     try {
+      ownLocation ??= await _tryGetOwnLocation();
       final friendName = friend.displayName.isNotEmpty
           ? friend.displayName
           : 'Bạn bè';
@@ -205,11 +207,9 @@ class WidgetService {
         ownLng: ownLocation?.lng,
       );
 
-      await HomeWidget.saveFile(
-        'locationMap',
-        mapBytes,
-        extension: 'png',
-      );
+      // Write map image bytes to a stable file and store path in UserDefaults
+      // so iOS WidgetKit (UIImage(contentsOfFile:)) can load it reliably.
+      await _saveMapFile('locationMap', mapBytes);
       await HomeWidget.saveWidgetData<String>('widgetMode', 'location');
       await HomeWidget.saveWidgetData<String>('locationFriend', friendName);
       await HomeWidget.saveWidgetData<String>('locationSummary', summary);
@@ -244,7 +244,7 @@ class WidgetService {
       final visibleLocations =
           await locationService.getVisibleFriendLocationsOnce();
       if (visibleLocations.isEmpty) return false;
-      final ownLocation = await locationService.getOwnLocation();
+      final ownLocation = await _tryGetOwnLocation(locationService);
       final selected = _selectNearestOrLatest(
         visibleLocations.values,
         ownLocation,
@@ -305,11 +305,7 @@ class WidgetService {
           ? _relativeTime(selected.timestamp)
           : '${_formatDistance(distance)} · ${_relativeTime(selected.timestamp)}';
 
-      await HomeWidget.saveFile(
-        'locationMap',
-        mapBytes,
-        extension: 'png',
-      );
+      await _saveMapFile('locationMap', mapBytes);
       await HomeWidget.saveWidgetData<String>('widgetMode', 'location');
       await HomeWidget.saveWidgetData<String>('locationFriend', friendName);
       await HomeWidget.saveWidgetData<String>('locationSummary', summary);
@@ -641,5 +637,105 @@ class WidgetService {
     if (difference.inHours < 1) return '${difference.inMinutes} phút trước';
     if (difference.inDays < 1) return '${difference.inHours} giờ trước';
     return '${difference.inDays} ngày trước';
+  }
+
+  /// Attempts to obtain the device's actual GPS position first (via last-known
+  /// or fast position lookup), falling back to Firestore ownLocation or cached
+  /// coordinates in SharedPreferences.
+  static Future<LocationModel?> _tryGetOwnLocation([
+    LocationService? service,
+  ]) async {
+    final locationService = service ?? LocationService();
+
+    // 1. Try GPS cached/last known position from OS (instant, zero battery cost)
+    try {
+      final lastKnown = await Geolocator.getLastKnownPosition();
+      if (lastKnown != null &&
+          LocationPolicy.isValidFix(
+            lat: lastKnown.latitude,
+            lng: lastKnown.longitude,
+            accuracy: lastKnown.accuracy,
+          )) {
+        return LocationModel(
+          uid: locationService.currentUid ?? 'me',
+          lat: lastKnown.latitude,
+          lng: lastKnown.longitude,
+          timestamp: lastKnown.timestamp,
+          accuracy: lastKnown.accuracy,
+          speed: lastKnown.speed,
+          isSharing: true,
+        );
+      }
+    } catch (_) {}
+
+    // 2. Try fast GPS fix with 3-second timeout if app is running foreground
+    try {
+      final currentPos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 3),
+        ),
+      );
+      if (LocationPolicy.isValidFix(
+        lat: currentPos.latitude,
+        lng: currentPos.longitude,
+        accuracy: currentPos.accuracy,
+      )) {
+        return LocationModel(
+          uid: locationService.currentUid ?? 'me',
+          lat: currentPos.latitude,
+          lng: currentPos.longitude,
+          timestamp: currentPos.timestamp,
+          accuracy: currentPos.accuracy,
+          speed: currentPos.speed,
+          isSharing: true,
+        );
+      }
+    } catch (_) {}
+
+    // 3. Fallback: Firestore ownLocation
+    try {
+      final own = await locationService.getOwnLocation();
+      if (own != null && own.hasCoordinate) return own;
+    } catch (_) {}
+
+    // 4. Fallback: cached coordinates in SharedPreferences
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lat = prefs.getDouble('last_own_lat');
+      final lng = prefs.getDouble('last_own_lng');
+      if (lat != null && lng != null && (lat != 0 || lng != 0)) {
+        return LocationModel(
+          uid: locationService.currentUid ?? 'me',
+          lat: lat,
+          lng: lng,
+          timestamp: DateTime.now(),
+          accuracy: 0,
+          speed: 0,
+          isSharing: true,
+        );
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
+  /// Saves [bytes] (PNG) into the App Group container (iOS) or app directory
+  /// (Android), then writes the file path into UserDefaults under [key] so
+  /// native WidgetKit code can load the image via `UIImage(contentsOfFile:)`.
+  static Future<void> _saveMapFile(String key, Uint8List bytes) async {
+    try {
+      if (Platform.isIOS) {
+        await HomeWidget.setAppGroupId(appGroupId);
+      }
+      await HomeWidget.saveFile(
+        key,
+        bytes,
+        extension: 'png',
+        appGroupId: Platform.isIOS ? appGroupId : null,
+      );
+    } catch (e) {
+      debugPrint('[WidgetService] _saveMapFile error: $e');
+    }
   }
 }

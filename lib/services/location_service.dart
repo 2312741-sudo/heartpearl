@@ -60,6 +60,9 @@ class LocationService {
   /// Whether a live streaming session is currently active in this service instance.
   bool get isLiveActive => _liveSubscription != null;
 
+  /// Current authenticated user ID, if signed in.
+  String? get currentUid => _auth.currentUser?.uid;
+
   DocumentReference<Map<String, dynamic>> _locationRef(String uid) =>
       _db.collection(collectionName).doc(uid);
 

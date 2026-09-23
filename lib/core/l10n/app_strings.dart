@@ -22,11 +22,11 @@ class AppStrings {
       'login_toggle_link_in': 'Đăng ký ngay',
 
       // Profile Creation
-      'profile_create_title': 'Tạo Hồ sơ 🎨',
+      'profile_create_title': 'Tạo Hồ sơ',
       'profile_create_sub': 'Cho bạn bè biết đây là bạn!',
       'profile_display_name': 'Tên hiển thị',
       'profile_username': 'Tên người dùng (@username)',
-      'profile_save_continue': 'Lưu & Bắt đầu 🚀',
+      'profile_save_continue': 'Lưu & Bắt đầu',
 
       // Home & Camera
       'home_video_badge': 'VIDEO',
@@ -52,10 +52,15 @@ class AppStrings {
       'inbox_empty_sub': 'Khi bạn bè gửi ảnh, chúng sẽ xuất hiện ở đây nhé!',
 
       // Viewer & Reactions
-      'photo_selfie_react': '📸 Selfie',
-      'photo_text_react': '💬 Nhắn tin',
+      'photo_selfie_react': 'Selfie',
+      'photo_text_react': 'Nhắn tin',
       'photo_send_reaction': 'Gửi phản hồi',
       'photo_react_success': 'Đã gửi phản hồi thành công!',
+      'media_download_btn': 'Tải về',
+      'media_download_photo_success': 'Đã lưu ảnh vào Thư viện ảnh!',
+      'media_download_video_success': 'Đã lưu video vào Thư viện ảnh!',
+      'media_download_permission_denied': 'Vui lòng cấp quyền truy cập Thư viện ảnh để lưu.',
+      'media_download_error': 'Không thể lưu ảnh/video. Vui lòng thử lại.',
 
       // Chat
       'chat_title': 'Tin nhắn',
@@ -158,7 +163,7 @@ class AppStrings {
       'live_stop_title': 'Dừng chia sẻ vị trí?',
       'live_stop_body': 'Vị trí của bạn sẽ bị xóa khỏi bản đồ bạn bè ngay lập tức.',
       'live_stop_btn': 'Dừng chia sẻ',
-      'live_active_prefix': '🔴 Đang phát vị trí',
+      'live_active_prefix': 'Đang phát vị trí',
       'live_stopped': 'Đã dừng chia sẻ vị trí trực tiếp.',
       'live_started': 'Đã bắt đầu chia sẻ vị trí trực tiếp!',
       'live_section_title': 'Chia sẻ trực tiếp theo thời gian',
@@ -186,11 +191,11 @@ class AppStrings {
       'login_toggle_link_in': 'Sign Up',
 
       // Profile Creation
-      'profile_create_title': 'Create Profile 🎨',
+      'profile_create_title': 'Create Profile',
       'profile_create_sub': 'Let your friends know who you are!',
       'profile_display_name': 'Display Name',
       'profile_username': 'Username (@username)',
-      'profile_save_continue': 'Save & Continue 🚀',
+      'profile_save_continue': 'Save & Continue',
 
       // Home & Camera
       'home_video_badge': 'VIDEO',
@@ -216,10 +221,15 @@ class AppStrings {
       'inbox_empty_sub': 'When friends send photos, they will appear here!',
 
       // Viewer & Reactions
-      'photo_selfie_react': '📸 Selfie',
-      'photo_text_react': '💬 Message',
+      'photo_selfie_react': 'Selfie',
+      'photo_text_react': 'Message',
       'photo_send_reaction': 'Send reaction',
       'photo_react_success': 'Reaction sent successfully!',
+      'media_download_btn': 'Download',
+      'media_download_photo_success': 'Photo saved to Photos library!',
+      'media_download_video_success': 'Video saved to Photos library!',
+      'media_download_permission_denied': 'Please grant Photos permission to save media.',
+      'media_download_error': 'Could not save media. Please try again.',
 
       // Chat
       'chat_title': 'Messages',
@@ -323,7 +333,7 @@ class AppStrings {
       'live_stop_title': 'Stop sharing location?',
       'live_stop_body': 'Your location will be immediately removed from your friends\' map.',
       'live_stop_btn': 'Stop Sharing',
-      'live_active_prefix': '🔴 Location live',
+      'live_active_prefix': 'Location live',
       'live_stopped': 'Live location sharing stopped.',
       'live_started': 'Live location sharing started!',
       'live_section_title': 'Timed Live Sharing',

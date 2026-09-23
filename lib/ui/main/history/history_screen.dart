@@ -10,6 +10,7 @@ import '../../../core/utils/haptic_helper.dart';
 import '../../../models/photo_model.dart';
 import '../../../providers/feed_provider.dart';
 import '../../../providers/settings_provider.dart';
+import '../../../services/media_downloader_service.dart';
 import '../../common/media_thumbnail.dart';
 import '../viewer/photo_viewer_screen.dart';
 
@@ -108,6 +109,7 @@ class HistoryScreen extends ConsumerWidget {
                             ),
                           );
                         },
+                        onLongPress: () => _showPhotoActions(context, ref, photo),
                         child: Container(
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(AppDimens.radiusLg),
@@ -176,6 +178,145 @@ class HistoryScreen extends ConsumerWidget {
           child: CircularProgressIndicator(color: AppColors.primary),
         ),
         error: (err, stack) => Center(child: Text('Lỗi: $err')),
+      ),
+    );
+  }
+
+  void _showPhotoActions(BuildContext context, WidgetRef ref, PhotoModel photo) {
+    HapticHelper.medium();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final lang = ref.read(settingsProvider).language;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppDimens.radius2Xl)),
+      ),
+      builder: (sheetCtx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white24 : AppColors.lightBorder,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(LucideIcons.arrowDownToLine, color: AppColors.primary),
+                title: Text(
+                  photo.isVideo ? 'Tải video về máy' : 'Tải ảnh về máy',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text('Lưu vào Thư viện ảnh của điện thoại'),
+                onTap: () async {
+                  Navigator.pop(sheetCtx);
+                  HapticHelper.light();
+                  final url = photo.isVideo
+                      ? (photo.videoUrl ?? photo.imageUrl)
+                      : photo.imageUrl;
+                  final success = await MediaDownloaderService.saveRemoteMedia(
+                    url: url,
+                    isVideo: photo.isVideo,
+                  );
+                  if (context.mounted) {
+                    if (success) {
+                      HapticHelper.success();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Row(
+                            children: [
+                              const Icon(
+                                LucideIcons.checkCircle2,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                photo.isVideo
+                                    ? AppStrings.tr('media_download_video_success', lang: lang)
+                                    : AppStrings.tr('media_download_photo_success', lang: lang),
+                              ),
+                            ],
+                          ),
+                          backgroundColor: AppColors.success,
+                          duration: const Duration(seconds: 3),
+                        ),
+                      );
+                    } else {
+                      HapticHelper.heavy();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            AppStrings.tr('media_download_permission_denied', lang: lang),
+                          ),
+                          backgroundColor: AppColors.error,
+                        ),
+                      );
+                    }
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(LucideIcons.maximize2),
+                title: const Text('Xem toàn màn hình'),
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => PhotoViewerScreen(photo: photo),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(LucideIcons.trash2, color: AppColors.error),
+                title: const Text(
+                  'Xóa khoảnh khắc này',
+                  style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600),
+                ),
+                onTap: () async {
+                  Navigator.pop(sheetCtx);
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Xóa khoảnh khắc?'),
+                      content: const Text(
+                        'Khoảnh khắc này sẽ bị xóa khỏi lịch sử của bạn vĩnh viễn.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Hủy'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text(
+                            'Xóa',
+                            style: TextStyle(
+                              color: AppColors.error,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirm == true) {
+                    await ref.read(photoServiceProvider).deletePhoto(photo.id);
+                    HapticHelper.success();
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

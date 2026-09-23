@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_dimens.dart';
@@ -215,6 +216,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
           _myPosition = LatLng(lastPos.latitude, lastPos.longitude);
           _myAccuracy = lastPos.accuracy;
         });
+        _cacheOwnPosition(lastPos.latitude, lastPos.longitude);
         _centerOnMeOnce();
       }
 
@@ -230,6 +232,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
           _myPosition = LatLng(currentPos.latitude, currentPos.longitude);
           _myAccuracy = currentPos.accuracy;
         });
+        _cacheOwnPosition(currentPos.latitude, currentPos.longitude);
         _centerOnMeOnce();
       }
 
@@ -256,9 +259,17 @@ class _MapScreenState extends ConsumerState<MapScreen>
             _myPosition = LatLng(pos.latitude, pos.longitude);
             _myAccuracy = pos.accuracy;
           });
+          _cacheOwnPosition(pos.latitude, pos.longitude);
         }
       });
     } catch (_) {}
+  }
+
+  void _cacheOwnPosition(double lat, double lng) {
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.setDouble('last_own_lat', lat);
+      prefs.setDouble('last_own_lng', lng);
+    }).catchError((_) {});
   }
 
   void _centerOnMeOnce() {

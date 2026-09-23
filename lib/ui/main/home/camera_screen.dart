@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:ui' as ui;
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -870,8 +869,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     final unreadRequests = ref.watch(friendRequestsProvider).value?.length ?? 0;
     final unreadNotifications = ref.watch(unreadNotificationsCountProvider);
     final bottomInset = MediaQuery.of(context).padding.bottom;
-    final navBarClearance = 80.0 + bottomInset + 16.0;
+    final navBarClearance = 74.0 + bottomInset;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hasActiveFilter = _selectedFilter.type != BeautyFilterType.normal;
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.black : AppColors.lightBackground,
@@ -1253,7 +1253,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                                       !_isFlippingCamera)
                                     Positioned.fill(
                                       child: BackdropFilter(
-                                        filter: ImageFilter.blur(
+                                         filter: ui.ImageFilter.blur(
                                           sigmaX: 12,
                                           sigmaY: 12,
                                         ),
@@ -1402,8 +1402,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                                       ),
                                     ),
 
-                                  // 2.5 Dynamic Video Recording HUD: Shrinking Laser Progress Line & Island Countdown
-                                  if (_isRecording) _buildRecordingHUD(),
+                                    // 2.5 Dynamic Video Recording HUD: Shrinking Laser Progress Line & Island Countdown
+                                    if (_isRecording) _buildRecordingHUD(),
                                 ],
                               ),
                             ),
@@ -1414,12 +1414,17 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                   ),
                 ),
 
-                const SizedBox(height: 10),
+                const SizedBox(height: 6),
 
                 // 3. Multi-Category Filter Carousel & Beauty Controls
                 if (!_isRecording) _buildFilterAndBeautyBar(isDark),
 
-                const SizedBox(height: 10),
+                const SizedBox(height: 6),
+
+                // Intensity Slider right above capture button (fixed height avoids any viewfinder resizing)
+                if (!_isRecording) _buildIntensitySlider(isDark, hasActiveFilter),
+
+                const SizedBox(height: 6),
 
                 // 4. Bottom Shutter & Controls (positioned above bottom navigation bar)
                 Padding(
@@ -1600,8 +1605,105 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     );
   }
 
+  Widget _buildIntensitySlider(bool isDark, bool hasActiveFilter) {
+    return SizedBox(
+      height: 36,
+      child: AnimatedOpacity(
+        opacity: hasActiveFilter && !_isRecording ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        child: IgnorePointer(
+          ignoring: !hasActiveFilter || _isRecording,
+          child: Center(
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 270),
+              margin: const EdgeInsets.symmetric(horizontal: 24),
+              child: FrostedContainer(
+                borderRadius: AppDimens.radiusFull,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 2,
+                ),
+                backgroundColor: isDark
+                    ? const Color(0xCC1E0D26)
+                    : AppColors.lightSurface.withValues(alpha: 0.95),
+                border: Border.all(
+                  color: isDark ? Colors.white24 : AppColors.lightBorder,
+                  width: 1,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      LucideIcons.slidersHorizontal,
+                      size: 13,
+                      color: isDark
+                          ? Colors.white70
+                          : AppColors.lightTextSecondary,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      'Cường độ',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: isDark
+                            ? Colors.white70
+                            : AppColors.lightTextSecondary,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          trackHeight: 2.5,
+                          thumbShape: const RoundSliderThumbShape(
+                            enabledThumbRadius: 6,
+                          ),
+                          overlayShape: const RoundSliderOverlayShape(
+                            overlayRadius: 12,
+                          ),
+                          activeTrackColor: AppColors.primary,
+                          inactiveTrackColor: isDark
+                              ? Colors.white24
+                              : AppColors.lightBorder,
+                          thumbColor: AppColors.primary,
+                        ),
+                        child: Slider(
+                          value: _filterIntensity,
+                          min: 0.0,
+                          max: 1.0,
+                          onChanged: (val) {
+                            setState(() => _filterIntensity = val);
+                            _saveEffectsSoon();
+                          },
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 32,
+                      child: Text(
+                        '${(_filterIntensity * 100).round()}%',
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: isDark
+                              ? Colors.white
+                              : AppColors.lightTextPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildFilterAndBeautyBar(bool isDark) {
-    final hasActiveFilter = _selectedFilter.type != BeautyFilterType.normal;
     final categoryFilters = [
       if (_selectedCategory == FilterCategory.natural) BeautyFilter.all.first,
       ...BeautyFilter.inCategory(_selectedCategory),
@@ -1610,65 +1712,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // A. Filter Intensity Slider (Only when a filter is active)
-        if (hasActiveFilter)
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppDimens.spaceLg,
-              vertical: 2,
-            ),
-            child: Row(
-              children: [
-                Text(
-                  'Cường độ',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: isDark
-                        ? Colors.white70
-                        : AppColors.lightTextSecondary,
-                  ),
-                ),
-                Expanded(
-                  child: SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      trackHeight: 2.5,
-                      thumbShape: const RoundSliderThumbShape(
-                        enabledThumbRadius: 6,
-                      ),
-                      overlayShape: const RoundSliderOverlayShape(
-                        overlayRadius: 12,
-                      ),
-                      activeTrackColor: AppColors.primary,
-                      inactiveTrackColor: isDark
-                          ? Colors.white24
-                          : AppColors.lightBorder,
-                      thumbColor: AppColors.primary,
-                    ),
-                    child: Slider(
-                      value: _filterIntensity,
-                      min: 0.0,
-                      max: 1.0,
-                      onChanged: (val) {
-                        setState(() => _filterIntensity = val);
-                        _saveEffectsSoon();
-                      },
-                    ),
-                  ),
-                ),
-                Text(
-                  '${(_filterIntensity * 100).round()}%',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white : AppColors.lightTextPrimary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-        // B. Filter Carousel for current category
+        // A. Filter Carousel for current category
         SizedBox(
           height: 38,
           child: ListView.separated(
@@ -1679,6 +1723,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             itemBuilder: (context, index) {
               final filter = categoryFilters[index];
               final isSelected = filter.type == _selectedFilter.type;
+              final swatchColors = filter.thumbnailColors.length >= 2
+                  ? filter.thumbnailColors
+                  : [filter.thumbnailColors.first, filter.thumbnailColors.first];
 
               return GestureDetector(
                 onTap: () => _selectFilter(filter),
@@ -1702,6 +1749,21 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      if (!filter.isOriginal) ...[
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(colors: swatchColors),
+                            border: Border.all(
+                              color: isSelected ? Colors.white : Colors.white54,
+                              width: 0.8,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                      ],
                       Text(filter.icon, style: const TextStyle(fontSize: 12)),
                       const SizedBox(width: 4),
                       Text(

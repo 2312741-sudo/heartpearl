@@ -10,6 +10,7 @@ import '../../providers/feed_provider.dart';
 import '../../providers/location_provider.dart';
 import '../common/app_badge.dart';
 import '../common/frosted_container.dart';
+import '../common/in_app_message_overlay.dart';
 import 'history/history_screen.dart';
 import 'home/camera_screen.dart';
 import 'inbox/inbox_screen.dart';
@@ -28,6 +29,8 @@ class _MainScaffoldState extends ConsumerState<MainScaffold>
   int _currentIndex = 0;
   int _cameraTrigger = 0;
   StreamSubscription<Uri?>? _widgetSub;
+  DateTime? _lastWidgetUriTime;
+  String? _lastWidgetUriStr;
 
   @override
   void initState() {
@@ -47,7 +50,36 @@ class _MainScaffoldState extends ConsumerState<MainScaffold>
     } catch (_) {}
   }
 
+  @override
+  Future<bool> didPushRouteInformation(RouteInformation routeInformation) async {
+    final uri = routeInformation.uri;
+    if (uri.scheme == 'heartpearl' ||
+        uri.host == 'map' ||
+        uri.path.contains('map') ||
+        uri.host == 'camera' ||
+        uri.path.contains('camera')) {
+      _handleWidgetUri(uri);
+      return true;
+    }
+    return super.didPushRouteInformation(routeInformation);
+  }
+
   void _handleWidgetUri(Uri uri) {
+    final now = DateTime.now();
+    final uriStr = uri.toString();
+    if (_lastWidgetUriTime != null &&
+        now.difference(_lastWidgetUriTime!) < const Duration(milliseconds: 750) &&
+        _lastWidgetUriStr == uriStr) {
+      return;
+    }
+    _lastWidgetUriTime = now;
+    _lastWidgetUriStr = uriStr;
+
+    // Pop any open sheets, dialogs, or subroutes back to root so tabs don't stack
+    try {
+      appNavigatorKey.currentState?.popUntil((route) => route.isFirst);
+    } catch (_) {}
+
     if (uri.host == 'map' || uri.path.contains('map')) {
       if (mounted) {
         setState(() => _currentIndex = 2);

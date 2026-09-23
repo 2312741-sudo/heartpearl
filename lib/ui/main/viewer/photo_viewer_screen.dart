@@ -15,6 +15,7 @@ import '../../../core/l10n/app_strings.dart';
 import '../../../core/utils/date_helper.dart';
 import '../../../core/utils/haptic_helper.dart';
 import '../../../services/content_filter_service.dart';
+import '../../../services/media_downloader_service.dart';
 import '../../../models/photo_model.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/chat_provider.dart';
@@ -126,7 +127,7 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Đã gửi reaction selfie thành công!'),
+            content: Text('Đã gửi reaction selfie thành công!'),
             backgroundColor: AppColors.success,
           ),
         );
@@ -341,7 +342,7 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Đã gửi phản hồi thành công!'),
+            content: Text('Đã gửi phản hồi thành công!'),
             backgroundColor: AppColors.success,
           ),
         );
@@ -376,6 +377,73 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
   String _chatIdFor(String firstUid, String secondUid) {
     final participants = [firstUid, secondUid]..sort();
     return participants.join('_');
+  }
+
+  bool _isDownloading = false;
+
+  Future<void> _handleDownloadMedia() async {
+    if (_isDownloading) return;
+    HapticHelper.light();
+    setState(() => _isDownloading = true);
+    final lang = ref.read(settingsProvider).language;
+
+    final url = widget.photo.isVideo
+        ? (widget.photo.videoUrl ?? widget.photo.imageUrl)
+        : widget.photo.imageUrl;
+
+    try {
+      final success = await MediaDownloaderService.saveRemoteMedia(
+        url: url,
+        isVideo: widget.photo.isVideo,
+      );
+
+      if (!mounted) return;
+      if (success) {
+        HapticHelper.success();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(
+                  LucideIcons.checkCircle2,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  widget.photo.isVideo
+                      ? AppStrings.tr('media_download_video_success', lang: lang)
+                      : AppStrings.tr('media_download_photo_success', lang: lang),
+                ),
+              ],
+            ),
+            backgroundColor: AppColors.success,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      } else {
+        HapticHelper.heavy();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppStrings.tr('media_download_permission_denied', lang: lang),
+            ),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi khi tải: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isDownloading = false);
+    }
   }
 
   Future<void> _handleDeletePhoto() async {
@@ -752,8 +820,32 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
 
                   const Spacer(),
 
+                  // Download / Save Media Button
+                  GestureDetector(
+                    onTap: _isDownloading ? null : _handleDownloadMedia,
+                    child: FrostedContainer(
+                      borderRadius: AppDimens.radiusFull,
+                      padding: const EdgeInsets.all(10),
+                      child: _isDownloading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(
+                              LucideIcons.arrowDownToLine,
+                              color: AppColors.white,
+                              size: 20,
+                            ),
+                    ),
+                  ),
+
                   // Safety & Moderation Menu (Flag / Block) for received photos (Apple Guideline 1.2)
-                  if (!isMine)
+                  if (!isMine) ...[
+                    const SizedBox(width: AppDimens.spaceSm),
                     GestureDetector(
                       onTap: () => _showSafetyMenu(senderName),
                       child: FrostedContainer(
@@ -766,6 +858,7 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
                         ),
                       ),
                     ),
+                  ],
                 ],
               ),
             ),
@@ -874,31 +967,69 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
                 ),
                 child: isMine
                     ? Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
+                          // 1. Download Media Button
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: _isDownloading ? null : _handleDownloadMedia,
+                              child: FrostedContainer(
+                                height: 50,
+                                borderRadius: AppDimens.radiusFull,
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    _isDownloading
+                                        ? const SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                        : const Icon(
+                                            LucideIcons.arrowDownToLine,
+                                            color: AppColors.white,
+                                            size: 18,
+                                          ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      AppStrings.tr('media_download_btn', lang: lang),
+                                      style: const TextStyle(
+                                        color: AppColors.white,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppDimens.spaceMd),
+                          // 2. Delete Photo Button
                           GestureDetector(
                             onTap: _handleDeletePhoto,
                             child: FrostedContainer(
-                              height: 52,
+                              height: 50,
                               borderRadius: AppDimens.radiusFull,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 18),
                               child: const Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
                                     LucideIcons.trash2,
                                     color: AppColors.error,
-                                    size: 20,
+                                    size: 18,
                                   ),
-                                  SizedBox(width: 8),
+                                  SizedBox(width: 6),
                                   Text(
-                                    'Xóa khoảnh khắc này',
+                                    'Xóa',
                                     style: TextStyle(
                                       color: AppColors.error,
                                       fontWeight: FontWeight.w600,
-                                      fontSize: 15,
+                                      fontSize: 14,
                                     ),
                                   ),
                                 ],

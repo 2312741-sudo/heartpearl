@@ -8,17 +8,17 @@ import '../../../core/constants/app_dimens.dart';
 import '../../../core/constants/app_typography.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/utils/haptic_helper.dart';
+import '../../../core/utils/url_launcher_helper.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/feed_provider.dart';
 import '../../../providers/settings_provider.dart';
 
 import 'package:firebase_auth/firebase_auth.dart';
 
-import '../../common/eula_modal.dart';
 import '../../common/user_avatar.dart';
-import 'blocked_users_screen.dart';
+import '../../../core/constants/app_info.dart';
 import 'edit_profile_sheet.dart';
-import 'location_privacy_screen.dart';
+import 'privacy_and_app_info_screen.dart';
 import '../friends/friends_screen.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -491,180 +491,16 @@ class ProfileScreen extends ConsumerWidget {
                           height: 1,
                         ),
 
-                        ListTile(
-                          leading: const Icon(
-                            LucideIcons.mapPinCheck,
-                            color: AppColors.primaryLight,
-                          ),
-                          title: Text(
-                            AppStrings.tr('location_privacy_title', lang: lang),
-                            style: AppTypography.bodyBold(
-                              color: isDark
-                                  ? AppColors.darkTextPrimary
-                                  : AppColors.lightTextPrimary,
-                            ),
-                          ),
-                          subtitle: Text(
-                            AppStrings.tr('location_ghost_mode', lang: lang),
-                            style: AppTypography.caption(
-                              color: isDark
-                                  ? AppColors.darkTextMuted
-                                  : AppColors.lightTextMuted,
-                            ),
-                          ),
-                          trailing: const Icon(
-                            LucideIcons.chevronRight,
-                            size: 18,
-                          ),
-                          onTap: () {
-                            HapticHelper.light();
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const LocationPrivacyScreen(),
-                              ),
-                            );
-                          },
-                        ),
-
-                        Divider(
-                          color: isDark
-                              ? AppColors.darkBorder
-                              : AppColors.lightBorder,
-                          height: 1,
-                        ),
-
-                        ListTile(
-                          leading: const Icon(
-                            LucideIcons.userRoundX,
-                            color: AppColors.primaryLight,
-                          ),
-                          title: Text(
-                            AppStrings.tr('safety_manage_blocks', lang: lang),
-                            style: AppTypography.bodyBold(
-                              color: isDark
-                                  ? AppColors.darkTextPrimary
-                                  : AppColors.lightTextPrimary,
-                            ),
-                          ),
-                          subtitle: Text(
-                            AppStrings.tr(
-                              'safety_manage_blocks_subtitle',
-                              lang: lang,
-                            ),
-                            style: AppTypography.caption(
-                              color: isDark
-                                  ? AppColors.darkTextMuted
-                                  : AppColors.lightTextMuted,
-                            ),
-                          ),
-                          trailing: const Icon(
-                            LucideIcons.chevronRight,
-                            size: 18,
-                          ),
-                          onTap: () {
-                            HapticHelper.light();
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const BlockedUsersScreen(),
-                              ),
-                            );
-                          },
-                        ),
-
-                        Divider(
-                          color: isDark
-                              ? AppColors.darkBorder
-                              : AppColors.lightBorder,
-                          height: 1,
-                        ),
-
-                        // Privacy Policy
+                        // Consolidated: Quyền riêng tư & Thông tin ứng dụng
                         ListTile(
                           leading: const Icon(
                             LucideIcons.shieldCheck,
                             color: AppColors.primaryLight,
                           ),
                           title: Text(
-                            'Quyền riêng tư & Bảo mật',
-                            style: AppTypography.bodyBold(
-                              color: isDark
-                                  ? AppColors.darkTextPrimary
-                                  : AppColors.lightTextPrimary,
-                            ),
-                          ),
-                          subtitle: Text(
-                            'Tiêu chuẩn bảo mật Apple & HeartPearl',
-                            style: AppTypography.caption(
-                              color: isDark
-                                  ? AppColors.darkTextMuted
-                                  : AppColors.lightTextMuted,
-                            ),
-                          ),
-                          trailing: const Icon(
-                            LucideIcons.chevronRight,
-                            size: 18,
-                          ),
-                          onTap: () => _showPrivacyPolicyDialog(
-                            context,
-                            ref,
-                            lang,
-                            isDark,
-                          ),
-                        ),
-
-                        Divider(
-                          color: isDark
-                              ? AppColors.darkBorder
-                              : AppColors.lightBorder,
-                          height: 1,
-                        ),
-
-                        // EULA & Community Standards (Apple Guideline 1.2)
-                        ListTile(
-                          leading: const Icon(
-                            LucideIcons.fileText,
-                            color: AppColors.primaryLight,
-                          ),
-                          title: Text(
-                            AppStrings.tr('profile_terms_eula', lang: lang),
-                            style: AppTypography.bodyBold(
-                              color: isDark
-                                  ? AppColors.darkTextPrimary
-                                  : AppColors.lightTextPrimary,
-                            ),
-                          ),
-                          subtitle: Text(
-                            AppStrings.tr('profile_terms_eula_sub', lang: lang),
-                            style: AppTypography.caption(
-                              color: isDark
-                                  ? AppColors.darkTextMuted
-                                  : AppColors.lightTextMuted,
-                            ),
-                          ),
-                          trailing: const Icon(
-                            LucideIcons.chevronRight,
-                            size: 18,
-                          ),
-                          onTap: () => EulaModal.show(context),
-                        ),
-
-                        Divider(
-                          color: isDark
-                              ? AppColors.darkBorder
-                              : AppColors.lightBorder,
-                          height: 1,
-                        ),
-
-                        // Contact & Support (Apple Guideline 1.2(d))
-                        ListTile(
-                          leading: const Icon(
-                            LucideIcons.headset,
-                            color: AppColors.primaryLight,
-                          ),
-                          title: Text(
                             lang == 'vi'
-                                ? 'Liên hệ & Khiếu nại vi phạm'
-                                : 'Contact & Support',
+                                ? 'Quyền riêng tư & Thông tin ứng dụng'
+                                : 'Privacy & App Information',
                             style: AppTypography.bodyBold(
                               color: isDark
                                   ? AppColors.darkTextPrimary
@@ -673,8 +509,8 @@ class ProfileScreen extends ConsumerWidget {
                           ),
                           subtitle: Text(
                             lang == 'vi'
-                                ? 'Phản hồi trong 24h • contact@heartpearl.app'
-                                : '24h response • contact@heartpearl.app',
+                                ? 'Vị trí, Chặn, Quyền hệ thống, Điều khoản & v1.0.2'
+                                : 'Location, Blocks, System Permissions & v1.0.2',
                             style: AppTypography.caption(
                               color: isDark
                                   ? AppColors.darkTextMuted
@@ -685,7 +521,14 @@ class ProfileScreen extends ConsumerWidget {
                             LucideIcons.chevronRight,
                             size: 18,
                           ),
-                          onTap: () => _showContactSupportDialog(context, lang, isDark),
+                          onTap: () {
+                            HapticHelper.light();
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const PrivacyAndAppInfoScreen(),
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -805,11 +648,21 @@ class ProfileScreen extends ConsumerWidget {
                   const SizedBox(height: AppDimens.space2Xl),
 
                   Text(
-                    'HeartPearl v2.0 • Flutter Edition',
+                    '${AppInfo.appName} v${AppInfo.appVersion} (Build ${AppInfo.buildNumber})',
                     style: AppTypography.caption(
                       color: isDark
                           ? AppColors.darkTextMuted
                           : AppColors.lightTextMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    AppInfo.copyright,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark
+                          ? AppColors.darkTextMuted.withValues(alpha: 0.6)
+                          : AppColors.lightTextMuted.withValues(alpha: 0.6),
                     ),
                   ),
 
@@ -913,12 +766,47 @@ class ProfileScreen extends ConsumerWidget {
                     const SizedBox(height: 10),
                     Text(
                       isVi
-                          ? 'Hoặc yêu cầu xóa tài khoản trực tuyến tại:\nhttps://tamchau-865f3.web.app/delete-account.html'
-                          : 'Or request online deletion at:\nhttps://tamchau-865f3.web.app/delete-account.html',
-                      style: const TextStyle(
+                          ? 'Hoặc yêu cầu xóa tài khoản trực tuyến tại:'
+                          : 'Or request online deletion at:',
+                      style: TextStyle(
                         fontSize: 12,
-                        color: AppColors.primaryLight,
+                        color: isDark
+                            ? AppColors.darkTextSecondary
+                            : AppColors.lightTextSecondary,
                         height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    InkWell(
+                      onTap: () {
+                        HapticHelper.light();
+                        UrlLauncherHelper.openDeleteAccount();
+                      },
+                      borderRadius: BorderRadius.circular(6),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 2),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                UrlLauncherHelper.deleteAccountUrl,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.primaryLight,
+                                  decoration: TextDecoration.underline,
+                                  decorationColor: AppColors.primaryLight,
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: 4),
+                            Icon(
+                              LucideIcons.externalLink,
+                              size: 13,
+                              color: AppColors.primaryLight,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     if (errorText != null) ...[
@@ -1051,255 +939,6 @@ class ProfileScreen extends ConsumerWidget {
             child: Text(
               text,
               style: const TextStyle(fontSize: 13, height: 1.3),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showPrivacyPolicyDialog(
-    BuildContext context,
-    WidgetRef ref,
-    String lang,
-    bool isDark,
-  ) {
-    HapticHelper.light();
-    final isVi = lang == 'vi';
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark
-            ? AppColors.darkSurface
-            : AppColors.lightSurface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppDimens.radius2Xl),
-          side: BorderSide(
-            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-          ),
-        ),
-        title: Row(
-          children: [
-            const Icon(LucideIcons.shieldCheck, color: AppColors.primaryLight),
-            const SizedBox(width: 10),
-            Text(isVi ? 'Quyền riêng tư & Bảo mật' : 'Privacy & Security'),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                isVi
-                    ? 'HeartPearl cam kết bảo vệ dữ liệu cá nhân theo tiêu chuẩn của Apple App Store:'
-                    : 'HeartPearl protects your personal data adhering to Apple App Store standards:',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                isVi
-                    ? '• Ảnh & Video: Chỉ chia sẻ trực tiếp với bạn bè mà bạn kết nối.'
-                    : '• Photos & Videos: Shared exclusively with approved friends.',
-              ),
-              const SizedBox(height: 6),
-              Text(
-                isVi
-                    ? '• Máy ảnh & Micrô: Chỉ hoạt động khi bạn chủ động chụp ảnh hoặc quay video.'
-                    : '• Camera & Microphone: Accessed only when you actively capture photos or record videos.',
-              ),
-              const SizedBox(height: 6),
-              Text(
-                isVi
-                    ? '• Widget màn hình chính: Cập nhật tự động những khoảnh khắc mới nhất từ bạn bè.'
-                    : '• Home Widgets: Automatically updates with the latest moments from friends.',
-              ),
-              const SizedBox(height: 6),
-              Text(
-                isVi
-                    ? '• Vị trí & Radar: Chỉ chia sẻ vị trí với bạn bè được chọn; bạn có thể bật Ghost mode bất cứ lúc nào.'
-                    : '• Location & Radar: Shared only with selected friends; you can toggle Ghost mode at any time.',
-              ),
-              const SizedBox(height: 6),
-              Text(
-                isVi
-                    ? '• Quyền làm chủ dữ liệu: Bạn có toàn quyền quản lý, xóa khoảnh khắc hoặc xóa vĩnh viễn tài khoản.'
-                    : '• Data Ownership: You have complete control to delete moments or erase your account permanently.',
-              ),
-              const SizedBox(height: 14),
-              Text(
-                isVi
-                    ? 'Trang chính sách trực tuyến:\nhttps://tamchau-865f3.web.app/privacy-policy.html'
-                    : 'Online Privacy Policy:\nhttps://tamchau-865f3.web.app/privacy-policy.html',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.primaryLight,
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                isVi
-                    ? 'Thỏa thuận người dùng (EULA):\nhttps://tamchau-865f3.web.app/eula.html'
-                    : 'End User License Agreement (EULA):\nhttps://tamchau-865f3.web.app/eula.html',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.primaryLight,
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                isVi
-                    ? 'Yêu cầu xóa dữ liệu trực tuyến:\nhttps://tamchau-865f3.web.app/delete-account.html'
-                    : 'Request Online Deletion:\nhttps://tamchau-865f3.web.app/delete-account.html',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.primaryLight,
-                  height: 1.4,
-                ),
-              ),
-
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(isVi ? 'Đóng' : 'Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showContactSupportDialog(
-    BuildContext context,
-    String lang,
-    bool isDark,
-  ) {
-    HapticHelper.light();
-    final isVi = lang == 'vi';
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor:
-            isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppDimens.radius2Xl),
-          side: BorderSide(
-            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-          ),
-        ),
-        title: Row(
-          children: [
-            const Icon(
-              LucideIcons.headset,
-              color: AppColors.primaryLight,
-              size: 22,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              isVi ? 'Liên hệ & Hỗ trợ' : 'Contact & Support',
-              style: AppTypography.h3(
-                color: isDark
-                    ? AppColors.darkTextPrimary
-                    : AppColors.lightTextPrimary,
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              isVi
-                  ? 'Đội ngũ hỗ trợ HeartPearl cam kết tiếp nhận và giải quyết mọi thắc mắc hoặc báo cáo vi phạm trong vòng 24 giờ.'
-                  : 'HeartPearl support team commits to review and resolve inquiries and content violation reports within 24 hours.',
-              style: TextStyle(
-                fontSize: 13,
-                height: 1.45,
-                color: isDark
-                    ? AppColors.darkTextPrimary
-                    : AppColors.lightTextPrimary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            _buildContactInfoTile(
-              icon: LucideIcons.mail,
-              title: isVi ? 'Email hỗ trợ kỹ thuật' : 'Technical Support Email',
-              value: 'contact@heartpearl.app',
-              isDark: isDark,
-            ),
-            const SizedBox(height: 8),
-            _buildContactInfoTile(
-              icon: LucideIcons.globe,
-              title: isVi ? 'Cổng web & Xóa tài khoản' : 'Web Portal & Data Deletion',
-              value: 'https://tamchau-865f3.web.app',
-              isDark: isDark,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(
-              isVi ? 'Đóng' : 'Close',
-              style: const TextStyle(color: AppColors.primaryLight),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildContactInfoTile({
-    required IconData icon,
-    required String title,
-    required String value,
-    required bool isDark,
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: isDark
-            ? AppColors.darkSurfaceLight
-            : AppColors.lightSurfaceLight,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: AppColors.primaryLight),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isDark
-                        ? AppColors.darkTextMuted
-                        : AppColors.lightTextMuted,
-                  ),
-                ),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.bold,
-                    color: isDark
-                        ? AppColors.darkTextPrimary
-                        : AppColors.lightTextPrimary,
-                  ),
-                ),
-              ],
             ),
           ),
         ],

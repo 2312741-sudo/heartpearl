@@ -19,6 +19,7 @@ import '../../../providers/friends_provider.dart';
 import '../../../providers/settings_provider.dart';
 import '../../../services/camera_effects_service.dart';
 import '../../../services/content_filter_service.dart';
+import '../../../services/media_downloader_service.dart';
 import '../../common/camera_effect_layer.dart';
 import '../../common/frosted_container.dart';
 import '../../common/gradient_button.dart';
@@ -54,6 +55,71 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
   bool _isUploading = false;
   double _uploadProgress = 0.0;
   bool _showFriendPicker = false;
+  bool _isSaving = false;
+
+  Future<void> _handleSaveMedia() async {
+    if (_isSaving) return;
+    HapticHelper.light();
+    setState(() => _isSaving = true);
+    final lang = ref.read(settingsProvider).language;
+
+    try {
+      final success = await MediaDownloaderService.saveCapturedMedia(
+        filePath: widget.filePath,
+        isVideo: widget.isVideo,
+        filter: widget.filter,
+        filterIntensity: widget.filterIntensity,
+        beauty: widget.beauty,
+      );
+
+      if (!mounted) return;
+      if (success) {
+        HapticHelper.success();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(
+                  LucideIcons.checkCircle2,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  widget.isVideo
+                      ? AppStrings.tr('media_download_video_success', lang: lang)
+                      : AppStrings.tr('media_download_photo_success', lang: lang),
+                ),
+              ],
+            ),
+            backgroundColor: AppColors.success,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      } else {
+        HapticHelper.heavy();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppStrings.tr('media_download_permission_denied', lang: lang),
+            ),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi khi lưu ảnh: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
 
   @override
   void initState() {
@@ -298,7 +364,7 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // 1. Top Cancel Button & Video Badge
+            // 1. Top Cancel Button, Video Badge & Download Button
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: AppDimens.spaceLg,
@@ -333,44 +399,85 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                       ),
                     ),
                   ),
-                  if (widget.isVideo)
-                    FrostedContainer(
-                      borderRadius: AppDimens.radiusFull,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      backgroundColor: isDark
-                          ? const Color(0x331E0D26)
-                          : AppColors.lightSurface.withValues(alpha: 0.9),
-                      border: Border.all(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.12)
-                            : AppColors.lightBorder.withValues(alpha: 0.6),
-                        width: 1,
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            LucideIcons.play,
+
+                  Row(
+                    children: [
+                      if (widget.isVideo) ...[
+                        FrostedContainer(
+                          borderRadius: AppDimens.radiusFull,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          backgroundColor: isDark
+                              ? const Color(0x331E0D26)
+                              : AppColors.lightSurface.withValues(alpha: 0.9),
+                          border: Border.all(
                             color: isDark
-                                ? AppColors.white
-                                : AppColors.lightTextPrimary,
-                            size: 14,
+                                ? Colors.white.withValues(alpha: 0.12)
+                                : AppColors.lightBorder.withValues(alpha: 0.6),
+                            width: 1,
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            AppStrings.tr('home_video_badge', lang: lang),
-                            style: AppTypography.bold.copyWith(
-                              fontSize: 12,
-                              color: isDark
-                                  ? AppColors.white
-                                  : AppColors.lightTextPrimary,
-                            ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                LucideIcons.play,
+                                color: isDark
+                                    ? AppColors.white
+                                    : AppColors.lightTextPrimary,
+                                size: 14,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                AppStrings.tr('home_video_badge', lang: lang),
+                                style: AppTypography.bold.copyWith(
+                                  fontSize: 12,
+                                  color: isDark
+                                      ? AppColors.white
+                                      : AppColors.lightTextPrimary,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
+                        const SizedBox(width: AppDimens.spaceSm),
+                      ],
+
+                      // Download / Save Media to Gallery
+                      GestureDetector(
+                        onTap: _isSaving ? null : _handleSaveMedia,
+                        child: FrostedContainer(
+                          borderRadius: AppDimens.radiusFull,
+                          padding: const EdgeInsets.all(10),
+                          backgroundColor: isDark
+                              ? const Color(0x331E0D26)
+                              : AppColors.lightSurface.withValues(alpha: 0.9),
+                          border: Border.all(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.12)
+                                : AppColors.lightBorder.withValues(alpha: 0.6),
+                            width: 1,
+                          ),
+                          child: _isSaving
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: AppColors.primary,
+                                  ),
+                                )
+                              : Icon(
+                                  LucideIcons.arrowDownToLine,
+                                  color: isDark
+                                      ? AppColors.white
+                                      : AppColors.lightTextPrimary,
+                                  size: 22,
+                                ),
+                        ),
                       ),
-                    ),
+                    ],
+                  ),
                 ],
               ),
             ),

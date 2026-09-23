@@ -2,6 +2,7 @@ import Flutter
 import UIKit
 import AVFoundation
 import WidgetKit
+import UserNotifications
 #if canImport(GoogleMaps)
 import GoogleMaps
 #endif
@@ -11,6 +12,15 @@ import workmanager_apple
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+  override func applicationDidBecomeActive(_ application: UIApplication) {
+    super.applicationDidBecomeActive(application)
+    // Clear app icon badge number when user opens or returns to the app
+    if #available(iOS 16.0, *) {
+      UNUserNotificationCenter.current().setBadgeCount(0)
+    } else {
+      application.applicationIconBadgeNumber = 0
+    }
+  }
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -148,6 +158,33 @@ import workmanager_apple
               result(videoPath)
             }
           }
+        }
+      } else {
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
+    // 3. Badge Channel (Reset or set app icon badge number)
+    let badgeChannel = FlutterMethodChannel(name: "com.heartpearl.app/badge", binaryMessenger: messenger)
+    badgeChannel.setMethodCallHandler { (call, result) in
+      if call.method == "clearBadge" {
+        if #available(iOS 16.0, *) {
+          UNUserNotificationCenter.current().setBadgeCount(0) { _ in
+            result(true)
+          }
+        } else {
+          UIApplication.shared.applicationIconBadgeNumber = 0
+          result(true)
+        }
+      } else if call.method == "setBadgeCount" {
+        let count = (call.arguments as? [String: Any])?["count"] as? Int ?? 0
+        if #available(iOS 16.0, *) {
+          UNUserNotificationCenter.current().setBadgeCount(count) { _ in
+            result(true)
+          }
+        } else {
+          UIApplication.shared.applicationIconBadgeNumber = count
+          result(true)
         }
       } else {
         result(FlutterMethodNotImplemented)

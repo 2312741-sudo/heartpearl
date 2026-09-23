@@ -92,7 +92,7 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Đã gửi lời mời kết bạn!'),
+            content: Text('Đã gửi lời mời kết bạn!'),
             backgroundColor: AppColors.success,
           ),
         );

@@ -115,8 +115,11 @@ class CameraEffectsService {
   static List<double> previewBeautyMatrix(BeautySettings settings) {
     if (!settings.hasEffect) return BeautyFilter.identityMatrix;
     final overall = settings.overall;
-    final brightness = settings.brightness * overall * 8;
-    final saturation = 1 + settings.vitality * overall * .12;
+    // brightness offset on ColorMatrix is in [-255, 255] range;
+    // multiply by 14 to make the effect clearly visible on preview.
+    final brightness = settings.brightness * overall * 14;
+    // Saturation boost: vitality drives color richness.
+    final saturation = 1 + settings.vitality * overall * .22;
     final inverse = 1 - saturation;
     const lr = .213;
     const lg = .715;
@@ -219,30 +222,30 @@ String? _renderPhoto(Map<String, dynamic> request) {
         final mask = skinMask.getPixel(x, y).r.toDouble() / 255;
         if (mask > .03) {
           final soft = softened.getPixel(x, y);
-          final textureBlend = ((smoothing * .28) + (blemish * .18)) * mask;
+          final textureBlend = ((smoothing * .45) + (blemish * .25)) * mask;
           red += (soft.r.toDouble() - red) * textureBlend;
           green += (soft.g.toDouble() - green) * textureBlend;
           blue += (soft.b.toDouble() - blue) * textureBlend;
 
-          final toneBlend = tone * .16 * mask;
+          final toneBlend = tone * .25 * mask;
           red += (soft.r.toDouble() - red) * toneBlend;
           green += (soft.g.toDouble() - green) * toneBlend;
           blue += (soft.b.toDouble() - blue) * toneBlend;
 
           final luminance = .213 * red + .715 * green + .072 * blue;
-          final lift = brighten * 9 * mask;
+          final lift = brighten * 20 * mask;
           red += lift;
           green += lift;
           blue += lift;
-          final vitalityAmount = vitality * .16 * mask;
+          final vitalityAmount = vitality * .28 * mask;
           red = luminance + (red - luminance) * (1 + vitalityAmount);
           green = luminance + (green - luminance) * (1 + vitalityAmount);
           blue = luminance + (blue - luminance) * (1 + vitalityAmount);
           if (luminance > 185) {
             final reduction = highlights * mask * (luminance - 185) / 70;
-            red -= reduction * 10;
-            green -= reduction * 10;
-            blue -= reduction * 10;
+            red -= reduction * 14;
+            green -= reduction * 14;
+            blue -= reduction * 14;
           }
         }
       }

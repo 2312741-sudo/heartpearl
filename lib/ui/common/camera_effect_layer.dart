@@ -41,8 +41,10 @@ class CameraEffectLayer extends StatelessWidget {
       );
     }
 
+    // Skin-smoothing: map overall*smoothing → subtle blur opacity.
+    // sigma=2.8 is perceptible but not cartoonish. Clamp opacity to 0.18 max.
     final smoothing = beauty.enabled
-        ? (beauty.smoothing * beauty.overall * 0.12).clamp(0.0, 0.10)
+        ? (beauty.smoothing * beauty.overall * 0.30).clamp(0.0, 0.18)
         : 0.0;
     final overlay = filter.overlayAt(filterIntensity);
     return Stack(
@@ -54,7 +56,7 @@ class CameraEffectLayer extends StatelessWidget {
             child: Opacity(
               opacity: smoothing,
               child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 1.2, sigmaY: 1.2),
+                filter: ImageFilter.blur(sigmaX: 2.8, sigmaY: 2.8),
                 child: const SizedBox.expand(),
               ),
             ),

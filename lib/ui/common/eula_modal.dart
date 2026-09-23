@@ -7,6 +7,7 @@ import '../../core/constants/app_dimens.dart';
 import '../../core/constants/app_typography.dart';
 import '../../core/l10n/app_strings.dart';
 import '../../core/utils/haptic_helper.dart';
+import '../../core/utils/url_launcher_helper.dart';
 import '../../providers/settings_provider.dart';
 
 class EulaModal extends ConsumerWidget {
@@ -224,15 +225,16 @@ class EulaModal extends ConsumerWidget {
                     isDark: isDark,
                   ),
 
-                  // 6. Account Deletion Rights (Apple Guideline 5.1.1(v))
+                  // 5. Account Deletion Rights (Apple Guideline 5.1.1(v))
                   _buildSection(
                     icon: LucideIcons.trash2,
                     title: isVi
                         ? '5. Quyền Xóa Tài khoản & Dữ liệu (Apple Guideline 5.1.1(v))'
                         : '5. Account Deletion Rights (Guideline 5.1.1(v))',
                     body: isVi
-                        ? 'Bạn có quyền xóa vĩnh viễn tài khoản và toàn bộ dữ liệu (ảnh, video, tin nhắn, bạn bè) bất cứ lúc nào trực tiếp trong phần Cài đặt Hồ sơ, hoặc thông qua trang web hỗ trợ:\nhttps://tamchau-865f3.web.app/delete-account.html'
-                        : 'You have full rights to permanently delete your account and all associated data anytime directly in Profile Settings, or via our web portal:\nhttps://tamchau-865f3.web.app/delete-account.html',
+                        ? 'Bạn có quyền xóa vĩnh viễn tài khoản và toàn bộ dữ liệu (ảnh, video, tin nhắn, bạn bè) bất cứ lúc nào trực tiếp trong phần Cài đặt Hồ sơ, hoặc thông qua trang web hỗ trợ:'
+                        : 'You have full rights to permanently delete your account and all associated data anytime directly in Profile Settings, or via our web portal:',
+                    linkUrl: UrlLauncherHelper.deleteAccountUrl,
                     isDark: isDark,
                   ),
 
@@ -264,18 +266,21 @@ class EulaModal extends ConsumerWidget {
                   },
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppDimens.spaceMd,
+                    ),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppDimens.radiusLg),
+                      borderRadius: BorderRadius.circular(
+                        AppDimens.radiusLg,
+                      ),
                     ),
                   ),
                   child: Text(
-                    isVi
-                        ? 'Tôi đã đọc & Đồng ý với EULA'
-                        : 'I have read & Agree to EULA',
+                    isVi ? 'Tôi đồng ý & Tiếp tục' : 'I Agree & Continue',
                     style: const TextStyle(
-                      fontSize: 16,
                       fontWeight: FontWeight.bold,
+                      fontSize: 15,
                     ),
                   ),
                 ),
@@ -292,6 +297,7 @@ class EulaModal extends ConsumerWidget {
     required String title,
     required String body,
     required bool isDark,
+    String? linkUrl,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppDimens.spaceBase),
@@ -319,15 +325,55 @@ class EulaModal extends ConsumerWidget {
           const SizedBox(height: 6),
           Padding(
             padding: const EdgeInsets.only(left: 26),
-            child: Text(
-              body,
-              style: TextStyle(
-                fontSize: 13,
-                color: isDark
-                    ? AppColors.darkTextSecondary
-                    : AppColors.lightTextSecondary,
-                height: 1.45,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  body,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: isDark
+                        ? AppColors.darkTextSecondary
+                        : AppColors.lightTextSecondary,
+                    height: 1.45,
+                  ),
+                ),
+                if (linkUrl != null) ...[
+                  const SizedBox(height: 6),
+                  InkWell(
+                    onTap: () {
+                      HapticHelper.light();
+                      UrlLauncherHelper.openUrl(linkUrl);
+                    },
+                    borderRadius: BorderRadius.circular(6),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              linkUrl,
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                color: AppColors.primaryLight,
+                                decoration: TextDecoration.underline,
+                                decorationColor: AppColors.primaryLight,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(
+                            LucideIcons.externalLink,
+                            size: 13,
+                            color: AppColors.primaryLight,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         ],

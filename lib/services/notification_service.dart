@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import '../models/notification_model.dart';
@@ -22,6 +23,15 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 }
 
 class NotificationService {
+  static const MethodChannel _badgeChannel = MethodChannel('com.heartpearl.app/badge');
+
+  /// Clear the red notification badge on the iOS app icon
+  static Future<void> clearAppBadge() async {
+    try {
+      await _badgeChannel.invokeMethod('clearBadge');
+    } catch (_) {}
+  }
+
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
   final AuthService _authService = AuthService();
@@ -48,11 +58,44 @@ class NotificationService {
         sound: true,
       );
 
-      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      // Automatically clear iOS app icon badge when app is launched
+      await clearAppBadge();
+
+      if (settings.authorizationStatus == AuthorizationStatus.authorized ||
+          settings.authorizationStatus == AuthorizationStatus.provisional) {
+        // On iOS, wait for APNS device token before requesting FCM token
+        // to prevent [firebase_messaging/apns-token-not-set] exception
+        try {
+          final apnsToken = await _fcm.getAPNSToken();
+          debugPrint('[FCM] Initial APNS token: $apnsToken');
+          if (apnsToken == null) {
+            // Wait up to 5 seconds for APNS registration to complete
+            for (int i = 0; i < 5; i++) {
+              await Future.delayed(const Duration(seconds: 1));
+              final retryApns = await _fcm.getAPNSToken();
+              if (retryApns != null) {
+                debugPrint('[FCM] APNS token acquired on retry $i: $retryApns');
+                break;
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('[FCM] Error checking APNS token: $e');
+        }
+
         final token = await _fcm.getToken();
+        debugPrint('[FCM] FCM registration token: $token');
         if (token != null) {
           await _authService.updateFCMToken(userId, token);
         }
+
+        // Listen for token updates (e.g. when APNS arrives after initial launch)
+        _fcm.onTokenRefresh.listen((newToken) async {
+          debugPrint('[FCM] FCM token refreshed: $newToken');
+          await _authService.updateFCMToken(userId, newToken);
+        });
+      } else {
+        debugPrint('[FCM] Notification permission not granted: ${settings.authorizationStatus}');
       }
 
       // Listen for foreground data messages (app open)

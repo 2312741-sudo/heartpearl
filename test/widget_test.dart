@@ -8,6 +8,9 @@ import 'package:heartpearl/core/utils/date_helper.dart';
 import 'package:heartpearl/core/utils/camera_filters.dart';
 import 'package:heartpearl/services/content_filter_service.dart';
 import 'package:heartpearl/services/widget_service.dart';
+import 'package:heartpearl/services/media_downloader_service.dart';
+import 'package:heartpearl/core/utils/url_launcher_helper.dart';
+import 'package:heartpearl/core/constants/app_info.dart';
 
 void main() {
   group('HeartPearl Models & Helpers Tests', () {
@@ -149,8 +152,8 @@ void main() {
     test('BeautySettings serialization and default values', () {
       const settings = BeautySettings();
       expect(settings.enabled, isTrue);
-      expect(settings.overall, 0.34);
-      expect(settings.smoothing, 0.32);
+      expect(settings.overall, 0.52);
+      expect(settings.smoothing, 0.48);
       expect(settings.hasEffect, isTrue);
 
       final map = settings.toMap();
@@ -182,6 +185,37 @@ void main() {
       expect(WidgetService.iOSWidgetName, 'widget');
       expect(WidgetService.locationWidgetUniqueName,
           'com.heartpearl.heartpearl.locationWidgetRefresh');
+    });
+
+    test('MediaDownloaderService album name is correct', () {
+      expect(MediaDownloaderService.albumName, 'HeartPearl');
+    });
+
+    test('UrlLauncherHelper constants and URL validity check', () {
+      expect(UrlLauncherHelper.supportEmail, 'nthanhtam.402@gmail.com');
+      expect(UrlLauncherHelper.privacyPolicyUrl,
+          'https://tamchau-865f3.web.app/privacy-policy.html');
+      expect(UrlLauncherHelper.eulaUrl,
+          'https://tamchau-865f3.web.app/eula.html');
+      expect(UrlLauncherHelper.deleteAccountUrl,
+          'https://tamchau-865f3.web.app/delete-account.html');
+      expect(UrlLauncherHelper.webPortalUrl,
+          'https://tamchau-865f3.web.app');
+
+      expect(Uri.parse(UrlLauncherHelper.privacyPolicyUrl).isAbsolute, isTrue);
+      expect(Uri.parse(UrlLauncherHelper.eulaUrl).isAbsolute, isTrue);
+      expect(Uri.parse(UrlLauncherHelper.deleteAccountUrl).isAbsolute, isTrue);
+      expect(Uri.parse(UrlLauncherHelper.webPortalUrl).isAbsolute, isTrue);
+    });
+
+    test('AppInfo constants are defined and valid', () {
+      expect(AppInfo.appName, 'HeartPearl');
+      expect(AppInfo.appVersion, '1.0.1');
+      expect(AppInfo.buildNumber, '7');
+      expect(AppInfo.fullVersion, '1.0.1 (Build 7)');
+      expect(AppInfo.bundleId, 'com.heartpearl.heartpearl');
+      expect(AppInfo.supportEmail, 'nthanhtam.402@gmail.com');
+      expect(AppInfo.copyright, contains('HeartPearl'));
     });
   });
 }

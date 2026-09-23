@@ -217,7 +217,7 @@ class _SelfieReactionModalState extends State<SelfieReactionModal>
                         ),
                       ),
                       Text(
-                        _capturedPath == null ? '📸 Phản hồi bằng Selfie' : 'Xem lại ảnh Selfie',
+                        _capturedPath == null ? 'Phản hồi bằng Selfie' : 'Xem lại ảnh Selfie',
                         style: AppTypography.h3(color: AppColors.white),
                       ),
                       const SizedBox(width: 40),

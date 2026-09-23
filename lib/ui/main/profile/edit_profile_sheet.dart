@@ -143,7 +143,7 @@ class _EditProfileSheetState extends ConsumerState<EditProfileSheet> {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Đã cập nhật hồ sơ thành công!'),
+            content: Text('Đã cập nhật hồ sơ thành công!'),
             backgroundColor: AppColors.success,
           ),
         );
