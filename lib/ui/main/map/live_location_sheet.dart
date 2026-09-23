@@ -4,6 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_dimens.dart';
+import '../../../core/constants/app_typography.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/utils/haptic_helper.dart';
 import '../../../providers/location_provider.dart';
@@ -20,6 +21,7 @@ class LiveLocationSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final lang = ref.watch(settingsProvider).language;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return SafeArea(
       child: Padding(
@@ -68,18 +70,19 @@ class LiveLocationSheet extends ConsumerWidget {
                     children: [
                       Text(
                         AppStrings.tr('live_share_title', lang: lang),
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
+                        style: AppTypography.h3(
+                          color: isDark
+                              ? AppColors.darkTextPrimary
+                              : AppColors.lightTextPrimary,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         AppStrings.tr('live_share_subtitle', lang: lang),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                          height: 1.3,
+                        style: AppTypography.caption(
+                          color: isDark
+                              ? AppColors.darkTextSecondary
+                              : AppColors.lightTextSecondary,
                         ),
                       ),
                     ],
@@ -131,7 +134,11 @@ class LiveLocationSheet extends ConsumerWidget {
                   Expanded(
                     child: Text(
                       AppStrings.tr('live_mutual_friends_note', lang: lang),
-                      style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                      style: AppTypography.micro(
+                        color: isDark
+                            ? AppColors.darkTextMuted
+                            : AppColors.lightTextMuted,
+                      ),
                     ),
                   ),
                 ],
@@ -243,17 +250,15 @@ class _DurationTile extends ConsumerWidget {
                   children: [
                     Text(
                       duration.label(lang),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                      ),
+                      style: AppTypography.bodyBold(),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       duration.subtitle(lang),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
+                      style: AppTypography.caption(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? AppColors.darkTextSecondary
+                            : AppColors.lightTextSecondary,
                       ),
                     ),
                   ],

@@ -7,15 +7,14 @@ import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_dimens.dart';
 import '../../core/constants/app_typography.dart';
 import '../../core/utils/haptic_helper.dart';
+import '../../core/navigation/app_navigation.dart';
+export '../../core/navigation/app_navigation.dart' show appNavigatorKey;
 import '../../models/chat_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../main/chat/chat_room_screen.dart';
 import 'frosted_container.dart';
 import 'user_avatar.dart';
-
-/// Global navigator key to allow in-app popups to navigate to chat rooms
-final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 
 class _ActiveMessageNotification {
   final String chatId;
@@ -168,15 +167,10 @@ class _InAppMessageOverlayState extends ConsumerState<InAppMessageOverlay>
     HapticHelper.medium();
     _dismiss();
 
-    // Navigate to ChatRoomScreen using the global navigator key
-    appNavigatorKey.currentState?.push(
-      MaterialPageRoute(
-        builder: (context) => ChatRoomScreen(
-          friendId: notif.friendId,
-          friendName: notif.friendName,
-          friendAvatar: notif.friendAvatar.isNotEmpty ? notif.friendAvatar : null,
-        ),
-      ),
+    AppNavigation.navigateToChat(
+      friendId: notif.friendId,
+      friendName: notif.friendName,
+      friendAvatar: notif.friendAvatar.isNotEmpty ? notif.friendAvatar : null,
     );
   }
 
@@ -290,9 +284,8 @@ class _InAppMessageOverlayState extends ConsumerState<InAppMessageOverlay>
                                             const SizedBox(width: 3),
                                             Text(
                                               'Tin nhắn mới',
-                                              style: TextStyle(
+                                              style: AppTypography.micro(
                                                 color: AppColors.primaryLight,
-                                                fontSize: 10,
                                                 fontWeight: FontWeight.bold,
                                               ),
                                             ),

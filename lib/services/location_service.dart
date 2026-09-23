@@ -43,6 +43,7 @@ class LocationService {
   StreamSubscription<Position>? _positionSubscription;
   StreamSubscription<Position>? _liveSubscription;
   Timer? _expiryTimer;
+  Timer? _heartbeatTimer;
   LocationSharingDuration? _currentDuration;
   DateTime? _lastBatteryReadAt;
   int? _cachedBatteryLevel;
@@ -272,6 +273,27 @@ class LocationService {
 
     _statusController.add(LocationTrackingStatus.tracking);
 
+    // Heartbeat: every 60 s, force-write last known position to Firestore so friends
+    // always see a fresh timestamp even when the user is stationary (no distanceFilter
+    // events fire). This also acts as a liveness ping for the live session.
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 60), (_) async {
+      if (_liveSubscription == null) return; // session stopped
+      if (expiresAt != null && DateTime.now().isAfter(expiresAt)) return;
+      try {
+        final pos = await Geolocator.getLastKnownPosition();
+        if (pos != null &&
+            LocationPolicy.isValidFix(
+              lat: pos.latitude,
+              lng: pos.longitude,
+              accuracy: pos.accuracy,
+            )) {
+          final battery = await _readBatteryLevel();
+          await _writeLivePosition(uid, pos, expiresAt, duration, battery);
+        }
+      } catch (_) {}
+    });
+
     // Schedule local expiry timer if session is not unlimited.
     if (expiresAt != null) {
       final remaining = expiresAt.difference(DateTime.now());
@@ -292,6 +314,8 @@ class LocationService {
     _liveSubscription = null;
     _expiryTimer?.cancel();
     _expiryTimer = null;
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
     _currentDuration = null;
     await sub?.cancel();
 
@@ -390,13 +414,16 @@ class LocationService {
 
   LocationSettings _buildLiveSettings() {
     const accuracy = LocationAccuracy.high;
-    const distanceFilter = 20; // metres
+    // 10 m is a good balance: fine-grained enough to show walking, but avoids
+    // excessive writes when the user is truly stationary (heartbeat covers that).
+    const distanceFilter = 10; // metres
 
     if (Platform.isAndroid) {
       return AndroidSettings(
         accuracy: accuracy,
         distanceFilter: distanceFilter,
-        intervalDuration: const Duration(seconds: 30),
+        // 20 s minimum interval between callbacks (even without moving 10 m)
+        intervalDuration: const Duration(seconds: 20),
         foregroundNotificationConfig: const ForegroundNotificationConfig(
           notificationTitle: 'HeartPearl Live',
           notificationText: 'Đang chia sẻ vị trí trực tiếp với bạn bè',
@@ -410,9 +437,11 @@ class LocationService {
       return AppleSettings(
         accuracy: accuracy,
         distanceFilter: distanceFilter,
-        pauseLocationUpdatesAutomatically: true,
-        showBackgroundLocationIndicator: true, // Blue pill when in background
-        allowBackgroundLocationUpdates: false, // No background; foreground only
+        // CRITICAL: false = iOS MUST NOT auto-pause the stream when stationary.
+        // With true, iOS can silently kill the stream → friends see no movement.
+        pauseLocationUpdatesAutomatically: false,
+        showBackgroundLocationIndicator: true, // Blue status bar pill in background
+        allowBackgroundLocationUpdates: false, // Foreground-only (Apple 5.1.2(i))
       );
     }
     return const LocationSettings(

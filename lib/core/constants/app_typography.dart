@@ -58,6 +58,18 @@ class AppTypography {
         color: color,
       );
 
+  static TextStyle captionBold({Color? color}) => semiBold.copyWith(
+        fontSize: 13,
+        color: color,
+      );
+
+  static TextStyle micro({Color? color, FontWeight? fontWeight}) =>
+      (fontWeight != null ? GoogleFonts.inter(fontWeight: fontWeight) : regular)
+          .copyWith(
+        fontSize: 11,
+        color: color,
+      );
+
   static TextStyle button({Color? color}) => bold.copyWith(
         fontSize: 16,
         letterSpacing: 0.3,

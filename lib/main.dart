@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'core/navigation/app_navigation.dart';
 import 'core/theme/app_theme.dart';
 import 'firebase_options.dart';
 import 'providers/auth_provider.dart';
@@ -57,7 +58,7 @@ class HeartPearlApp extends ConsumerWidget {
     final authState = ref.watch(authStateProvider);
 
     return MaterialApp(
-      navigatorKey: appNavigatorKey,
+      navigatorKey: AppNavigation.navigatorKey,
       title: 'HeartPearl',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,

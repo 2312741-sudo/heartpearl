@@ -2,11 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import '../core/navigation/app_navigation.dart';
 import '../models/notification_model.dart';
-import '../ui/common/in_app_message_overlay.dart';
-import '../ui/main/chat/chat_room_screen.dart';
-import '../ui/main/friends/friends_screen.dart';
-import '../ui/main/notifications/notifications_screen.dart';
 import 'auth_service.dart';
 import 'widget_service.dart';
 
@@ -125,39 +122,27 @@ class NotificationService {
     final data = message.data;
     final type = data['type'] as String?;
 
-    if (type == 'chat_message') {
-      final senderId = data['senderId'] as String?;
-      final friendName = (data['friendName'] as String?) ?? 'Bạn bè';
-      final friendAvatar = data['friendAvatar'] as String?;
+    AppNavigation.scheduleNavigation(() {
+      if (type == 'chat_message') {
+        final senderId = data['senderId'] as String?;
+        final friendName = (data['friendName'] as String?) ?? 'Bạn bè';
+        final friendAvatar = data['friendAvatar'] as String?;
 
-      if (senderId != null && senderId.isNotEmpty) {
-        appNavigatorKey.currentState?.push(
-          MaterialPageRoute(
-            builder: (context) => ChatRoomScreen(
-              friendId: senderId,
-              friendName: friendName,
-              friendAvatar: friendAvatar != null && friendAvatar.isNotEmpty
-                  ? friendAvatar
-                  : null,
-            ),
-          ),
+        if (senderId != null && senderId.isNotEmpty) {
+          AppNavigation.navigateToChat(
+            friendId: senderId,
+            friendName: friendName,
+            friendAvatar: friendAvatar,
+          );
+        }
+      } else if (type == 'friend_request' || type == 'friend_accept') {
+        AppNavigation.navigateToFriends(
+          initialIndex: type == 'friend_request' ? 1 : 0,
         );
+      } else if (type == 'photo' || type == 'reaction') {
+        AppNavigation.navigateToNotifications();
       }
-    } else if (type == 'friend_request' || type == 'friend_accept') {
-      appNavigatorKey.currentState?.push(
-        MaterialPageRoute(
-          builder: (context) => FriendsScreen(
-            initialIndex: type == 'friend_request' ? 1 : 0,
-          ),
-        ),
-      );
-    } else if (type == 'photo' || type == 'reaction') {
-      appNavigatorKey.currentState?.push(
-        MaterialPageRoute(
-          builder: (context) => const NotificationsScreen(),
-        ),
-      );
-    }
+    });
   }
 
   // Stream in-app notifications

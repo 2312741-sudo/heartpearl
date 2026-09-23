@@ -167,6 +167,25 @@ class _MapScreenState extends ConsumerState<MapScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _initUserLocation();
+    _loadSavedMapStyle();
+  }
+
+  Future<void> _loadSavedMapStyle() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString('map_style');
+      if (saved != null && mounted) {
+        final style = MapStyle.values.where((s) => s.name == saved).firstOrNull;
+        if (style != null) setState(() => _userMapStyle = style);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveMapStyle(MapStyle style) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('map_style', style.name);
+    } catch (_) {}
   }
 
   @override
@@ -337,9 +356,9 @@ class _MapScreenState extends ConsumerState<MapScreen>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Kiểu bản đồ',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                style: AppTypography.h3(),
               ),
               const SizedBox(height: 12),
               ListTile(
@@ -351,6 +370,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                     : null,
                 onTap: () {
                   setState(() => _userMapStyle = MapStyle.dark);
+                  _saveMapStyle(MapStyle.dark);
                   Navigator.pop(ctx);
                 },
               ),
@@ -363,6 +383,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                     : null,
                 onTap: () {
                   setState(() => _userMapStyle = MapStyle.street);
+                  _saveMapStyle(MapStyle.street);
                   Navigator.pop(ctx);
                 },
               ),
@@ -374,6 +395,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                     : null,
                 onTap: () {
                   setState(() => _userMapStyle = MapStyle.satellite);
+                  _saveMapStyle(MapStyle.satellite);
                   Navigator.pop(ctx);
                 },
               ),
@@ -455,7 +477,6 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
     final ownLocation = ref.watch(ownLocationProvider).value;
     final userProfile = ref.watch(userProfileProvider).value;
-    final status = ref.watch(locationTrackingStatusProvider).value;
     final isSharing = ownLocation?.isSharing == true;
     final isLive = ownLocation?.isLive == true;
     final lang = ref.watch(settingsProvider).language;
@@ -489,43 +510,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
     };
 
     return Scaffold(
-      appBar: AppBar(
-        leading: Navigator.canPop(context)
-            ? IconButton(
-                icon: const Icon(LucideIcons.arrowLeft),
-                onPressed: () => Navigator.pop(context),
-              )
-            : null,
-        title: const Text('Bản đồ bạn bè'),
-        actions: [
-          _LiveStatus(
-            status: status,
-            isSharing: isSharing,
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const LocationPrivacyScreen(),
-              ),
-            ),
-          ),
-          IconButton(
-            tooltip: 'Cài đặt vị trí',
-            icon: const Icon(LucideIcons.shieldCheck, size: 22),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const LocationPrivacyScreen(),
-              ),
-            ),
-          ),
-          IconButton(
-            tooltip: 'Tiện ích Widget màn hình chính',
-            icon: const Icon(LucideIcons.layoutGrid, size: 21),
-            onPressed: _showWidgetGuideSheet,
-          ),
-          const SizedBox(width: AppDimens.spaceXs),
-        ],
-      ),
+      extendBodyBehindAppBar: true,
       body: Stack(
         children: [
           // 1. Unconditional Base Map
@@ -604,241 +589,244 @@ class _MapScreenState extends ConsumerState<MapScreen>
             ],
           ),
 
-          // 2. Location Control Bar (Manual Check-in + Live Location)
+          // 2. Top Header Overlay (title + live status + quick actions)
           Positioned(
-            top: AppDimens.spaceSm,
-            left: AppDimens.spaceBase,
-            right: AppDimens.spaceBase,
+            top: 0,
+            left: 0,
+            right: 0,
             child: SafeArea(
               bottom: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Live status banner (shown only when live is active)
-                  if (isLive) ...[
-                    _LiveBanner(
-                      ownLocation: ownLocation,
-                      lang: lang,
-                      onStop: _stopLive,
-                      isDark: isDark,
-                    ),
-                    const SizedBox(height: AppDimens.spaceSm),
-                  ],
-                  // Main control bar
-                  Material(
-                    elevation: 4,
-                    borderRadius: BorderRadius.circular(16),
-                    color: isDark
-                        ? AppColors.darkSurface.withValues(alpha: 0.95)
-                        : Colors.white.withValues(alpha: 0.95),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppDimens.spaceBase,
+                  AppDimens.spaceSm,
+                  AppDimens.spaceBase,
+                  0,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Live banner (only when live is active)
+                    if (isLive) ...[
+                      _LiveBanner(
+                        ownLocation: ownLocation,
+                        lang: lang,
+                        onStop: _stopLive,
+                        isDark: isDark,
                       ),
-                      child: Row(
-                        children: [
-                          // Status icon
-                          Container(
-                            padding: const EdgeInsets.all(7),
-                            decoration: BoxDecoration(
-                              color: isLive
-                                  ? Colors.red.withValues(alpha: 0.12)
-                                  : isSharing
-                                      ? AppColors.success.withValues(alpha: 0.15)
-                                      : AppColors.primary.withValues(alpha: 0.15),
-                              shape: BoxShape.circle,
+                      const SizedBox(height: 8),
+                    ],
+
+                    // Header pill: title + status + buttons
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? AppColors.darkSurface.withValues(alpha: 0.92)
+                              : Colors.white.withValues(alpha: 0.93),
+                          borderRadius: BorderRadius.circular(18),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12),
+                              blurRadius: 12,
+                              offset: const Offset(0, 3),
                             ),
-                            child: Icon(
-                              isLive
-                                  ? LucideIcons.radio
-                                  : isSharing
-                                      ? LucideIcons.mapPinCheck
-                                      : LucideIcons.mapPin,
-                              size: 16,
-                              color: isLive
-                                  ? Colors.red
-                                  : isSharing
-                                      ? AppColors.success
-                                      : AppColors.primary,
-                            ),
+                          ],
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
                           ),
-                          const SizedBox(width: 8),
-                          // Status text
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
+                          child: Row(
+                            children: [
+                              // Status dot + title
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isLive
+                                      ? Colors.red
+                                      : isSharing
+                                          ? AppColors.success
+                                          : Colors.grey.shade400,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
                                   isLive
                                       ? AppStrings.tr('live_share_title', lang: lang)
                                       : isSharing
-                                          ? 'Check-in thủ công'
-                                          : 'Vị trí đang ẩn',
+                                          ? 'Check-in · Bạn bè'
+                                          : 'Bản đồ bạn bè',
                                   style: AppTypography.caption(
                                     color: isDark
                                         ? AppColors.darkTextPrimary
                                         : AppColors.lightTextPrimary,
                                   ).copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
                                   ),
                                 ),
-                                Text(
-                                  isLive
-                                      ? 'Cập nhật liên tục với bạn bè'
-                                      : isSharing
-                                          ? 'Không chạy ngầm tự động'
-                                          : 'Bấm để chia sẻ vị trí',
-                                  style: AppTypography.caption(
-                                    color: isDark
-                                        ? AppColors.darkTextMuted
-                                        : AppColors.lightTextMuted,
-                                  ).copyWith(fontSize: 10),
+                              ),
+
+                              // Action buttons on the right
+                              if (!isSharing) ...[
+                                _ActionChip(
+                                  label: 'Check-in',
+                                  icon: LucideIcons.mapPin,
+                                  color: AppColors.primary,
+                                  loading: _isCheckingIn,
+                                  onTap: _isCheckingIn ? null : _performManualCheckIn,
+                                ),
+                                const SizedBox(width: 6),
+                                _ActionChip(
+                                  label: 'Live',
+                                  icon: LucideIcons.radio,
+                                  color: Colors.red.shade600,
+                                  onTap: _showLiveSheet,
+                                ),
+                              ] else if (isLive) ...[
+                                _ActionChip(
+                                  label: 'Dừng',
+                                  icon: LucideIcons.squareX,
+                                  color: Colors.red.shade600,
+                                  onTap: _stopLive,
+                                ),
+                                const SizedBox(width: 4),
+                                _MapIconButton(
+                                  icon: LucideIcons.ghost,
+                                  tooltip: 'Ẩn vị trí',
+                                  isDark: isDark,
+                                  onPressed: _clearCheckIn,
+                                ),
+                              ] else ...[
+                                _ActionChip(
+                                  label: 'Live',
+                                  icon: LucideIcons.radio,
+                                  color: Colors.red.shade600,
+                                  onTap: _showLiveSheet,
+                                ),
+                                const SizedBox(width: 4),
+                                _MapIconButton(
+                                  icon: LucideIcons.ghost,
+                                  tooltip: 'Ẩn vị trí',
+                                  isDark: isDark,
+                                  onPressed: _clearCheckIn,
                                 ),
                               ],
-                            ),
+
+                              const SizedBox(width: 6),
+
+                              // Privacy settings
+                              _MapIconButton(
+                                icon: LucideIcons.shieldCheck,
+                                tooltip: 'Cài đặt vị trí',
+                                isDark: isDark,
+                                onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const LocationPrivacyScreen(),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 6),
-                          // Action buttons
-                          if (!isSharing) ...[
-                            // Check-in button
-                            _ActionChip(
-                              label: 'Check-in',
-                              icon: LucideIcons.mapPin,
-                              color: AppColors.primary,
-                              loading: _isCheckingIn,
-                              onTap: _isCheckingIn ? null : _performManualCheckIn,
-                            ),
-                            const SizedBox(width: 4),
-                            // Live button
-                            _ActionChip(
-                              label: 'Live',
-                              icon: LucideIcons.radio,
-                              color: Colors.red.shade600,
-                              onTap: _showLiveSheet,
-                            ),
-                          ] else if (isLive) ...[
-                            // Stop live
-                            _ActionChip(
-                              label: 'Dừng',
-                              icon: LucideIcons.squareX,
-                              color: Colors.red.shade600,
-                              onTap: _stopLive,
-                            ),
-                            const SizedBox(width: 4),
-                            // Ghost Mode
-                            IconButton(
-                              tooltip: 'Ẩn vị trí (Ghost Mode)',
-                              icon: const Icon(LucideIcons.ghost, size: 17),
-                              color: AppColors.darkTextMuted,
-                              visualDensity: VisualDensity.compact,
-                              onPressed: _clearCheckIn,
-                            ),
-                          ] else ...[
-                            // Update check-in
-                            _ActionChip(
-                              label: 'Live',
-                              icon: LucideIcons.radio,
-                              color: Colors.red.shade600,
-                              onTap: _showLiveSheet,
-                            ),
-                            const SizedBox(width: 4),
-                            // Ghost Mode
-                            IconButton(
-                              tooltip: 'Ẩn vị trí (Ghost Mode)',
-                              icon: const Icon(LucideIcons.ghost, size: 17),
-                              color: AppColors.darkTextMuted,
-                              visualDensity: VisualDensity.compact,
-                              onPressed: _clearCheckIn,
-                            ),
-                          ],
-                        ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
 
-          // 3. Subtle empty friends indicator
-          if (items.isEmpty && isSharing)
+          // 3. Empty friends hint (subtle, bottom center)
+          if (items.isEmpty && isSharing && !isLoadingFriends)
             Positioned(
-              top: AppDimens.spaceSm,
-              left: AppDimens.spaceLg,
-              right: AppDimens.spaceLg,
+              bottom: 30,
+              left: 0,
+              right: 0,
               child: SafeArea(
-                bottom: false,
+                top: false,
                 child: Center(
-                  child: Material(
-                    elevation: 2,
-                    borderRadius: BorderRadius.circular(20),
-                    color: (isDark ? AppColors.darkSurface : Colors.white)
-                        .withValues(alpha: 0.92),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            isLoadingFriends
-                                ? LucideIcons.loader2
-                                : LucideIcons.users,
-                            size: 16,
-                            color: AppColors.primaryLight,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            isLoadingFriends
-                                ? 'Đang cập nhật vị trí bạn bè...'
-                                : 'Chưa có bạn bè nào chia sẻ vị trí',
-                            style: AppTypography.caption(
-                              color: isDark
-                                  ? AppColors.darkTextPrimary
-                                  : AppColors.lightTextPrimary,
-                            ),
-                          ),
-                        ],
-                      ),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: (isDark ? AppColors.darkSurface : Colors.white)
+                          .withValues(alpha: 0.88),
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(LucideIcons.users, size: 14, color: AppColors.primaryLight),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Chưa có bạn bè nào chia sẻ vị trí',
+                          style: AppTypography.caption(
+                            color: isDark
+                                ? AppColors.darkTextMuted
+                                : AppColors.lightTextMuted,
+                          ).copyWith(fontSize: 12),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
             ),
 
-          // 4. Floating Zoom & Recenter Controls (Right Side)
+          // 4. Right side: Map controls (layers, zoom, locate)
           Positioned(
             right: AppDimens.spaceBase,
-            bottom: items.isNotEmpty ? 112 : 36,
+            bottom: items.isNotEmpty ? 108 : 30,
             child: SafeArea(
+              top: false,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Widget guide
+                  _FloatingMapButton(
+                    icon: LucideIcons.layoutGrid,
+                    onPressed: _showWidgetGuideSheet,
+                    tooltip: 'Tiện ích Widget',
+                  ),
+                  const SizedBox(height: 6),
+
                   // Map Style Switcher (Layers)
                   _FloatingMapButton(
                     icon: LucideIcons.layers,
                     onPressed: _showMapStyleSheet,
+                    tooltip: 'Kiểu bản đồ',
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 14),
 
                   // Zoom In
                   _FloatingMapButton(
                     icon: LucideIcons.plus,
                     onPressed: _zoomIn,
+                    tooltip: 'Phóng to',
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
 
                   // Zoom Out
                   _FloatingMapButton(
                     icon: LucideIcons.minus,
                     onPressed: _zoomOut,
+                    tooltip: 'Thu nhỏ',
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 14),
 
                   // Re-center on Me
                   _FloatingMapButton(
@@ -847,6 +835,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                         : LucideIcons.locateFixed,
                     iconColor: AppColors.primary,
                     onPressed: _recenterOnMe,
+                    tooltip: 'Về vị trí của tôi',
                   ),
                 ],
               ),
@@ -858,8 +847,9 @@ class _MapScreenState extends ConsumerState<MapScreen>
             Align(
               alignment: Alignment.bottomCenter,
               child: SafeArea(
+                top: false,
                 child: SizedBox(
-                  height: 92,
+                  height: 96,
                   child: ListView.separated(
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppDimens.spaceBase,
@@ -929,18 +919,15 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 ),
                 title: Text(
                   '${user?.displayName ?? "Bạn"} (Vị trí của bạn)',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
+                  style: AppTypography.h3(),
                 ),
                 subtitle: Text(
                   location?.isSharing == true
                       ? 'Đang hiển thị vị trí (Check-in thủ công)'
                       : 'Đang ở chế độ riêng tư (Chưa Check-in)',
-                  style: TextStyle(
+                  style: AppTypography.caption(
                     color: location?.isSharing == true
-                        ? Colors.green
+                        ? AppColors.success
                         : Colors.orange,
                   ),
                 ),
@@ -1538,36 +1525,79 @@ class _FloatingMapButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onPressed;
   final Color? iconColor;
+  final String? tooltip;
 
   const _FloatingMapButton({
     required this.icon,
     required this.onPressed,
     this.iconColor,
+    this.tooltip,
   });
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Material(
-      elevation: 4,
-      shape: const CircleBorder(),
-      color: isDark
-          ? AppColors.darkSurface.withValues(alpha: 0.92)
-          : Colors.white.withValues(alpha: 0.92),
-      child: InkWell(
-        customBorder: const CircleBorder(),
+    return Tooltip(
+      message: tooltip ?? '',
+      child: Material(
+        elevation: 4,
+        shape: const CircleBorder(),
+        color: isDark
+            ? AppColors.darkSurface.withValues(alpha: 0.92)
+            : Colors.white.withValues(alpha: 0.92),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onPressed,
+          child: Container(
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            child: Icon(
+              icon,
+              size: 22,
+              color: iconColor ??
+                  (isDark
+                      ? AppColors.darkTextPrimary
+                      : AppColors.lightTextPrimary),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact icon button used inside the header pill.
+class _MapIconButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final bool isDark;
+  final VoidCallback onPressed;
+
+  const _MapIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.isDark,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
         onTap: onPressed,
         child: Container(
-          width: 44,
-          height: 44,
-          alignment: Alignment.center,
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.07),
+            borderRadius: BorderRadius.circular(8),
+          ),
           child: Icon(
             icon,
-            size: 22,
-            color: iconColor ??
-                (isDark
-                    ? AppColors.darkTextPrimary
-                    : AppColors.lightTextPrimary),
+            size: 16,
+            color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
           ),
         ),
       ),
@@ -1656,56 +1686,6 @@ class _FriendLocationCard extends StatelessWidget {
   }
 }
 
-class _LiveStatus extends StatelessWidget {
-  final LocationTrackingStatus? status;
-  final bool isSharing;
-  final VoidCallback onTap;
-
-  const _LiveStatus({
-    required this.status,
-    required this.isSharing,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final live = isSharing && status == LocationTrackingStatus.tracking;
-    return Center(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-          decoration: BoxDecoration(
-            color: (live ? Colors.green : Colors.grey).withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: live ? Colors.green : Colors.grey,
-                ),
-              ),
-              const SizedBox(width: 5),
-              Text(
-                live ? 'LIVE' : 'RIÊNG TƯ',
-                style: TextStyle(
-                  color: live ? Colors.green : Colors.grey,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 /// Red banner displayed above the main control bar when a live session is active.
 class _LiveBanner extends StatefulWidget {

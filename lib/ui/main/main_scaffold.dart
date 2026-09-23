@@ -5,12 +5,12 @@ import 'package:home_widget/home_widget.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_dimens.dart';
+import '../../core/navigation/app_navigation.dart';
 import '../../core/utils/haptic_helper.dart';
 import '../../providers/feed_provider.dart';
 import '../../providers/location_provider.dart';
 import '../common/app_badge.dart';
 import '../common/frosted_container.dart';
-import '../common/in_app_message_overlay.dart';
 import 'history/history_screen.dart';
 import 'home/camera_screen.dart';
 import 'inbox/inbox_screen.dart';
@@ -76,9 +76,7 @@ class _MainScaffoldState extends ConsumerState<MainScaffold>
     _lastWidgetUriStr = uriStr;
 
     // Pop any open sheets, dialogs, or subroutes back to root so tabs don't stack
-    try {
-      appNavigatorKey.currentState?.popUntil((route) => route.isFirst);
-    } catch (_) {}
+    AppNavigation.popToRoot();
 
     if (uri.host == 'map' || uri.path.contains('map')) {
       if (mounted) {

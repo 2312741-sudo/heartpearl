@@ -151,8 +151,7 @@ class HistoryScreen extends ConsumerWidget {
                                           const SizedBox(width: 3),
                                           Text(
                                             reactionCount.toString(),
-                                            style: const TextStyle(
-                                              fontSize: 10,
+                                            style: AppTypography.micro(
                                               color: AppColors.white,
                                               fontWeight: FontWeight.bold,
                                             ),
@@ -212,7 +211,7 @@ class HistoryScreen extends ConsumerWidget {
                 leading: const Icon(LucideIcons.arrowDownToLine, color: AppColors.primary),
                 title: Text(
                   photo.isVideo ? 'Tải video về máy' : 'Tải ảnh về máy',
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+                  style: AppTypography.bodyBold(),
                 ),
                 subtitle: const Text('Lưu vào Thư viện ảnh của điện thoại'),
                 onTap: () async {
@@ -277,9 +276,9 @@ class HistoryScreen extends ConsumerWidget {
               ),
               ListTile(
                 leading: const Icon(LucideIcons.trash2, color: AppColors.error),
-                title: const Text(
+                title: Text(
                   'Xóa khoảnh khắc này',
-                  style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600),
+                  style: AppTypography.bodyBold(color: AppColors.error),
                 ),
                 onTap: () async {
                   Navigator.pop(sheetCtx);
@@ -297,12 +296,9 @@ class HistoryScreen extends ConsumerWidget {
                         ),
                         TextButton(
                           onPressed: () => Navigator.pop(ctx, true),
-                          child: const Text(
+                          child: Text(
                             'Xóa',
-                            style: TextStyle(
-                              color: AppColors.error,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: AppTypography.bodyBold(color: AppColors.error),
                           ),
                         ),
                       ],

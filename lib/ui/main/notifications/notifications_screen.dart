@@ -134,7 +134,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
               'Hủy',
-              style: TextStyle(
+              style: AppTypography.body(
                 color: isDark
                     ? AppColors.darkTextMuted
                     : AppColors.lightTextMuted,
@@ -309,20 +309,19 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                                 horizontal: AppDimens.spaceLg,
                               ),
                               color: AppColors.error,
-                              child: const Row(
+                              child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(
+                                  const Icon(
                                     LucideIcons.trash2,
                                     color: AppColors.white,
                                     size: 20,
                                   ),
-                                  SizedBox(width: 6),
+                                  const SizedBox(width: 6),
                                   Text(
                                     'Xóa',
-                                    style: TextStyle(
+                                    style: AppTypography.captionBold(
                                       color: AppColors.white,
-                                      fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                 ],
@@ -351,7 +350,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         error: (err, _) => Center(
           child: Text(
             'Lỗi tải thông báo: $err',
-            style: TextStyle(
+            style: AppTypography.body(
               color: isDark
                   ? AppColors.darkTextPrimary
                   : AppColors.lightTextPrimary,

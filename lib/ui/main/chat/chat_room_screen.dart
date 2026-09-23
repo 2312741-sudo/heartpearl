@@ -25,6 +25,9 @@ class ChatRoomScreen extends ConsumerStatefulWidget {
   /// Currently active chat room ID when open on screen
   static String? activeChatId;
 
+  /// Currently active friend ID when open on screen
+  static String? activeFriendId;
+
   const ChatRoomScreen({
     super.key,
     required this.friendId,
@@ -51,6 +54,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   void initState() {
     super.initState();
     ChatRoomScreen.activeChatId = _chatId;
+    ChatRoomScreen.activeFriendId = widget.friendId;
     _markRead();
   }
 
@@ -65,6 +69,9 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   void dispose() {
     if (ChatRoomScreen.activeChatId == _chatId) {
       ChatRoomScreen.activeChatId = null;
+    }
+    if (ChatRoomScreen.activeFriendId == widget.friendId) {
+      ChatRoomScreen.activeFriendId = null;
     }
     _textController.dispose();
     super.dispose();

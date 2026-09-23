@@ -122,7 +122,9 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
         title: Text('${AppStrings.tr('safety_menu_block', lang: lang)} ${friend.displayName}?'),
         content: Text(
           AppStrings.tr('safety_block_instant_notice', lang: lang),
-          style: const TextStyle(fontSize: 14, height: 1.4),
+          style: AppTypography.body(
+            color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+          ),
         ),
         actions: [
           TextButton(
@@ -224,9 +226,9 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
                       ),
                       child: Text(
                         requestsCount.toString(),
-                        style: const TextStyle(
-                          fontSize: 10,
+                        style: AppTypography.micro(
                           color: AppColors.white,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
@@ -370,7 +372,7 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
                               const SizedBox(width: 10),
                               Text(
                                 AppStrings.tr('safety_menu_block', lang: lang),
-                                style: const TextStyle(color: AppColors.error),
+                                style: AppTypography.body(color: AppColors.error),
                               ),
                             ],
                           ),
