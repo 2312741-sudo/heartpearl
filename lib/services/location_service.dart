@@ -503,6 +503,9 @@ class LocationService {
     _currentDuration = duration;
     _currentExpiresAt = expiresAt;
 
+    // Warm up places cache for accurate dwell place evaluation
+    unawaited(_placesService.getUserPlaces(uid));
+
     // Register onDisconnect hook in RTDB
     try {
       await _rtdbLocationRef(uid).onDisconnect().update({

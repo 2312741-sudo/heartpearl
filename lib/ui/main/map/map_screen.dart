@@ -16,10 +16,13 @@ import '../../../core/constants/app_typography.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/utils/haptic_helper.dart';
 import '../../../models/location_model.dart';
+import '../../../models/place_model.dart';
 import '../../../models/user_model.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/location_provider.dart';
+import '../../../providers/places_provider.dart';
 import '../../../providers/settings_provider.dart';
+import '../../../services/location_policy.dart';
 import '../../../services/widget_service.dart';
 import 'add_place_sheet.dart';
 import 'live_location_sheet.dart';
@@ -616,6 +619,9 @@ class _MapScreenState extends ConsumerState<MapScreen>
     final items = locationsAsync.value ?? const <FriendLocation>[];
     final isLoadingFriends = locationsAsync.isLoading && items.isEmpty;
 
+    final userPlaces = ref.watch(userPlacesProvider).value ?? const <PlaceModel>[];
+    final friendPlaces = ref.watch(friendsPlacesProvider).value ?? const <FriendPlace>[];
+
     final ownLocation = ref.watch(ownLocationProvider).value;
     final userProfile = ref.watch(userProfileProvider).value;
     final isSharing = ownLocation?.isSharing == true;
@@ -702,6 +708,38 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
               MarkerLayer(
                 markers: [
+                  // Pinned Places: Own Places
+                  for (final place in userPlaces)
+                    Marker(
+                      point: LatLng(place.lat, place.lng),
+                      width: 80,
+                      height: 70,
+                      child: _PlaceMarkerWidget(
+                        emoji: place.emoji,
+                        label: place.label,
+                        isOwn: true,
+                        onTap: () => _showPlaceDetails(place: place),
+                      ),
+                    ),
+
+                  // Pinned Places: Friends' Places
+                  for (final fp in friendPlaces)
+                    Marker(
+                      point: LatLng(fp.place.lat, fp.place.lng),
+                      width: 90,
+                      height: 70,
+                      child: _PlaceMarkerWidget(
+                        emoji: fp.place.emoji,
+                        label: fp.place.label,
+                        isOwn: false,
+                        friend: fp.friend,
+                        onTap: () => _showPlaceDetails(
+                          place: fp.place,
+                          friend: fp.friend,
+                        ),
+                      ),
+                    ),
+
                   // Own Location Marker ("Bạn")
                   if (_myPosition != null)
                     Marker(
@@ -1465,6 +1503,178 @@ class _MapScreenState extends ConsumerState<MapScreen>
     );
   }
 
+  String _formatDistanceToPlace(double lat, double lng) {
+    if (_myPosition == null) return '';
+    final d = LocationPolicy.distanceMetres(
+      _myPosition!.latitude,
+      _myPosition!.longitude,
+      lat,
+      lng,
+    );
+    if (d < 1000) {
+      return '${d.round()} m';
+    }
+    return '${(d / 1000).toStringAsFixed(1)} km';
+  }
+
+  void _showPlaceDetails({
+    required PlaceModel place,
+    UserModel? friend,
+  }) {
+    HapticHelper.selection();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isOwn = friend == null;
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(AppDimens.spaceLg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Pill handle
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: AppDimens.spaceSm),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white24 : Colors.black26,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+
+              // Header
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(place.emoji, style: const TextStyle(fontSize: 26)),
+                ),
+                title: Text(
+                  place.label,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: isDark
+                        ? AppColors.darkTextPrimary
+                        : AppColors.lightTextPrimary,
+                  ),
+                ),
+                subtitle: Text(
+                  isOwn
+                      ? 'Địa điểm đã ghim của bạn · ${place.type.displayName}'
+                      : 'Địa điểm của ${friend.displayName} · ${place.type.displayName}',
+                  style: TextStyle(
+                    color: isDark
+                        ? AppColors.darkTextSecondary
+                        : AppColors.lightTextSecondary,
+                  ),
+                ),
+                trailing: isOwn
+                    ? IconButton(
+                        icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                        tooltip: 'Xóa địa điểm',
+                        onPressed: () async {
+                          Navigator.pop(ctx);
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (dCtx) => AlertDialog(
+                              title: const Text('Xóa địa điểm?'),
+                              content: Text('Bạn có chắc muốn xóa "${place.label}" không?'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(dCtx, false),
+                                  child: const Text('Hủy'),
+                                ),
+                                TextButton(
+                                  onPressed: () => Navigator.pop(dCtx, true),
+                                  child: const Text('Xóa', style: TextStyle(color: Colors.red)),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (confirm == true) {
+                            await ref.read(placesServiceProvider).deletePlace(place.id);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Đã xóa "${place.label}"'),
+                                  backgroundColor: AppColors.primary,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                      )
+                    : null,
+              ),
+
+              const Divider(),
+              const SizedBox(height: 8),
+
+              // Location info
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _StatItem(
+                    label: 'Tọa độ',
+                    value:
+                        '${place.lat.toStringAsFixed(4)}, ${place.lng.toStringAsFixed(4)}',
+                    icon: LucideIcons.mapPin,
+                  ),
+                  _StatItem(
+                    label: 'Bán kính',
+                    value: '${place.radiusMetres.round()} m',
+                    icon: LucideIcons.circleDot,
+                  ),
+                  if (_myPosition != null)
+                    _StatItem(
+                      label: 'Khoảng cách',
+                      value: _formatDistanceToPlace(place.lat, place.lng),
+                      icon: LucideIcons.navigation,
+                    ),
+                ],
+              ),
+
+              const SizedBox(height: 16),
+              // Zoom into place button
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _mapController.move(LatLng(place.lat, place.lng), 17.0);
+                  },
+                  icon: const Icon(LucideIcons.navigation, size: 18),
+                  label: const Text('Xem trên bản đồ'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showWidgetGuideSheet() {
     HapticHelper.selection();
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -1924,6 +2134,138 @@ class _FriendMarkerWidget extends StatelessWidget {
                 fontSize: 10,
                 fontWeight: FontWeight.w700,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlaceMarkerWidget extends StatelessWidget {
+  final String emoji;
+  final String label;
+  final bool isOwn;
+  final UserModel? friend;
+  final VoidCallback onTap;
+
+  const _PlaceMarkerWidget({
+    required this.emoji,
+    required this.label,
+    required this.isOwn,
+    this.friend,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final pillBg = isDark
+        ? const Color(0xF0180716)
+        : Colors.white.withValues(alpha: 0.95);
+    final textColor = isDark ? Colors.white : Colors.black87;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Emoji circle with optional friend badge
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isDark ? const Color(0xFF26232E) : Colors.white,
+                  border: Border.all(
+                    color: isOwn ? AppColors.primary : const Color(0xFF7C4DFF),
+                    width: 2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: (isOwn ? AppColors.primary : const Color(0xFF7C4DFF))
+                          .withValues(alpha: 0.35),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  emoji,
+                  style: const TextStyle(fontSize: 20),
+                ),
+              ),
+
+              // Friend mini avatar badge on bottom right
+              if (!isOwn && friend != null)
+                Positioned(
+                  right: -4,
+                  bottom: -2,
+                  child: Container(
+                    width: 18,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                    child: CircleAvatar(
+                      radius: 9,
+                      backgroundColor: const Color(0xFF7C4DFF),
+                      backgroundImage: (friend!.avatarUrl != null &&
+                              friend!.avatarUrl!.isNotEmpty)
+                          ? CachedNetworkImageProvider(friend!.avatarUrl!)
+                          : null,
+                      child: (friend!.avatarUrl == null ||
+                              friend!.avatarUrl!.isEmpty)
+                          ? Text(
+                              friend!.displayName.isNotEmpty
+                                  ? friend!.displayName[0].toUpperCase()
+                                  : '?',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            )
+                          : null,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 3),
+
+          // Label pill
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: pillBg,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isDark ? Colors.white12 : Colors.black12,
+                width: 0.6,
+              ),
+              boxShadow: const [
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 4,
+                  offset: Offset(0, 1),
+                ),
+              ],
+            ),
+            child: Text(
+              isOwn ? label : '${friend?.displayName.split(' ').last ?? ""}: $label',
+              style: TextStyle(
+                color: textColor,
+                fontSize: 9.5,
+                fontWeight: FontWeight.bold,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

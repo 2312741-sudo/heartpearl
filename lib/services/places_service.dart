@@ -11,6 +11,7 @@ class PlacesService {
 
   // Local cache for rapid geofence matching during GPS fixes
   List<PlaceModel> _cachedPlaces = [];
+  final Map<String, List<PlaceModel>> _cachedFriendsPlaces = {};
 
   PlacesService({
     this.firestore,
@@ -25,12 +26,15 @@ class PlacesService {
 
   List<PlaceModel> get cachedPlaces => List.unmodifiable(_cachedPlaces);
 
+  List<PlaceModel> getCachedFriendPlaces(String uid) =>
+      List.unmodifiable(_cachedFriendsPlaces[uid] ?? const []);
+
   @visibleForTesting
   set cachedPlacesForTesting(List<PlaceModel> places) {
     _cachedPlaces = List.of(places);
   }
 
-  /// Streams the current user's pinned places
+  /// Streams a user's pinned places (current user or friend)
   Stream<List<PlaceModel>> streamUserPlaces(String uid) {
     if (uid.isEmpty) return Stream.value(const []);
     return _placesCollection(uid)
@@ -40,8 +44,15 @@ class PlacesService {
       final places = snapshot.docs
           .map((doc) => PlaceModel.fromFirestore(doc))
           .toList(growable: false);
-      _cachedPlaces = places;
+      if (uid == (_auth.currentUser?.uid ?? '')) {
+        _cachedPlaces = places;
+      } else {
+        _cachedFriendsPlaces[uid] = places;
+      }
       return places;
+    }).handleError((Object e) {
+      debugPrint('[PlacesService] streamUserPlaces error for $uid: $e');
+      return <PlaceModel>[];
     });
   }
 
@@ -55,10 +66,14 @@ class PlacesService {
       final places = snapshot.docs
           .map((doc) => PlaceModel.fromFirestore(doc))
           .toList(growable: false);
-      _cachedPlaces = places;
+      if (uid == (_auth.currentUser?.uid ?? '')) {
+        _cachedPlaces = places;
+      } else {
+        _cachedFriendsPlaces[uid] = places;
+      }
       return places;
     } catch (e) {
-      debugPrint('[PlacesService] getUserPlaces error: $e');
+      debugPrint('[PlacesService] getUserPlaces error for $uid: $e');
       return const [];
     }
   }
@@ -107,10 +122,15 @@ class PlacesService {
     required double lat,
     required double lng,
     String? currentPlaceId,
+    String? uid,
   }) {
-    if (_cachedPlaces.isEmpty) return null;
+    final places = (uid != null && uid != (_auth.currentUser?.uid ?? ''))
+        ? (_cachedFriendsPlaces[uid] ?? const [])
+        : _cachedPlaces;
 
-    for (final place in _cachedPlaces) {
+    if (places.isEmpty) return null;
+
+    for (final place in places) {
       final dist = LocationPolicy.distanceMetres(lat, lng, place.lat, place.lng);
       // Hysteresis boundary: wider margin if already inside this place
       final effectiveRadius = (currentPlaceId == place.id)

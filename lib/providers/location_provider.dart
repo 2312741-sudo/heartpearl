@@ -6,6 +6,7 @@ import '../models/location_model.dart';
 import '../models/user_model.dart';
 import '../services/location_service.dart';
 import 'friends_provider.dart';
+import 'places_provider.dart';
 
 export '../services/location_service.dart' show LocationTrackingStatus;
 
@@ -17,7 +18,8 @@ class FriendLocation {
 }
 
 final locationServiceProvider = Provider<LocationService>((ref) {
-  final service = LocationService();
+  final placesService = ref.watch(placesServiceProvider);
+  final service = LocationService(placesService: placesService);
   ref.onDispose(() => unawaited(service.dispose()));
   return service;
 });

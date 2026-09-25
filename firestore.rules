@@ -92,6 +92,11 @@ service cloud.firestore {
         request.auth.uid == userId ||
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['friends'])
       );
+
+      match /places/{placeId} {
+        allow read: if signedIn();
+        allow create, update, delete: if signedIn() && request.auth.uid == userId;
+      }
     }
     match /photos/{photoId} {
       // Inbox queries contain photos from multiple senders, so visibility is

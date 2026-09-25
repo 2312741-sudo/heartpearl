@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:heartpearl/models/location_model.dart';
 import 'package:heartpearl/models/place_model.dart';
+import 'package:heartpearl/models/user_model.dart';
+import 'package:heartpearl/providers/places_provider.dart';
 import 'package:heartpearl/services/location_policy.dart';
 import 'package:heartpearl/services/places_service.dart';
 
@@ -307,4 +309,37 @@ void main() {
       expect(match, isNull);
     });
   });
+
+  group('FriendPlace & Multiple Users Cache Tests', () {
+    test('FriendPlace instantiates with friend and place correctly', () {
+      final user = UserModel(
+        uid: 'friend_1',
+        username: 'alice',
+        email: 'friend@test.com',
+        displayName: 'Alice',
+        friends: const [],
+        createdAt: DateTime.now(),
+      );
+      final place = PlaceModel(
+        id: 'place_f1',
+        ownerUid: 'friend_1',
+        type: PlaceType.home,
+        label: 'Nhà Alice',
+        lat: 10.78,
+        lng: 106.70,
+        createdAt: DateTime.now(),
+      );
+      final fp = FriendPlace(friend: user, place: place);
+      expect(fp.friend.displayName, 'Alice');
+      expect(fp.place.label, 'Nhà Alice');
+      expect(fp.place.emoji, '🏠');
+    });
+
+    test('getCachedFriendPlaces returns empty list when friend has no cached places', () {
+      final service = PlacesService();
+      final places = service.getCachedFriendPlaces('unknown_friend');
+      expect(places, isEmpty);
+    });
+  });
 }
+
