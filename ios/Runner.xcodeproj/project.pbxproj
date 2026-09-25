@@ -20,7 +20,7 @@
 		E2CA7A77305B8EBB0009E02C /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E2CA7A76305B8EBB0009E02C /* WidgetKit.framework */; };
 		E2CA7A86305B8EBC0009E02C /* HeartPearlWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E2CA7A75305B8EBB0009E02C /* HeartPearlWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		FBE100012EC3CC0400C636F2 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = FBE100022EC3CC0400C636F2 /* GoogleService-Info.plist */; };
-		FBE100032EC3CC0400C636F2 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = FBE100042EC3CC0400C636F2 /* PrivacyInfo.xcprivacy */; };
+		FBE100032EC3CC0400C636F2 /* BuildFile in Resources */ = {isa = PBXBuildFile; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -142,7 +142,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E2CA7A79305B8EBB0009E02C /* SwiftUI.framework in Frameworks */,
 				E2CA7A77305B8EBB0009E02C /* WidgetKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -362,6 +361,7 @@
 				97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */,
 				97C146FC1CF9000F007C117D /* Main.storyboard in Resources */,
 				FBE100012EC3CC0400C636F2 /* GoogleService-Info.plist in Resources */,
+				FBE100032EC3CC0400C636F2 /* BuildFile in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -594,7 +594,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SUPPORTED_PLATFORMS = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALIDATE_PRODUCT = YES;
 			};
@@ -781,7 +781,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SUPPORTED_PLATFORMS = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				TARGETED_DEVICE_FAMILY = "1,2";
