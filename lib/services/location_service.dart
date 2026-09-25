@@ -65,6 +65,25 @@ class LocationService {
   String? _currentPlaceLabel;
   DateTime? _arrivedAt;
 
+  // Adaptive battery saver state (Zenly / Life360 pattern)
+  bool _isStationary = false;
+  Position? _stationaryAnchor;
+  DateTime? _stationarySince;
+  LocationPermission? _lastPermission;
+
+  bool get isStationary => _isStationary;
+  LocationPermission? get lastPermission => _lastPermission;
+
+  /// Checks if background "Always" location permission is granted.
+  Future<bool> hasAlwaysPermission() async {
+    final perm = await Geolocator.checkPermission();
+    _lastPermission = perm;
+    return perm == LocationPermission.always;
+  }
+
+  /// Opens device App Settings so user can grant "Always" location permission.
+  Future<bool> openLocationSettings() => Geolocator.openAppSettings();
+
   /// Safe status emitter — no-ops if the controller has already been closed.
   void _addStatus(LocationTrackingStatus status) {
     if (!_statusController.isClosed) _statusController.add(status);
@@ -210,6 +229,7 @@ class LocationService {
       permission = await Geolocator.requestPermission();
     }
     if (permission == LocationPermission.deniedForever) {
+      _lastPermission = permission;
       _addStatus(LocationTrackingStatus.permissionDeniedForever);
       throw const LocationTrackingException(
         'Quyền vị trí đã bị từ chối vĩnh viễn. Hãy mở Cài đặt ứng dụng.',
@@ -218,6 +238,7 @@ class LocationService {
     }
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.unableToDetermine) {
+      _lastPermission = permission;
       _addStatus(LocationTrackingStatus.permissionDenied);
       throw const LocationTrackingException(
         'HeartPearl cần quyền vị trí để bật chia sẻ.',
@@ -233,6 +254,7 @@ class LocationService {
         }
       } catch (_) {}
     }
+    _lastPermission = permission;
     if (permission != LocationPermission.always &&
         permission != LocationPermission.whileInUse) {
       _addStatus(LocationTrackingStatus.permissionDenied);
@@ -375,6 +397,10 @@ class LocationService {
     final uid = _requireCurrentUid();
     await requestSharingPermission();
 
+    // Reset stationary tracking state
+    _isStationary = false;
+    _stationarySince = DateTime.now();
+
     // Get initial fix to write immediately with graceful fallback.
     Position? initialPosition;
     try {
@@ -397,6 +423,7 @@ class LocationService {
       throw Exception('Tọa độ GPS không hợp lệ hoặc chưa sẵn sàng. Vui lòng kiểm tra lại GPS.');
     }
 
+    _stationaryAnchor = initialPosition;
     final expiresAt = duration.expiresAt();
 
     // Write initial position + session metadata to RTDB & Firestore.
@@ -409,11 +436,6 @@ class LocationService {
 
   /// Core live-stream wiring shared by [startLiveSharing] and
   /// [resumeLiveSharingIfNeeded].
-  ///
-  /// Sets [_currentDuration], [_currentExpiresAt], registers the RTDB
-  /// `onDisconnect` hook, opens [Geolocator.getPositionStream],
-  /// starts the 45-second heartbeat timer, and schedules the local expiry
-  /// timer when [expiresAt] is non-null.
   Future<void> _beginLiveStream(
     String uid,
     DateTime? expiresAt,
@@ -430,32 +452,73 @@ class LocationService {
       });
     } catch (_) {}
 
-    // Start streaming position updates with auto-restart on error.
-    final settings = _buildLiveSettings();
-    void startPositionStream() {
-      _liveSubscription = Geolocator.getPositionStream(locationSettings: settings).listen(
-        (position) => _onLivePosition(uid, position, expiresAt, duration),
-        onError: (Object error) {
-          debugPrint('Live location stream error: $error — restarting in 5s');
-          _addStatus(LocationTrackingStatus.error);
-          _liveSubscription?.cancel();
-          _liveSubscription = null;
-          if (_heartbeatTimer != null) {
-            Future.delayed(const Duration(seconds: 5), () {
-              if (_heartbeatTimer != null) startPositionStream();
-            });
-          }
-        },
-        cancelOnError: true,
-      );
+    // Start streaming position updates (initially in active moving mode)
+    _startLiveSubscription(uid, expiresAt, duration, isStationary: false);
+
+    // Start heartbeat timer
+    _armHeartbeatTimer(uid, expiresAt, duration, isStationary: false);
+
+    // Schedule local expiry timer if session is not unlimited.
+    if (expiresAt != null) {
+      final remaining = expiresAt.difference(DateTime.now());
+      if (remaining > Duration.zero) {
+        _expiryTimer = Timer(remaining, () async {
+          await stopLiveSharing(clearFirestore: true);
+        });
+      } else {
+        await stopLiveSharing(clearFirestore: true);
+      }
     }
-    startPositionStream();
+  }
 
+  void _startLiveSubscription(
+    String uid,
+    DateTime? expiresAt,
+    LocationSharingDuration duration, {
+    required bool isStationary,
+  }) {
+    _liveSubscription?.cancel();
+    final settings = _buildLiveSettings(isStationary: isStationary);
+
+    _liveSubscription = Geolocator.getPositionStream(locationSettings: settings).listen(
+      (position) => _onLivePosition(uid, position, expiresAt, duration),
+      onError: (Object error) {
+        debugPrint('[LocationService] Live stream error: $error — restarting in 5s');
+        _addStatus(LocationTrackingStatus.error);
+        _liveSubscription?.cancel();
+        _liveSubscription = null;
+        if (_heartbeatTimer != null && _currentDuration != null) {
+          Future.delayed(const Duration(seconds: 5), () {
+            if (_heartbeatTimer != null && _currentDuration != null) {
+              _startLiveSubscription(
+                uid,
+                expiresAt,
+                duration,
+                isStationary: _isStationary,
+              );
+            }
+          });
+        }
+      },
+      cancelOnError: true,
+    );
     _addStatus(LocationTrackingStatus.tracking);
+  }
 
-    // Heartbeat: every 45 s, force-write a FRESH GPS fix to RTDB
+  void _armHeartbeatTimer(
+    String uid,
+    DateTime? expiresAt,
+    LocationSharingDuration duration, {
+    required bool isStationary,
+  }) {
     _heartbeatTimer?.cancel();
-    _heartbeatTimer = Timer.periodic(const Duration(seconds: 45), (_) async {
+    // In stationary sleep mode: ping every 3 minutes.
+    // In moving active mode: ping every 45 seconds.
+    final interval = isStationary
+        ? const Duration(minutes: 3)
+        : const Duration(seconds: 45);
+
+    _heartbeatTimer = Timer.periodic(interval, (_) async {
       if (_liveSubscription == null) return;
       if (expiresAt != null && DateTime.now().isAfter(expiresAt)) {
         await stopLiveSharing(clearFirestore: true);
@@ -465,9 +528,9 @@ class LocationService {
         Position? pos;
         try {
           pos = await Geolocator.getCurrentPosition(
-            locationSettings: const LocationSettings(
-              accuracy: LocationAccuracy.medium,
-              timeLimit: Duration(seconds: 8),
+            locationSettings: LocationSettings(
+              accuracy: isStationary ? LocationAccuracy.medium : LocationAccuracy.high,
+              timeLimit: const Duration(seconds: 8),
             ),
           );
         } catch (_) {
@@ -484,18 +547,6 @@ class LocationService {
         }
       } catch (_) {}
     });
-
-    // Schedule local expiry timer if session is not unlimited.
-    if (expiresAt != null) {
-      final remaining = expiresAt.difference(DateTime.now());
-      if (remaining > Duration.zero) {
-        _expiryTimer = Timer(remaining, () async {
-          await stopLiveSharing(clearFirestore: true);
-        });
-      } else {
-        await stopLiveSharing(clearFirestore: true);
-      }
-    }
   }
 
   /// Stops the live streaming session. If [clearFirestore] is true, also
@@ -517,6 +568,9 @@ class LocationService {
     _currentPlaceType = null;
     _currentPlaceLabel = null;
     _arrivedAt = null;
+    _isStationary = false;
+    _stationaryAnchor = null;
+    _stationarySince = null;
     await sub?.cancel();
 
     final uid = _auth.currentUser?.uid;
@@ -609,7 +663,57 @@ class LocationService {
       return;
     }
 
-    // Adaptive Motion & Distance Gate (Zenly pattern):
+    final now = DateTime.now();
+    final speed = position.speed.isFinite && position.speed > 0
+        ? position.speed.clamp(0, 200).toDouble()
+        : 0.0;
+
+    _evaluateDwellPlace(position.latitude, position.longitude, speed);
+    final isAtPlace = _currentPlaceType != null;
+
+    // Anchor tracking for stationary sleep vs moving wake-up
+    _stationaryAnchor ??= position;
+    final distFromAnchor = LocationPolicy.distanceMetres(
+      _stationaryAnchor!.latitude,
+      _stationaryAnchor!.longitude,
+      position.latitude,
+      position.longitude,
+    );
+
+    // 1. Stationary vs Moving State Machine (Adaptive Battery Saver)
+    final appearsStationary = (speed < 1.0 && distFromAnchor < 40.0) || isAtPlace;
+
+    if (appearsStationary) {
+      _stationarySince ??= now;
+      final stillFor = now.difference(_stationarySince!);
+
+      // If still for >= 2 minutes (or immediately at pinned place), switch to low-power sleep mode
+      if (!_isStationary && (stillFor >= const Duration(minutes: 2) || isAtPlace)) {
+        _isStationary = true;
+        debugPrint('[LocationService] Switching to stationary sleep mode at '
+            '(${position.latitude}, ${position.longitude})');
+        _startLiveSubscription(uid, expiresAt, duration, isStationary: true);
+        _armHeartbeatTimer(uid, expiresAt, duration, isStationary: true);
+      }
+    } else {
+      // User is moving (> 1.5 m/s or moved > 50m from anchor)
+      final isMoving = speed >= 1.5 || distFromAnchor >= 50.0;
+      if (isMoving) {
+        _stationaryAnchor = position;
+        _stationarySince = null;
+
+        if (_isStationary) {
+          // Wake up to high-accuracy moving mode!
+          _isStationary = false;
+          debugPrint('[LocationService] Waking up from sleep mode: motion detected '
+              '(speed: ${speed.toStringAsFixed(1)} m/s, dist: ${distFromAnchor.toStringAsFixed(1)}m)');
+          _startLiveSubscription(uid, expiresAt, duration, isStationary: false);
+          _armHeartbeatTimer(uid, expiresAt, duration, isStationary: false);
+        }
+      }
+    }
+
+    // 2. Adaptive Motion & Distance Gate for writes:
     final lastLat = _lastWrittenLat;
     final lastLng = _lastWrittenLng;
     final lastAt = _lastWrittenAt;
@@ -620,19 +724,16 @@ class LocationService {
         position.latitude,
         position.longitude,
       );
-      final elapsed = DateTime.now().difference(lastAt);
+      final elapsed = now.difference(lastAt);
 
-      // Stationary check: speed < 0.6 m/s (~2.1 km/h) and moved < 15 m
-      final isStationary = position.speed < 0.6 && dist < 15.0;
-
-      if (isStationary) {
-        // While stationary: update keep-alive every 60s or when moved >= 15m
-        if (elapsed < const Duration(seconds: 60)) {
+      if (_isStationary) {
+        // While stationary: update keep-alive every 3 min or when moved >= 25m
+        if (dist < 25.0 && elapsed < const Duration(minutes: 3)) {
           return;
         }
       } else {
-        // While moving: write if moved >= 10m OR if 8s elapsed
-        if (dist < 10.0 && elapsed < const Duration(seconds: 8)) {
+        // While moving: write if moved >= 5m OR if 8s elapsed
+        if (dist < 5.0 && elapsed < const Duration(seconds: 8)) {
           return;
         }
       }
@@ -659,7 +760,12 @@ class LocationService {
 
       _evaluateDwellPlace(position.latitude, position.longitude, speed);
 
-      // 1. Write to RTDB (Instant WebSocket ~30ms, no per-write cost)
+      // Ensure RTDB connection is active
+      try {
+        _rtdb.goOnline();
+      } catch (_) {}
+
+      // 1. Write to RTDB (Instant WebSocket ~30ms, no per-write cost) with 6s timeout
       await _rtdbLocationRef(uid).update({
         'ownerUid': uid,
         'isSharing': true,
@@ -677,7 +783,7 @@ class LocationService {
         'currentPlaceType': _currentPlaceType,
         'currentPlaceLabel': _currentPlaceLabel,
         'arrivedAt': _arrivedAt?.millisecondsSinceEpoch,
-      });
+      }).timeout(const Duration(seconds: 6));
 
       _lastWrittenLat = position.latitude;
       _lastWrittenLng = position.longitude;
@@ -704,13 +810,13 @@ class LocationService {
             'lng': position.longitude,
             'accuracy': position.accuracy,
             'speed': speed,
-            'batteryLevel': ?battery,
+            'batteryLevel': battery,
             'capturedAt': Timestamp.fromDate(position.timestamp),
             'updatedAt': FieldValue.serverTimestamp(),
             'currentPlaceType': _currentPlaceType,
             'currentPlaceLabel': _currentPlaceLabel,
             'arrivedAt': _arrivedAt != null ? Timestamp.fromDate(_arrivedAt!) : FieldValue.delete(),
-          }, SetOptions(merge: true));
+          }, SetOptions(merge: true)).timeout(const Duration(seconds: 6));
         } catch (e) {
           debugPrint('Firestore dual-sync warning: $e');
         }
@@ -736,6 +842,10 @@ class LocationService {
 
       _evaluateDwellPlace(position.latitude, position.longitude, speed);
 
+      try {
+        _rtdb.goOnline();
+      } catch (_) {}
+
       await _rtdbLocationRef(uid).update({
         'ownerUid': uid,
         'isSharing': true,
@@ -753,18 +863,20 @@ class LocationService {
         'currentPlaceType': _currentPlaceType,
         'currentPlaceLabel': _currentPlaceLabel,
         'arrivedAt': _arrivedAt?.millisecondsSinceEpoch,
-      });
+      }).timeout(const Duration(seconds: 6));
       _addStatus(LocationTrackingStatus.tracking);
     } catch (error) {
       debugPrint('Heartbeat write failed: $error');
     }
   }
 
-  LocationSettings _buildLiveSettings() {
+  LocationSettings _buildLiveSettings({bool isStationary = false}) {
+    final bool hasAlways = _lastPermission == LocationPermission.always;
     if (Platform.isAndroid) {
       return AndroidSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 0,
+        accuracy: isStationary ? LocationAccuracy.medium : LocationAccuracy.high,
+        distanceFilter: isStationary ? 80 : 5,
+        intervalDuration: Duration(seconds: isStationary ? 60 : 4),
         foregroundNotificationConfig: const ForegroundNotificationConfig(
           notificationTitle: 'HeartPearl Live',
           notificationText: 'Đang chia sẻ vị trí trực tiếp với bạn bè',
@@ -776,16 +888,17 @@ class LocationService {
     }
     if (Platform.isIOS) {
       return AppleSettings(
-        accuracy: LocationAccuracy.bestForNavigation,
-        distanceFilter: 0,
+        accuracy: isStationary ? LocationAccuracy.medium : LocationAccuracy.bestForNavigation,
+        distanceFilter: isStationary ? 80 : 5,
+        activityType: isStationary ? ActivityType.other : ActivityType.fitness,
         pauseLocationUpdatesAutomatically: false,
-        showBackgroundLocationIndicator: true,
+        showBackgroundLocationIndicator: !hasAlways,
         allowBackgroundLocationUpdates: true,
       );
     }
-    return const LocationSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: 0,
+    return LocationSettings(
+      accuracy: isStationary ? LocationAccuracy.medium : LocationAccuracy.high,
+      distanceFilter: isStationary ? 80 : 5,
     );
   }
 
@@ -984,6 +1097,11 @@ class LocationService {
       // Ensure GPS permission is still granted
       await requestSharingPermission();
 
+      // Reset stationary state
+      _isStationary = false;
+      _stationarySince = DateTime.now();
+      _stationaryAnchor = null;
+
       // Re-open the live GPS stream with the remaining time
       await _beginLiveStream(uid, expiresAt, duration);
       debugPrint('[LocationService] Resumed live session — '
@@ -1002,8 +1120,26 @@ class LocationService {
   }
 
   Future<void> setBackgroundMode(bool background) async {
-    // No-op per Apple Guideline 5.1.2(i): automatic background location is removed.
-    // Live sessions pause naturally when the OS suspends the app.
+    if (!background && isLiveActive) {
+      // Returned to foreground: ensure RTDB connection is online and sync latest fix
+      try {
+        _rtdb.goOnline();
+        final lastKnown = await Geolocator.getLastKnownPosition();
+        if (lastKnown != null && _currentDuration != null) {
+          final uid = currentUid;
+          if (uid != null) {
+            final battery = await _readBatteryLevel();
+            await _writeLivePosition(
+              uid,
+              lastKnown,
+              _currentExpiresAt,
+              _currentDuration!,
+              battery,
+            );
+          }
+        }
+      } catch (_) {}
+    }
   }
 
   Future<int?> _readBatteryLevel() async {

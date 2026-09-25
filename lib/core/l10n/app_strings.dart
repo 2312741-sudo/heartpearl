@@ -171,6 +171,10 @@ class AppStrings {
       'live_started': 'Đã bắt đầu chia sẻ vị trí trực tiếp!',
       'live_section_title': 'Chia sẻ trực tiếp theo thời gian',
       'live_mutual_friends_note': 'Chỉ bạn bè đã kết bạn 2 chiều mới thấy vị trí của bạn.',
+      'live_always_permission_title': 'Cần quyền "Luôn cho phép"',
+      'live_always_permission_body': 'Để cập nhật vị trí trực tiếp ngầm khi tắt màn hình hoặc chuyển sang ứng dụng khác mà không gây tốn pin, vui lòng chọn "Luôn cho phép" (Always) trong Cài đặt vị trí.',
+      'live_always_permission_open': 'Mở Cài đặt',
+      'live_always_permission_later': 'Để sau',
     },
     'en': {
       // Welcome
@@ -344,6 +348,10 @@ class AppStrings {
       'live_started': 'Live location sharing started!',
       'live_section_title': 'Timed Live Sharing',
       'live_mutual_friends_note': 'Only mutual friends can see your location.',
+      'live_always_permission_title': 'Requires "Always Allow"',
+      'live_always_permission_body': 'To update your live location in the background when locked or switching apps without draining battery, please select "Always Allow" in Location Settings.',
+      'live_always_permission_open': 'Open Settings',
+      'live_always_permission_later': 'Maybe later',
     },
   };
 

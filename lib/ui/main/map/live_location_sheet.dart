@@ -212,12 +212,41 @@ class _DurationTile extends ConsumerWidget {
       if (!context.mounted) return;
     }
 
+    final locationService = ref.read(locationServiceProvider);
+    final hasAlways = await locationService.hasAlwaysPermission();
+    if (!hasAlways && context.mounted) {
+      final shouldOpenSettings = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          icon: const Icon(LucideIcons.navigation, color: AppColors.primary, size: 36),
+          title: Text(AppStrings.tr('live_always_permission_title', lang: lang)),
+          content: Text(AppStrings.tr('live_always_permission_body', lang: lang)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(AppStrings.tr('live_always_permission_later', lang: lang)),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(AppStrings.tr('live_always_permission_open', lang: lang)),
+            ),
+          ],
+        ),
+      );
+      if (shouldOpenSettings == true) {
+        await locationService.openLocationSettings();
+        if (context.mounted) Navigator.pop(context);
+        return;
+      }
+      if (!context.mounted) return;
+    }
+
     // Close the sheet.
     if (context.mounted) Navigator.pop(context, duration);
 
     // Start the live session.
     try {
-      await ref.read(locationServiceProvider).startLiveSharing(duration);
+      await locationService.startLiveSharing(duration);
       HapticHelper.success();
     } catch (e) {
       // Errors surface via the status stream; map_screen will show the snackbar.

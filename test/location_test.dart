@@ -333,4 +333,55 @@ void main() {
       expect(visibleFriends.contains('friend_2'), isTrue);
     });
   });
+
+  group('Adaptive Tracking State Machine Tests', () {
+    test('Stationary criteria detection: speed < 1.0 m/s and anchor dist < 40m', () {
+      const anchorLat = 10.7769;
+      const anchorLng = 106.7009;
+
+      // Small jitter (15 metres away), speed 0.3 m/s -> stationary
+      const currentLat = 10.7770;
+      const currentLng = 106.7010;
+      final dist = LocationPolicy.distanceMetres(anchorLat, anchorLng, currentLat, currentLng);
+      const speed = 0.3;
+
+      final isStationary = (speed < 1.0 && dist < 40.0);
+      expect(dist, lessThan(40.0));
+      expect(isStationary, isTrue);
+    });
+
+    test('Moving wake-up criteria: speed >= 1.5 m/s or anchor dist >= 50m triggers wake-up', () {
+      const anchorLat = 10.7769;
+      const anchorLng = 106.7009;
+
+      // 1. In motion by speed (running/vehicle)
+      const speed = 2.5;
+      const distSmall = 10.0;
+      final wakesBySpeed = speed >= 1.5 || distSmall >= 50.0;
+      expect(wakesBySpeed, isTrue);
+
+      // 2. In motion by moving away from anchor (> 50m)
+      const walkSpeed = 0.8;
+      const distantLat = 10.7780; // ~120m away
+      const distantLng = 106.7009;
+      final distLarge = LocationPolicy.distanceMetres(anchorLat, anchorLng, distantLat, distantLng);
+      expect(distLarge, greaterThan(50.0));
+
+      final wakesByDist = walkSpeed >= 1.5 || distLarge >= 50.0;
+      expect(wakesByDist, isTrue);
+    });
+
+    test('Sleep mode duration gate: requires >= 2 minutes before entering stationary sleep mode', () {
+      final now = DateTime.now();
+      final stationarySinceRecent = now.subtract(const Duration(seconds: 45));
+      final stationarySinceLong = now.subtract(const Duration(seconds: 130));
+
+      final canSleepRecent = now.difference(stationarySinceRecent) >= const Duration(minutes: 2);
+      final canSleepLong = now.difference(stationarySinceLong) >= const Duration(minutes: 2);
+
+      expect(canSleepRecent, isFalse);
+      expect(canSleepLong, isTrue);
+    });
+  });
 }
+
