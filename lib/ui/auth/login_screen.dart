@@ -78,12 +78,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() => _isLoading = true);
     final authService = ref.read(authServiceProvider);
     final lang = ref.read(settingsProvider).language;
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
 
     try {
       if (_isSignUp) {
         await authService.signUpWithEmail(
-          email: _emailController.text,
-          password: _passwordController.text,
+          email: email,
+          password: password,
           displayName: 'Người dùng',
         );
 
@@ -96,24 +98,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         }
       } else {
         await authService.signInWithEmail(
-          email: _emailController.text,
-          password: _passwordController.text,
+          email: email,
+          password: password,
         );
         if (mounted) {
           Navigator.of(context).popUntil((route) => route.isFirst);
         }
       }
     } on FirebaseAuthException catch (e) {
-      String message = AppStrings.tr('auth.error.default', lang: lang);
-      if (e.code == 'user-not-found') {
-        message = 'Tài khoản không tồn tại trên hệ thống.';
-      } else if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
-        message = 'Mật khẩu hoặc thông tin đăng nhập không chính xác.';
-      } else if (e.code == 'email-already-in-use') {
-        message = 'Email này đã được sử dụng bởi một tài khoản khác.';
-      } else if (e.code == 'weak-password') {
-        message = 'Mật khẩu quá yếu, vui lòng chọn ít nhất 6 ký tự.';
-      }
+      debugPrint('[Auth] FirebaseAuthException: code=${e.code}, message=${e.message}');
+      String message = switch (e.code.toLowerCase()) {
+        'invalid-email' || 'invalid_email' => AppStrings.tr('auth_error_invalid_email', lang: lang),
+        'user-not-found' || 'user_not_found' || 'error_user_not_found' => AppStrings.tr('auth_error_user_not_found', lang: lang),
+        'wrong-password' || 'invalid-credential' || 'invalid_login_credentials' || 'error_wrong_password' => AppStrings.tr('auth_error_wrong_password', lang: lang),
+        'email-already-in-use' || 'email_already_in_use' || 'error_email_already_in_use' => AppStrings.tr('auth_error_email_in_use', lang: lang),
+        'weak-password' || 'weak_password' => AppStrings.tr('auth_error_weak_password', lang: lang),
+        'operation-not-allowed' || 'operation_not_allowed' => AppStrings.tr('auth_error_operation_not_allowed', lang: lang),
+        'network-request-failed' || 'network_error' => AppStrings.tr('auth_error_network_failed', lang: lang),
+        'too-many-requests' || 'too_many_requests' => AppStrings.tr('auth_error_too_many_requests', lang: lang),
+        'user-disabled' || 'user_disabled' => AppStrings.tr('auth_error_user_disabled', lang: lang),
+        'channel-error' => 'Vui lòng kiểm tra và điền đầy đủ email và mật khẩu.',
+        _ => (e.message != null && e.message!.isNotEmpty)
+            ? e.message!
+            : AppStrings.tr('auth_error_default', lang: lang),
+      };
 
       HapticHelper.heavy();
       if (mounted) {
@@ -125,6 +133,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         );
       }
     } catch (e) {
+      debugPrint('[Auth] General error during submit: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
