@@ -63,28 +63,42 @@ class _AddPlaceSheetState extends ConsumerState<AddPlaceSheet> {
     try {
       final ownLocation = ref.read(ownLocationProvider).value;
       if (ownLocation != null && ownLocation.hasCoordinate) {
-        setState(() {
-          _lat = ownLocation.lat;
-          _lng = ownLocation.lng;
-          _isLoadingGps = false;
-        });
+        if (mounted) {
+          setState(() {
+            _lat = ownLocation.lat;
+            _lng = ownLocation.lng;
+            _isLoadingGps = false;
+          });
+        }
         return;
       }
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 6),
-        ),
-      );
+      Position? pos;
+      try {
+        pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+            timeLimit: Duration(seconds: 4),
+          ),
+        );
+      } catch (_) {
+        pos = await Geolocator.getLastKnownPosition();
+      }
+
       if (mounted) {
         setState(() {
-          _lat = pos.latitude;
-          _lng = pos.longitude;
+          _lat = pos?.latitude ?? _lat ?? 10.7769;
+          _lng = pos?.longitude ?? _lng ?? 106.7009;
           _isLoadingGps = false;
         });
       }
     } catch (_) {
-      if (mounted) setState(() => _isLoadingGps = false);
+      if (mounted) {
+        setState(() {
+          _lat ??= 10.7769;
+          _lng ??= 106.7009;
+          _isLoadingGps = false;
+        });
+      }
     }
   }
 

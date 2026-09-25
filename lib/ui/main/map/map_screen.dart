@@ -371,10 +371,11 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
   void _showAddPlaceSheet({double? lat, double? lng}) {
     HapticHelper.selection();
+    final center = _mapController.camera.center;
     AddPlaceSheet.show(
       context,
-      lat: lat ?? _myPosition?.latitude,
-      lng: lng ?? _myPosition?.longitude,
+      lat: lat ?? _myPosition?.latitude ?? center.latitude,
+      lng: lng ?? _myPosition?.longitude ?? center.longitude,
     );
   }
 

@@ -37,23 +37,65 @@ class PlacesService {
   /// Streams a user's pinned places (current user or friend)
   Stream<List<PlaceModel>> streamUserPlaces(String uid) {
     if (uid.isEmpty) return Stream.value(const []);
-    return _placesCollection(uid)
+
+    final controller = StreamController<List<PlaceModel>>.broadcast();
+    StreamSubscription? subColSub;
+    StreamSubscription? userDocSub;
+
+    void update(List<PlaceModel> places) {
+      if (places.isNotEmpty || (_cachedPlaces.isEmpty && uid == (_auth.currentUser?.uid ?? ''))) {
+        if (uid == (_auth.currentUser?.uid ?? '')) {
+          _cachedPlaces = places;
+        } else {
+          _cachedFriendsPlaces[uid] = places;
+        }
+        if (!controller.isClosed) controller.add(places);
+      }
+    }
+
+    // 1. Listen to subcollection
+    subColSub = _placesCollection(uid)
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) {
-      final places = snapshot.docs
-          .map((doc) => PlaceModel.fromFirestore(doc))
-          .toList(growable: false);
-      if (uid == (_auth.currentUser?.uid ?? '')) {
-        _cachedPlaces = places;
-      } else {
-        _cachedFriendsPlaces[uid] = places;
-      }
-      return places;
-    }).handleError((Object e) {
-      debugPrint('[PlacesService] streamUserPlaces error for $uid: $e');
-      return <PlaceModel>[];
-    });
+        .listen(
+      (snapshot) {
+        if (snapshot.docs.isNotEmpty) {
+          final places = snapshot.docs
+              .map((doc) => PlaceModel.fromFirestore(doc))
+              .toList(growable: false);
+          update(places);
+        }
+      },
+      onError: (Object e) {
+        debugPrint('[PlacesService] subcollection stream error for $uid: $e');
+      },
+    );
+
+    // 2. Listen to user doc as resilient fallback / instant update
+    userDocSub = _db.collection('users').doc(uid).snapshots().listen(
+      (doc) {
+        if (doc.exists) {
+          final raw = doc.data()?['pinnedPlaces'];
+          if (raw is List) {
+            final places = raw
+                .whereType<Map<String, dynamic>>()
+                .map((m) => PlaceModel.fromMap(m, id: m['id']?.toString() ?? ''))
+                .toList(growable: false);
+            update(places);
+          }
+        }
+      },
+      onError: (Object e) {
+        debugPrint('[PlacesService] user doc stream error for $uid: $e');
+      },
+    );
+
+    controller.onCancel = () {
+      subColSub?.cancel();
+      userDocSub?.cancel();
+    };
+
+    return controller.stream;
   }
 
   /// Fetches places for a user once
@@ -63,19 +105,44 @@ class PlacesService {
       final snapshot = await _placesCollection(uid)
           .orderBy('createdAt', descending: true)
           .get();
-      final places = snapshot.docs
-          .map((doc) => PlaceModel.fromFirestore(doc))
-          .toList(growable: false);
-      if (uid == (_auth.currentUser?.uid ?? '')) {
-        _cachedPlaces = places;
-      } else {
-        _cachedFriendsPlaces[uid] = places;
+      if (snapshot.docs.isNotEmpty) {
+        final places = snapshot.docs
+            .map((doc) => PlaceModel.fromFirestore(doc))
+            .toList(growable: false);
+        if (uid == (_auth.currentUser?.uid ?? '')) {
+          _cachedPlaces = places;
+        } else {
+          _cachedFriendsPlaces[uid] = places;
+        }
+        return places;
       }
-      return places;
     } catch (e) {
-      debugPrint('[PlacesService] getUserPlaces error for $uid: $e');
-      return const [];
+      debugPrint('[PlacesService] getUserPlaces subcollection error for $uid: $e');
     }
+
+    // Fallback: read from user doc
+    try {
+      final doc = await _db.collection('users').doc(uid).get();
+      if (doc.exists) {
+        final raw = doc.data()?['pinnedPlaces'];
+        if (raw is List) {
+          final places = raw
+              .whereType<Map<String, dynamic>>()
+              .map((m) => PlaceModel.fromMap(m, id: m['id']?.toString() ?? ''))
+              .toList(growable: false);
+          if (uid == (_auth.currentUser?.uid ?? '')) {
+            _cachedPlaces = places;
+          } else {
+            _cachedFriendsPlaces[uid] = places;
+          }
+          return places;
+        }
+      }
+    } catch (e) {
+      debugPrint('[PlacesService] getUserPlaces user doc error for $uid: $e');
+    }
+
+    return const [];
   }
 
   /// Saves or updates a place
@@ -89,28 +156,56 @@ class PlacesService {
     final placeId = place.id.isNotEmpty ? place.id : collection.doc().id;
     final modelToSave = place.copyWith(id: placeId, ownerUid: uid);
 
-    await collection.doc(placeId).set(
-          modelToSave.toMap(),
-          SetOptions(merge: true),
-        );
-
-    // Update in local cache
+    // Update in local cache immediately
     _cachedPlaces = [
       modelToSave,
       ..._cachedPlaces.where((p) => p.id != placeId),
     ];
+
+    // Dual-write:
+    // 1. Write to user doc (guaranteed by firestore.rules even before rules redeployment)
+    try {
+      final userDocRef = _db.collection('users').doc(uid);
+      await userDocRef.set({
+        'pinnedPlaces': _cachedPlaces.map((p) => p.toMap()).toList(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('[PlacesService] Failed to sync pinnedPlaces to user doc: $e');
+    }
+
+    // 2. Write to subcollection (when rules are active)
+    try {
+      await collection.doc(placeId).set(
+            modelToSave.toMap(),
+            SetOptions(merge: true),
+          );
+    } catch (e) {
+      debugPrint('[PlacesService] Subcollection save error (likely pending rules deploy): $e');
+    }
   }
 
   /// Deletes a place
   Future<void> deletePlace(String placeId) async {
     final uid = _auth.currentUser?.uid;
     if (uid == null || uid.isEmpty) return;
+
+    _cachedPlaces = _cachedPlaces.where((p) => p.id != placeId).toList();
+
+    // 1. Delete from user doc
+    try {
+      final userDocRef = _db.collection('users').doc(uid);
+      await userDocRef.set({
+        'pinnedPlaces': _cachedPlaces.map((p) => p.toMap()).toList(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('[PlacesService] Failed to sync delete to user doc: $e');
+    }
+
+    // 2. Delete from subcollection
     try {
       await _placesCollection(uid).doc(placeId).delete();
-      _cachedPlaces = _cachedPlaces.where((p) => p.id != placeId).toList();
     } catch (e) {
-      debugPrint('[PlacesService] deletePlace error: $e');
-      rethrow;
+      debugPrint('[PlacesService] Subcollection delete error: $e');
     }
   }
 

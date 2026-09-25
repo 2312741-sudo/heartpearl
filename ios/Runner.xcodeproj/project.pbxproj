@@ -842,6 +842,7 @@
 		};
 		E2CA7A88305B8EBC0009E02C /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9740EEB21CF90195004384FC /* Debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
@@ -858,6 +859,8 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_KEY_CFBundleShortVersionString = YES;
+				GENERATE_INFOPLIST_KEY_CFBundleVersion = YES;
 				INFOPLIST_FILE = HeartPearlWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = HeartPearl;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -883,11 +886,13 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Debug;
 		};
 		E2CA7A89305B8EBC0009E02C /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
@@ -904,6 +909,8 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_KEY_CFBundleShortVersionString = YES;
+				GENERATE_INFOPLIST_KEY_CFBundleVersion = YES;
 				INFOPLIST_FILE = HeartPearlWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = HeartPearl;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -926,11 +933,13 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Release;
 		};
 		E2CA7A8A305B8EBC0009E02C /* Profile */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
@@ -947,6 +956,8 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_KEY_CFBundleShortVersionString = YES;
+				GENERATE_INFOPLIST_KEY_CFBundleVersion = YES;
 				INFOPLIST_FILE = HeartPearlWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = HeartPearl;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -969,6 +980,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Profile;
 		};
