@@ -11,6 +11,7 @@ import 'package:heartpearl/services/widget_service.dart';
 import 'package:heartpearl/services/media_downloader_service.dart';
 import 'package:heartpearl/core/utils/url_launcher_helper.dart';
 import 'package:heartpearl/core/constants/app_info.dart';
+import 'package:heartpearl/ui/common/image_crop_screen.dart';
 
 void main() {
   group('HeartPearl Models & Helpers Tests', () {
@@ -88,6 +89,8 @@ void main() {
       expect(map['senderId'], 'user_123');
       expect(map['text'], 'Xin chào bạn!');
       expect(map['type'], 'text');
+      expect(map['status'], 'sent');
+      expect(msg.status, 'sent');
     });
 
     test('DateHelper relative time test', () {
@@ -210,12 +213,25 @@ void main() {
 
     test('AppInfo constants are defined and valid', () {
       expect(AppInfo.appName, 'HeartPearl');
-      expect(AppInfo.appVersion, '1.0.2');
-      expect(AppInfo.buildNumber, '8');
-      expect(AppInfo.fullVersion, '1.0.2 (Build 8)');
+      expect(AppInfo.appVersion, '1.0.3');
+      expect(AppInfo.buildNumber, '9');
+      expect(AppInfo.fullVersion, '1.0.3 (Build 9)');
       expect(AppInfo.bundleId, 'com.heartpearl.heartpearl');
       expect(AppInfo.supportEmail, 'nthanhtam.402@gmail.com');
       expect(AppInfo.copyright, contains('HeartPearl'));
+    });
+
+    test('ImageCropScreen presets and styles are properly configured', () {
+      expect(AspectRatioPreset.ratio3x4.label, '3:4');
+      expect(AspectRatioPreset.ratio3x4.ratio, 3 / 4);
+      expect(AspectRatioPreset.ratio1x1.label, '1:1');
+      expect(AspectRatioPreset.ratio1x1.ratio, 1.0);
+      expect(AspectRatioPreset.ratio9x16.label, '9:16');
+      expect(AspectRatioPreset.ratio9x16.ratio, 9 / 16);
+      expect(AspectRatioPreset.original.label, 'Gốc');
+      expect(AspectRatioPreset.original.ratio, isNull);
+      expect(CropStyle.values.contains(CropStyle.circle), isTrue);
+      expect(CropStyle.values.contains(CropStyle.rectangle), isTrue);
     });
   });
 }

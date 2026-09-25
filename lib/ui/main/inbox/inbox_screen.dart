@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../core/constants/app_colors.dart';
@@ -13,6 +14,7 @@ import '../../../providers/feed_provider.dart';
 import '../../../providers/settings_provider.dart';
 import '../../../services/widget_service.dart';
 import '../../common/media_thumbnail.dart';
+import '../../common/skeleton_loader.dart';
 import '../viewer/photo_viewer_screen.dart';
 
 class InboxScreen extends ConsumerWidget {
@@ -34,90 +36,120 @@ class InboxScreen extends ConsumerWidget {
           ),
         ),
       ),
-      body: inboxAsync.when(
-        data: (photos) {
-          // Only update widget with photos from FRIENDS (never from current user)
-          final friendPhotos = photos.where((p) => p.senderId != user?.uid).toList();
-          if (friendPhotos.isNotEmpty) {
-            final latest = friendPhotos.first;
-            WidgetService.updateLatestPhoto(
-              latest.imageUrl,
-              caption: latest.caption,
-              senderName: latest.senderUser?.displayName ?? latest.senderUser?.username ?? 'Bạn bè',
-              isMirrored: latest.isMirrored,
-            );
-          } else {
-            WidgetService.clearWidget();
-          }
-          if (photos.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    LucideIcons.image,
-                    size: 64,
-                    color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                  ),
-                  const SizedBox(height: AppDimens.spaceBase),
-                  Text(
-                    AppStrings.tr('inbox_empty_title', lang: lang),
-                    style: AppTypography.h3(
-                      color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: AppDimens.spaceSm),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppDimens.space3Xl),
-                    child: Text(
-                      AppStrings.tr('inbox_empty_sub', lang: lang),
-                      style: AppTypography.body(
-                        color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return GridView.builder(
-            padding: const EdgeInsets.all(AppDimens.spaceBase),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: AppDimens.spaceBase,
-              mainAxisSpacing: AppDimens.spaceBase,
-              childAspectRatio: 0.8,
-            ),
-            itemCount: photos.length,
-            itemBuilder: (context, index) {
-              final photo = photos[index];
-              final isNew = user != null && photo.seen[user.uid] != true;
-
-              return _PhotoCard(
-                photo: photo,
-                isNew: isNew,
-                onTap: () {
-                  HapticHelper.light();
-                  if (user != null) {
-                    ref.read(photoServiceProvider).markPhotoAsSeen(photo.id, user.uid);
-                  }
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => PhotoViewerScreen(photo: photo),
-                    ),
-                  );
-                },
-              );
-            },
-          );
+      body: RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: () async {
+          HapticHelper.light();
+          ref.read(photoServiceProvider).clearSenderCache();
+          ref.invalidate(inboxPhotosProvider);
+          try {
+            await ref.read(inboxPhotosProvider.future);
+          } catch (_) {}
         },
-        loading: () => const Center(
-          child: CircularProgressIndicator(color: AppColors.primary),
-        ),
-        error: (err, stack) => Center(
-          child: Text('Lỗi: $err'),
+        child: inboxAsync.when(
+          data: (photos) {
+            // Only update widget with photos from FRIENDS (never from current user)
+            final friendPhotos = photos.where((p) => p.senderId != user?.uid).toList();
+            if (friendPhotos.isNotEmpty) {
+              final latest = friendPhotos.first;
+              WidgetService.updateLatestPhoto(
+                latest.imageUrl,
+                caption: latest.caption,
+                senderName: latest.senderUser?.displayName ?? latest.senderUser?.username ?? 'Bạn bè',
+                isMirrored: latest.isMirrored,
+              );
+            } else {
+              WidgetService.clearWidget();
+            }
+            if (photos.isEmpty) {
+              return LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 96,
+                            height: 96,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+                              boxShadow: AppDimens.glowShadow(AppColors.primary, opacity: 0.25),
+                            ),
+                            child: Icon(
+                              LucideIcons.image,
+                              size: 48,
+                              color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                            ),
+                          ),
+                          const SizedBox(height: AppDimens.spaceLg),
+                          Text(
+                            AppStrings.tr('inbox_empty_title', lang: lang),
+                            style: AppTypography.h3(
+                              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: AppDimens.spaceSm),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: AppDimens.space3Xl),
+                            child: Text(
+                              AppStrings.tr('inbox_empty_sub', lang: lang),
+                              style: AppTypography.body(
+                                color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ],
+                      ).animate().fadeIn(duration: 400.ms).scale(begin: const Offset(0.9, 0.9)),
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            return GridView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(AppDimens.spaceBase),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: AppDimens.spaceBase,
+                mainAxisSpacing: AppDimens.spaceBase,
+                childAspectRatio: 0.8,
+              ),
+              itemCount: photos.length,
+              itemBuilder: (context, index) {
+                final photo = photos[index];
+                final isNew = user != null && photo.seen[user.uid] != true;
+
+                return _PhotoCard(
+                  photo: photo,
+                  isNew: isNew,
+                  onTap: () {
+                    HapticHelper.light();
+                    if (user != null) {
+                      ref.read(photoServiceProvider).markPhotoAsSeen(photo.id, user.uid);
+                    }
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => PhotoViewerScreen(photo: photo),
+                      ),
+                    );
+                  },
+                ).animate().fadeIn(
+                  duration: 300.ms,
+                  delay: (index.clamp(0, 8) * 50).ms,
+                ).slideY(begin: 0.08, end: 0);
+              },
+            );
+          },
+          loading: () => const SkeletonGridView(childAspectRatio: 0.8),
+          error: (err, stack) => Center(
+            child: Text('Lỗi: $err'),
+          ),
         ),
       ),
     );

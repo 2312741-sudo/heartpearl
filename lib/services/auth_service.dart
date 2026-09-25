@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
@@ -135,10 +136,10 @@ class AuthService {
   // ==========================================
 
   Future<UserCredential?> signInWithGoogle() async {
-    final GoogleSignIn googleSignIn = GoogleSignIn(
-      scopes: ['email'],
-      clientId: '592218033486-8j6s0j3h9acvep29p70m56chb0dcfqtr.apps.googleusercontent.com',
-    );
+    // Do NOT pass clientId on Android — the plugin reads it from google-services.json.
+    // Passing a web client ID here causes ApiException: 10 (Developer Error) on Android.
+    // On iOS it is not needed either when GoogleService-Info.plist is correctly configured.
+    final GoogleSignIn googleSignIn = GoogleSignIn(scopes: ['email']);
     final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
     if (googleUser == null) {
       // User cancelled
@@ -248,6 +249,26 @@ class AuthService {
 
   // Sign out
   Future<void> signOut() async {
+    // Mark location as not live-sharing in Firestore before signing out,
+    // so friends stop seeing the live session even if the GPS stream lingers briefly.
+    // We do not call LocationService directly here to avoid circular dependencies;
+    // the Riverpod provider will dispose the LocationService instance on auth change.
+    try {
+      final uid = _auth.currentUser?.uid;
+      if (uid != null) {
+        await _db.collection('userLocations').doc(uid).set(
+          {'liveSessionActive': false, 'isSharing': false},
+          SetOptions(merge: true),
+        );
+        try {
+          await FirebaseDatabase.instance.ref('locations/$uid').update({
+            'liveSessionActive': false,
+            'isSharing': false,
+            'isOnline': false,
+          });
+        } catch (_) {}
+      }
+    } catch (_) {}
     try {
       await GoogleSignIn().signOut();
     } catch (_) {}
@@ -259,6 +280,11 @@ class AuthService {
     final user = _auth.currentUser;
     if (user == null) return;
     final uid = user.uid;
+
+    // Step 0: Delete Auth account FIRST.
+    // If the session is stale, Firebase throws requires-recent-login and we stop
+    // immediately — no data is partially deleted, avoiding a zombie account.
+    await user.delete();
 
     // 1. Delete user's uploaded photos and storage media files
     try {
@@ -285,20 +311,24 @@ class AuthService {
       debugPrint('Error deleting user photos: $e');
     }
 
-    // 2. Remove user from all friends' lists
+    // 2. Remove user from all friends' lists (chunked to stay under 500-op batch limit)
     try {
       final friendsSnapshot = await _db
           .collection('users')
           .where('friends', arrayContains: uid)
           .get();
 
-      final batch = _db.batch();
-      for (final friendDoc in friendsSnapshot.docs) {
-        batch.update(friendDoc.reference, {
-          'friends': FieldValue.arrayRemove([uid]),
-        });
+      const batchLimit = 400;
+      for (var i = 0; i < friendsSnapshot.docs.length; i += batchLimit) {
+        final chunk = friendsSnapshot.docs.skip(i).take(batchLimit);
+        final batch = _db.batch();
+        for (final friendDoc in chunk) {
+          batch.update(friendDoc.reference, {
+            'friends': FieldValue.arrayRemove([uid]),
+          });
+        }
+        await batch.commit();
       }
-      await batch.commit();
     } catch (e) {
       debugPrint('Error removing user from friends: $e');
     }
@@ -345,7 +375,17 @@ class AuthService {
       debugPrint('Error deleting notifications: $e');
     }
 
-    // 5. Delete user avatar in storage if exists
+    // 5. Delete location data (GDPR + App Store 5.1.1 compliance)
+    try {
+      await _db.collection('userLocations').doc(uid).delete();
+      try {
+        await FirebaseDatabase.instance.ref('locations/$uid').remove();
+      } catch (_) {}
+    } catch (e) {
+      debugPrint('Error deleting user location: $e');
+    }
+
+    // 6. Delete user avatar in storage if exists
     try {
       await FirebaseStorage.instance
           .ref()
@@ -354,23 +394,19 @@ class AuthService {
           .catchError((_) {});
     } catch (_) {}
 
-    // 6. Delete user Firestore document
+    // 7. Delete user Firestore document
     try {
       await _db.collection('users').doc(uid).delete();
     } catch (e) {
       debugPrint('Error deleting user doc: $e');
     }
 
-    // 7. Clear local data & widget cache
+    // 8. Clear local data & widget cache
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
       await WidgetService.updateLatestPhoto('');
     } catch (_) {}
-
-    // 8. Delete user from Firebase Authentication
-    // May throw FirebaseAuthException with code 'requires-recent-login'
-    await user.delete();
   }
 
   // Get user profile document

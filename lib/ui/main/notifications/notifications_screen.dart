@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -11,6 +12,7 @@ import '../../../models/notification_model.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/feed_provider.dart';
 import '../../../providers/notifications_provider.dart';
+import '../../common/skeleton_loader.dart';
 import '../../common/user_avatar.dart';
 import '../chat/chat_list_screen.dart';
 import '../chat/chat_room_screen.dart';
@@ -337,16 +339,17 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                               notif: notif,
                               isDark: isDark,
                             ),
-                          );
+                          ).animate().fadeIn(
+                            duration: 300.ms,
+                            delay: (index.clamp(0, 8) * 50).ms,
+                          ).slideY(begin: 0.08, end: 0);
                         },
                       ),
               ),
             ],
           );
         },
-        loading: () => const Center(
-          child: CircularProgressIndicator(color: AppColors.primary),
-        ),
+        loading: () => const SkeletonListView(),
         error: (err, _) => Center(
           child: Text(
             'Lỗi tải thông báo: $err',
@@ -596,6 +599,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                       ? AppColors.darkBorder
                       : AppColors.lightBorder,
                 ),
+                boxShadow: AppDimens.glowShadow(
+                  AppColors.primary,
+                  opacity: 0.25,
+                ),
               ),
               child: Icon(
                 _filterIndex == 1
@@ -633,7 +640,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             ),
           ],
         ),
-      ),
+      ).animate().fadeIn(duration: 400.ms).scale(begin: const Offset(0.9, 0.9)),
     );
   }
 }

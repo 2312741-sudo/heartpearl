@@ -4,12 +4,15 @@ import 'dart:io';
 import 'package:battery_plus/battery_plus.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../models/location_model.dart';
 import 'location_policy.dart';
 import 'location_sharing_duration.dart';
+import 'places_service.dart';
 
 enum LocationTrackingStatus {
   idle,
@@ -33,28 +36,68 @@ class LocationTrackingException implements Exception {
 
 class LocationService {
   static const String collectionName = 'userLocations';
+  static const String rtdbUrl =
+      'https://tamchau-865f3.asia-southeast1.firebasedatabase.app';
 
   final FirebaseFirestore _db;
   final FirebaseAuth _auth;
   final Battery _battery;
+  final FirebaseDatabase _rtdb;
+  final PlacesService _placesService;
   final StreamController<LocationTrackingStatus> _statusController =
       StreamController<LocationTrackingStatus>.broadcast();
 
-  StreamSubscription<Position>? _positionSubscription;
   StreamSubscription<Position>? _liveSubscription;
   Timer? _expiryTimer;
   Timer? _heartbeatTimer;
   LocationSharingDuration? _currentDuration;
   DateTime? _lastBatteryReadAt;
   int? _cachedBatteryLevel;
+  double? _lastWrittenLat;
+  double? _lastWrittenLng;
+  DateTime? _lastWrittenAt;
+  DateTime? _lastFirestoreSyncAt;
+
+  // Zenly Dwell Time Engine State
+  String? _currentPlaceId;
+  String? _currentPlaceType;
+  String? _currentPlaceLabel;
+  DateTime? _arrivedAt;
+
+  /// Safe status emitter — no-ops if the controller has already been closed.
+  void _addStatus(LocationTrackingStatus status) {
+    if (!_statusController.isClosed) _statusController.add(status);
+  }
 
   LocationService({
     FirebaseFirestore? firestore,
     FirebaseAuth? auth,
     Battery? battery,
+    FirebaseDatabase? rtdb,
+    PlacesService? placesService,
   }) : _db = firestore ?? FirebaseFirestore.instance,
        _auth = auth ?? FirebaseAuth.instance,
-       _battery = battery ?? Battery();
+       _battery = battery ?? Battery(),
+       _rtdb = rtdb ?? _initRtdb(),
+       _placesService = placesService ?? PlacesService() {
+    try {
+      _rtdb.setPersistenceEnabled(true);
+    } catch (_) {}
+  }
+
+  static FirebaseDatabase _initRtdb() {
+    try {
+      if (Firebase.apps.isNotEmpty) {
+        return FirebaseDatabase.instanceFor(
+          app: Firebase.app(),
+          databaseURL: rtdbUrl,
+        );
+      }
+      return FirebaseDatabase.instance;
+    } catch (_) {
+      return FirebaseDatabase.instance;
+    }
+  }
 
   Stream<LocationTrackingStatus> get statusStream => _statusController.stream;
 
@@ -67,6 +110,8 @@ class LocationService {
   DocumentReference<Map<String, dynamic>> _locationRef(String uid) =>
       _db.collection(collectionName).doc(uid);
 
+  DatabaseReference _rtdbLocationRef(String uid) => _rtdb.ref('locations/$uid');
+
   String _requireCurrentUid() {
     final uid = _auth.currentUser?.uid;
     if (uid == null || uid.isEmpty) {
@@ -75,21 +120,61 @@ class LocationService {
     return uid;
   }
 
+  /// Evaluates whether coordinates match a pinned place and manages dwell arrival time.
+  void _evaluateDwellPlace(double lat, double lng, double speed) {
+    // If moving fast (> 15 km/h ~ 4.2 m/s), user is definitely in transit
+    if (speed > 4.2) {
+      _currentPlaceId = null;
+      _currentPlaceType = null;
+      _currentPlaceLabel = null;
+      _arrivedAt = null;
+      return;
+    }
+
+    final matched = _placesService.findMatchingPlace(
+      lat: lat,
+      lng: lng,
+      currentPlaceId: _currentPlaceId,
+    );
+
+    if (matched != null) {
+      if (_currentPlaceId == matched.id) {
+        // Still at the same place: keep previous arrival timestamp!
+      } else {
+        // New place arrival
+        _currentPlaceId = matched.id;
+        _currentPlaceType = matched.type.name;
+        _currentPlaceLabel = matched.label;
+        _arrivedAt = DateTime.now();
+      }
+    } else {
+      _currentPlaceId = null;
+      _currentPlaceType = null;
+      _currentPlaceLabel = null;
+      _arrivedAt = null;
+    }
+  }
+
+  /// Streams own location updates via Firebase Realtime Database.
   Stream<LocationModel?> streamOwnLocation() {
     final uid = _auth.currentUser?.uid;
     if (uid == null || uid.isEmpty) return Stream.value(null);
-    return _locationRef(uid).snapshots().map((snapshot) {
-      if (!snapshot.exists) return null;
-      return LocationModel.fromFirestore(snapshot);
+    return _rtdbLocationRef(uid).onValue.map((event) {
+      final snapshot = event.snapshot;
+      if (!snapshot.exists || snapshot.value == null) return null;
+      return LocationModel.fromRealtimeSnapshot(snapshot);
     });
   }
 
+  /// Streams a friend's location updates via Firebase Realtime Database.
+  /// Subscriptions receive low-latency (~30-50ms) push updates with onDisconnect awareness.
   Stream<LocationModel?> streamFriendLocation(String friendUid) {
     final cleanUid = friendUid.trim();
     if (cleanUid.isEmpty) return Stream.value(null);
-    return _locationRef(cleanUid).snapshots().map((snapshot) {
-      if (!snapshot.exists) return null;
-      final location = LocationModel.fromFirestore(snapshot);
+    return _rtdbLocationRef(cleanUid).onValue.map((event) {
+      final snapshot = event.snapshot;
+      if (!snapshot.exists || snapshot.value == null) return null;
+      final location = LocationModel.fromRealtimeSnapshot(snapshot);
       // Respect expiry server-side: if expired, treat as not sharing.
       if (!location.isSharing || !location.hasCoordinate || location.isExpired) {
         return null;
@@ -99,27 +184,32 @@ class LocationService {
   }
 
   Future<LocationModel?> getOwnLocation() async {
-    final snapshot = await _locationRef(_requireCurrentUid()).get();
-    return snapshot.exists ? LocationModel.fromFirestore(snapshot) : null;
+    final uid = _requireCurrentUid();
+    final snapshot = await _rtdbLocationRef(uid).get();
+    if (snapshot.exists && snapshot.value != null) {
+      return LocationModel.fromRealtimeSnapshot(snapshot);
+    }
+    final doc = await _locationRef(uid).get();
+    return doc.exists ? LocationModel.fromFirestore(doc) : null;
   }
 
   Future<LocationPermission> requestSharingPermission() async {
     if (!await Geolocator.isLocationServiceEnabled()) {
-      _statusController.add(LocationTrackingStatus.serviceDisabled);
+      _addStatus(LocationTrackingStatus.serviceDisabled);
       throw const LocationTrackingException(
         'Dịch vụ vị trí đang tắt. Hãy bật vị trí trong Cài đặt.',
         LocationTrackingStatus.serviceDisabled,
       );
     }
 
-    _statusController.add(LocationTrackingStatus.requestingPermission);
+    _addStatus(LocationTrackingStatus.requestingPermission);
     var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.unableToDetermine) {
       permission = await Geolocator.requestPermission();
     }
     if (permission == LocationPermission.deniedForever) {
-      _statusController.add(LocationTrackingStatus.permissionDeniedForever);
+      _addStatus(LocationTrackingStatus.permissionDeniedForever);
       throw const LocationTrackingException(
         'Quyền vị trí đã bị từ chối vĩnh viễn. Hãy mở Cài đặt ứng dụng.',
         LocationTrackingStatus.permissionDeniedForever,
@@ -127,7 +217,7 @@ class LocationService {
     }
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.unableToDetermine) {
-      _statusController.add(LocationTrackingStatus.permissionDenied);
+      _addStatus(LocationTrackingStatus.permissionDenied);
       throw const LocationTrackingException(
         'HeartPearl cần quyền vị trí để bật chia sẻ.',
         LocationTrackingStatus.permissionDenied,
@@ -144,7 +234,7 @@ class LocationService {
     }
     if (permission != LocationPermission.always &&
         permission != LocationPermission.whileInUse) {
-      _statusController.add(LocationTrackingStatus.permissionDenied);
+      _addStatus(LocationTrackingStatus.permissionDenied);
       throw const LocationTrackingException(
         'HeartPearl cần quyền vị trí để bật chia sẻ.',
         LocationTrackingStatus.permissionDenied,
@@ -157,7 +247,7 @@ class LocationService {
   Future<void> stopSharing() => setSharingEnabled(false);
 
   // ---------------------------------------------------------------------------
-  // Manual Check-In (original behaviour — kept per Apple Guideline 5.1.2(i))
+  // Manual Check-In (per Apple Guideline 5.1.2(i))
   // ---------------------------------------------------------------------------
 
   /// Manual Check-in: captures a single GPS fix on explicit user tap.
@@ -165,43 +255,92 @@ class LocationService {
     final uid = _requireCurrentUid();
     await requestSharingPermission();
 
-    final position = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        timeLimit: Duration(seconds: 15),
-      ),
-    );
+    Position? position;
+    try {
+      position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
+    } catch (_) {
+      position = await Geolocator.getLastKnownPosition();
+    }
 
-    if (!LocationPolicy.isValidFix(
-      lat: position.latitude,
-      lng: position.longitude,
-      accuracy: position.accuracy,
-    )) {
-      throw Exception('Tọa độ GPS không hợp lệ. Vui lòng kiểm tra lại kết nối GPS.');
+    if (position == null ||
+        !LocationPolicy.isValidFix(
+          lat: position.latitude,
+          lng: position.longitude,
+          accuracy: position.accuracy,
+        )) {
+      throw Exception('Tọa độ GPS không hợp lệ hoặc chưa sẵn sàng. Vui lòng thử lại.');
     }
 
     final battery = await _readBatteryLevel();
     final now = DateTime.now();
+    final speed = position.speed.isFinite && position.speed > 0
+        ? position.speed.clamp(0, 200).toDouble()
+        : 0.0;
 
-    final data = <String, dynamic>{
+    _evaluateDwellPlace(position.latitude, position.longitude, speed);
+
+    // 1. Setup onDisconnect & write to RTDB
+    final rtdbRef = _rtdbLocationRef(uid);
+    try {
+      await rtdbRef.onDisconnect().update({
+        'isOnline': false,
+        'updatedAt': ServerValue.timestamp,
+      });
+    } catch (_) {}
+
+    await rtdbRef.update({
       'ownerUid': uid,
       'isSharing': true,
+      'isOnline': true,
       'liveSessionActive': false,
-      'shareExpiresAt': FieldValue.delete(),
-      'shareDurationLabel': FieldValue.delete(),
-      'geo': GeoPoint(position.latitude, position.longitude),
+      'shareExpiresAt': null,
+      'shareDurationLabel': null,
       'lat': position.latitude,
       'lng': position.longitude,
       'accuracy': position.accuracy,
-      'speed': position.speed.isFinite && position.speed > 0
-          ? position.speed.clamp(0, 200).toDouble()
-          : 0.0,
-      'batteryLevel': ?battery,
-      'capturedAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
+      'speed': speed,
+      'batteryLevel': battery,
+      'capturedAt': now.millisecondsSinceEpoch,
+      'updatedAt': ServerValue.timestamp,
+      'currentPlaceType': _currentPlaceType,
+      'currentPlaceLabel': _currentPlaceLabel,
+      'arrivedAt': _arrivedAt?.millisecondsSinceEpoch,
+    });
 
-    await _locationRef(uid).set(data, SetOptions(merge: true));
+    // 2. Dual-write to Firestore for backward compatibility
+    try {
+      final firestoreData = <String, dynamic>{
+        'ownerUid': uid,
+        'isSharing': true,
+        'isOnline': true,
+        'liveSessionActive': false,
+        'shareExpiresAt': FieldValue.delete(),
+        'shareDurationLabel': FieldValue.delete(),
+        'geo': GeoPoint(position.latitude, position.longitude),
+        'lat': position.latitude,
+        'lng': position.longitude,
+        'accuracy': position.accuracy,
+        'speed': speed,
+        'batteryLevel': ?battery,
+        'capturedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'currentPlaceType': _currentPlaceType,
+        'currentPlaceLabel': _currentPlaceLabel,
+        'arrivedAt': _arrivedAt != null ? Timestamp.fromDate(_arrivedAt!) : FieldValue.delete(),
+      };
+      await _locationRef(uid).set(firestoreData, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Firestore checkIn sync warning: $e');
+    }
+
+    _lastWrittenLat = position.latitude;
+    _lastWrittenLng = position.longitude;
+    _lastWrittenAt = now;
 
     final model = LocationModel(
       uid: uid,
@@ -212,24 +351,22 @@ class LocationService {
       speed: position.speed,
       batteryLevel: battery,
       isSharing: true,
+      isOnline: true,
       liveSessionActive: false,
+      currentPlaceType: _currentPlaceType,
+      currentPlaceLabel: _currentPlaceLabel,
+      arrivedAt: _arrivedAt,
     );
 
-    _statusController.add(LocationTrackingStatus.tracking);
+    _addStatus(LocationTrackingStatus.tracking);
     return model;
   }
 
   // ---------------------------------------------------------------------------
-  // Live Location Sharing (timed session)
+  // Live Location Sharing (Zenly Architecture via RTDB)
   // ---------------------------------------------------------------------------
 
   /// Starts a live location streaming session for the chosen [duration].
-  ///
-  /// GPS positions are published to Firestore whenever the device moves ≥ 20m
-  /// OR every 30 seconds (whichever comes first), whileInUse only.
-  /// When the app enters background, iOS/Android suspend the stream; the last
-  /// known coordinates remain on Firestore until the session expires or the
-  /// user taps Ghost Mode.
   Future<void> startLiveSharing(LocationSharingDuration duration) async {
     // Stop any existing live session first.
     await stopLiveSharing(clearFirestore: false);
@@ -237,51 +374,86 @@ class LocationService {
     final uid = _requireCurrentUid();
     await requestSharingPermission();
 
-    // Get initial fix to write immediately.
-    final initialPosition = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        timeLimit: Duration(seconds: 15),
-      ),
-    );
+    // Get initial fix to write immediately with graceful fallback.
+    Position? initialPosition;
+    try {
+      initialPosition = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
+    } catch (_) {
+      initialPosition = await Geolocator.getLastKnownPosition();
+    }
 
-    if (!LocationPolicy.isValidFix(
-      lat: initialPosition.latitude,
-      lng: initialPosition.longitude,
-      accuracy: initialPosition.accuracy,
-    )) {
-      throw Exception('Tọa độ GPS không hợp lệ. Vui lòng kiểm tra lại kết nối GPS.');
+    if (initialPosition == null ||
+        !LocationPolicy.isValidFix(
+          lat: initialPosition.latitude,
+          lng: initialPosition.longitude,
+          accuracy: initialPosition.accuracy,
+        )) {
+      throw Exception('Tọa độ GPS không hợp lệ hoặc chưa sẵn sàng. Vui lòng kiểm tra lại GPS.');
     }
 
     final expiresAt = duration.expiresAt();
     _currentDuration = duration;
 
-    // Write initial position + session metadata to Firestore.
+    // Register onDisconnect hook in RTDB
+    try {
+      await _rtdbLocationRef(uid).onDisconnect().update({
+        'isOnline': false,
+        'updatedAt': ServerValue.timestamp,
+      });
+    } catch (_) {}
+
+    // Write initial position + session metadata to RTDB & Firestore.
     final battery = await _readBatteryLevel();
-    await _writeLivePosition(uid, initialPosition, expiresAt, duration, battery);
+    await _writeLivePosition(uid, initialPosition, expiresAt, duration, battery, forceFirestore: true);
 
-    // Start streaming position updates.
+    // Start streaming position updates with auto-restart on error.
     final settings = _buildLiveSettings();
-    _liveSubscription = Geolocator.getPositionStream(locationSettings: settings).listen(
-      (position) => _onLivePosition(uid, position, expiresAt, duration),
-      onError: (Object error) {
-        debugPrint('Live location stream error: $error');
-        _statusController.add(LocationTrackingStatus.error);
-      },
-      cancelOnError: false,
-    );
+    void startPositionStream() {
+      _liveSubscription = Geolocator.getPositionStream(locationSettings: settings).listen(
+        (position) => _onLivePosition(uid, position, expiresAt, duration),
+        onError: (Object error) {
+          debugPrint('Live location stream error: $error — restarting in 5s');
+          _addStatus(LocationTrackingStatus.error);
+          _liveSubscription?.cancel();
+          _liveSubscription = null;
+          if (_heartbeatTimer != null) {
+            Future.delayed(const Duration(seconds: 5), () {
+              if (_heartbeatTimer != null) startPositionStream();
+            });
+          }
+        },
+        cancelOnError: true,
+      );
+    }
+    startPositionStream();
 
-    _statusController.add(LocationTrackingStatus.tracking);
+    _addStatus(LocationTrackingStatus.tracking);
 
-    // Heartbeat: every 60 s, force-write last known position to Firestore so friends
-    // always see a fresh timestamp even when the user is stationary (no distanceFilter
-    // events fire). This also acts as a liveness ping for the live session.
+    // Heartbeat: every 45 s, force-write a FRESH GPS fix to RTDB
     _heartbeatTimer?.cancel();
-    _heartbeatTimer = Timer.periodic(const Duration(seconds: 60), (_) async {
-      if (_liveSubscription == null) return; // session stopped
-      if (expiresAt != null && DateTime.now().isAfter(expiresAt)) return;
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 45), (_) async {
+      if (_liveSubscription == null) return;
+      if (expiresAt != null && DateTime.now().isAfter(expiresAt)) {
+        await stopLiveSharing(clearFirestore: true);
+        return;
+      }
       try {
-        final pos = await Geolocator.getLastKnownPosition();
+        Position? pos;
+        try {
+          pos = await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.medium,
+              timeLimit: Duration(seconds: 8),
+            ),
+          );
+        } catch (_) {
+          pos = await Geolocator.getLastKnownPosition();
+        }
         if (pos != null &&
             LocationPolicy.isValidFix(
               lat: pos.latitude,
@@ -289,7 +461,7 @@ class LocationService {
               accuracy: pos.accuracy,
             )) {
           final battery = await _readBatteryLevel();
-          await _writeLivePosition(uid, pos, expiresAt, duration, battery);
+          await _heartbeatWrite(uid, pos, expiresAt, duration, battery);
         }
       } catch (_) {}
     });
@@ -317,32 +489,72 @@ class LocationService {
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
     _currentDuration = null;
+    _lastWrittenLat = null;
+    _lastWrittenLng = null;
+    _lastWrittenAt = null;
+    _lastFirestoreSyncAt = null;
+    _currentPlaceId = null;
+    _currentPlaceType = null;
+    _currentPlaceLabel = null;
+    _arrivedAt = null;
     await sub?.cancel();
 
-    if (clearFirestore) {
+    final uid = _auth.currentUser?.uid;
+    if (uid != null && uid.isNotEmpty) {
       try {
-        final uid = _auth.currentUser?.uid;
-        if (uid != null && uid.isNotEmpty) {
-          await _locationRef(uid).set({
-            'ownerUid': uid,
-            'isSharing': false,
-            'liveSessionActive': false,
-            'shareExpiresAt': FieldValue.delete(),
-            'shareDurationLabel': FieldValue.delete(),
-            'geo': FieldValue.delete(),
-            'lat': FieldValue.delete(),
-            'lng': FieldValue.delete(),
-            'capturedAt': FieldValue.delete(),
-            'accuracy': FieldValue.delete(),
-            'speed': FieldValue.delete(),
-            'batteryLevel': FieldValue.delete(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-        }
+        await _rtdbLocationRef(uid).onDisconnect().cancel();
+      } catch (_) {}
+    }
+
+    if (clearFirestore && uid != null && uid.isNotEmpty) {
+      // Clear RTDB
+      try {
+        await _rtdbLocationRef(uid).update({
+          'ownerUid': uid,
+          'isSharing': false,
+          'isOnline': false,
+          'liveSessionActive': false,
+          'shareExpiresAt': null,
+          'shareDurationLabel': null,
+          'lat': null,
+          'lng': null,
+          'capturedAt': null,
+          'accuracy': null,
+          'speed': null,
+          'batteryLevel': null,
+          'currentPlaceType': null,
+          'currentPlaceLabel': null,
+          'arrivedAt': null,
+          'updatedAt': ServerValue.timestamp,
+        });
+      } catch (error) {
+        debugPrint('stopLiveSharing RTDB error: $error');
+      }
+
+      // Clear Firestore
+      try {
+        await _locationRef(uid).set({
+          'ownerUid': uid,
+          'isSharing': false,
+          'liveSessionActive': false,
+          'shareExpiresAt': FieldValue.delete(),
+          'shareDurationLabel': FieldValue.delete(),
+          'geo': FieldValue.delete(),
+          'lat': FieldValue.delete(),
+          'lng': FieldValue.delete(),
+          'capturedAt': FieldValue.delete(),
+          'accuracy': FieldValue.delete(),
+          'speed': FieldValue.delete(),
+          'batteryLevel': FieldValue.delete(),
+          'currentPlaceType': FieldValue.delete(),
+          'currentPlaceLabel': FieldValue.delete(),
+          'arrivedAt': FieldValue.delete(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
       } catch (error) {
         debugPrint('stopLiveSharing Firestore error: $error');
       }
-      _statusController.add(LocationTrackingStatus.idle);
+      _addStatus(LocationTrackingStatus.idle);
     }
   }
 
@@ -372,12 +584,125 @@ class LocationService {
       accuracy: position.accuracy,
     )) { return; }
 
+    // Filter out noisy low-accuracy jitter (e.g. indoors/tunnels where error circle > 65m)
+    if (position.accuracy > 65.0) {
+      return;
+    }
+
+    // Adaptive Motion & Distance Gate (Zenly pattern):
+    final lastLat = _lastWrittenLat;
+    final lastLng = _lastWrittenLng;
+    final lastAt = _lastWrittenAt;
+    if (lastLat != null && lastLng != null && lastAt != null) {
+      final dist = LocationPolicy.distanceMetres(
+        lastLat,
+        lastLng,
+        position.latitude,
+        position.longitude,
+      );
+      final elapsed = DateTime.now().difference(lastAt);
+
+      // Stationary check: speed < 0.6 m/s (~2.1 km/h) and moved < 15 m
+      final isStationary = position.speed < 0.6 && dist < 15.0;
+
+      if (isStationary) {
+        // While stationary: update keep-alive every 60s or when moved >= 15m
+        if (elapsed < const Duration(seconds: 60)) {
+          return;
+        }
+      } else {
+        // While moving: write if moved >= 10m OR if 8s elapsed
+        if (dist < 10.0 && elapsed < const Duration(seconds: 8)) {
+          return;
+        }
+      }
+    }
+
     _readBatteryLevel().then((battery) {
+      if (_liveSubscription == null) return;
       _writeLivePosition(uid, position, expiresAt, duration, battery);
     });
   }
 
   Future<void> _writeLivePosition(
+    String uid,
+    Position position,
+    DateTime? expiresAt,
+    LocationSharingDuration duration,
+    int? battery, {
+    bool forceFirestore = false,
+  }) async {
+    try {
+      final speed = position.speed.isFinite && position.speed > 0
+          ? position.speed.clamp(0, 200).toDouble()
+          : 0.0;
+
+      _evaluateDwellPlace(position.latitude, position.longitude, speed);
+
+      // 1. Write to RTDB (Instant WebSocket ~30ms, no per-write cost)
+      await _rtdbLocationRef(uid).update({
+        'ownerUid': uid,
+        'isSharing': true,
+        'isOnline': true,
+        'liveSessionActive': true,
+        'shareDurationLabel': duration.firestoreLabel,
+        'shareExpiresAt': expiresAt?.millisecondsSinceEpoch,
+        'lat': position.latitude,
+        'lng': position.longitude,
+        'accuracy': position.accuracy,
+        'speed': speed,
+        'batteryLevel': battery,
+        'capturedAt': position.timestamp.millisecondsSinceEpoch,
+        'updatedAt': ServerValue.timestamp,
+        'currentPlaceType': _currentPlaceType,
+        'currentPlaceLabel': _currentPlaceLabel,
+        'arrivedAt': _arrivedAt?.millisecondsSinceEpoch,
+      });
+
+      _lastWrittenLat = position.latitude;
+      _lastWrittenLng = position.longitude;
+      final now = DateTime.now();
+      _lastWrittenAt = now;
+      _addStatus(LocationTrackingStatus.tracking);
+
+      // 2. Dual-sync to Firestore only every 2 minutes or on session start
+      if (forceFirestore ||
+          _lastFirestoreSyncAt == null ||
+          now.difference(_lastFirestoreSyncAt!) >= const Duration(minutes: 2)) {
+        _lastFirestoreSyncAt = now;
+        try {
+          await _locationRef(uid).set({
+            'ownerUid': uid,
+            'isSharing': true,
+            'isOnline': true,
+            'liveSessionActive': true,
+            'shareDurationLabel': duration.firestoreLabel,
+            'shareExpiresAt':
+                expiresAt != null ? Timestamp.fromDate(expiresAt) : FieldValue.delete(),
+            'geo': GeoPoint(position.latitude, position.longitude),
+            'lat': position.latitude,
+            'lng': position.longitude,
+            'accuracy': position.accuracy,
+            'speed': speed,
+            'batteryLevel': ?battery,
+            'capturedAt': Timestamp.fromDate(position.timestamp),
+            'updatedAt': FieldValue.serverTimestamp(),
+            'currentPlaceType': _currentPlaceType,
+            'currentPlaceLabel': _currentPlaceLabel,
+            'arrivedAt': _arrivedAt != null ? Timestamp.fromDate(_arrivedAt!) : FieldValue.delete(),
+          }, SetOptions(merge: true));
+        } catch (e) {
+          debugPrint('Firestore dual-sync warning: $e');
+        }
+      }
+    } catch (error) {
+      debugPrint('Live write failed: $error');
+      _addStatus(LocationTrackingStatus.error);
+    }
+  }
+
+  /// Writes a fresh position to RTDB for heartbeat purposes.
+  Future<void> _heartbeatWrite(
     String uid,
     Position position,
     DateTime? expiresAt,
@@ -388,65 +713,59 @@ class LocationService {
       final speed = position.speed.isFinite && position.speed > 0
           ? position.speed.clamp(0, 200).toDouble()
           : 0.0;
-      final data = <String, dynamic>{
+
+      _evaluateDwellPlace(position.latitude, position.longitude, speed);
+
+      await _rtdbLocationRef(uid).update({
         'ownerUid': uid,
         'isSharing': true,
+        'isOnline': true,
         'liveSessionActive': true,
         'shareDurationLabel': duration.firestoreLabel,
-        'shareExpiresAt':
-            expiresAt != null ? Timestamp.fromDate(expiresAt) : FieldValue.delete(),
-        'geo': GeoPoint(position.latitude, position.longitude),
+        'shareExpiresAt': expiresAt?.millisecondsSinceEpoch,
         'lat': position.latitude,
         'lng': position.longitude,
         'accuracy': position.accuracy,
         'speed': speed,
-        'batteryLevel': ?battery,
-        'capturedAt': Timestamp.fromDate(position.timestamp),
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-      await _locationRef(uid).set(data, SetOptions(merge: true));
-      _statusController.add(LocationTrackingStatus.tracking);
+        'batteryLevel': battery,
+        'capturedAt': position.timestamp.millisecondsSinceEpoch,
+        'updatedAt': ServerValue.timestamp,
+        'currentPlaceType': _currentPlaceType,
+        'currentPlaceLabel': _currentPlaceLabel,
+        'arrivedAt': _arrivedAt?.millisecondsSinceEpoch,
+      });
+      _addStatus(LocationTrackingStatus.tracking);
     } catch (error) {
-      debugPrint('Live write failed: $error');
-      _statusController.add(LocationTrackingStatus.error);
+      debugPrint('Heartbeat write failed: $error');
     }
   }
 
   LocationSettings _buildLiveSettings() {
-    const accuracy = LocationAccuracy.high;
-    // 10 m is a good balance: fine-grained enough to show walking, but avoids
-    // excessive writes when the user is truly stationary (heartbeat covers that).
-    const distanceFilter = 10; // metres
-
     if (Platform.isAndroid) {
       return AndroidSettings(
-        accuracy: accuracy,
-        distanceFilter: distanceFilter,
-        // 20 s minimum interval between callbacks (even without moving 10 m)
-        intervalDuration: const Duration(seconds: 20),
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 0,
         foregroundNotificationConfig: const ForegroundNotificationConfig(
           notificationTitle: 'HeartPearl Live',
           notificationText: 'Đang chia sẻ vị trí trực tiếp với bạn bè',
           notificationChannelName: 'Chia sẻ vị trí trực tiếp',
-          enableWakeLock: false,
+          enableWakeLock: true,
           setOngoing: true,
         ),
       );
     }
     if (Platform.isIOS) {
       return AppleSettings(
-        accuracy: accuracy,
-        distanceFilter: distanceFilter,
-        // CRITICAL: false = iOS MUST NOT auto-pause the stream when stationary.
-        // With true, iOS can silently kill the stream → friends see no movement.
+        accuracy: LocationAccuracy.bestForNavigation,
+        distanceFilter: 0,
         pauseLocationUpdatesAutomatically: false,
-        showBackgroundLocationIndicator: true, // Blue status bar pill in background
-        allowBackgroundLocationUpdates: false, // Foreground-only (Apple 5.1.2(i))
+        showBackgroundLocationIndicator: true,
+        allowBackgroundLocationUpdates: true,
       );
     }
     return const LocationSettings(
-      accuracy: accuracy,
-      distanceFilter: distanceFilter,
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 0,
     );
   }
 
@@ -457,26 +776,69 @@ class LocationService {
   /// Removes the user's location from the map (Ghost Mode).
   /// Also stops any active live session.
   Future<void> clearCheckIn() async {
-    // Stop live session without clearing Firestore (we handle it below).
     if (isLiveActive) await stopLiveSharing(clearFirestore: false);
+    _lastWrittenLat = null;
+    _lastWrittenLng = null;
+    _lastWrittenAt = null;
+    _lastFirestoreSyncAt = null;
+    _currentPlaceId = null;
+    _currentPlaceType = null;
+    _currentPlaceLabel = null;
+    _arrivedAt = null;
 
     final uid = _requireCurrentUid();
-    await _locationRef(uid).set({
-      'ownerUid': uid,
-      'isSharing': false,
-      'liveSessionActive': false,
-      'shareExpiresAt': FieldValue.delete(),
-      'shareDurationLabel': FieldValue.delete(),
-      'geo': FieldValue.delete(),
-      'lat': FieldValue.delete(),
-      'lng': FieldValue.delete(),
-      'capturedAt': FieldValue.delete(),
-      'accuracy': FieldValue.delete(),
-      'speed': FieldValue.delete(),
-      'batteryLevel': FieldValue.delete(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    _statusController.add(LocationTrackingStatus.idle);
+    try {
+      await _rtdbLocationRef(uid).onDisconnect().cancel();
+    } catch (_) {}
+
+    // Clear RTDB
+    try {
+      await _rtdbLocationRef(uid).update({
+        'ownerUid': uid,
+        'isSharing': false,
+        'isOnline': false,
+        'liveSessionActive': false,
+        'shareExpiresAt': null,
+        'shareDurationLabel': null,
+        'lat': null,
+        'lng': null,
+        'capturedAt': null,
+        'accuracy': null,
+        'speed': null,
+        'batteryLevel': null,
+        'currentPlaceType': null,
+        'currentPlaceLabel': null,
+        'arrivedAt': null,
+        'updatedAt': ServerValue.timestamp,
+      });
+    } catch (e) {
+      debugPrint('clearCheckIn RTDB error: $e');
+    }
+
+    // Clear Firestore
+    try {
+      await _locationRef(uid).set({
+        'ownerUid': uid,
+        'isSharing': false,
+        'liveSessionActive': false,
+        'shareExpiresAt': FieldValue.delete(),
+        'shareDurationLabel': FieldValue.delete(),
+        'geo': FieldValue.delete(),
+        'lat': FieldValue.delete(),
+        'lng': FieldValue.delete(),
+        'capturedAt': FieldValue.delete(),
+        'accuracy': FieldValue.delete(),
+        'speed': FieldValue.delete(),
+        'batteryLevel': FieldValue.delete(),
+        'currentPlaceType': FieldValue.delete(),
+        'currentPlaceLabel': FieldValue.delete(),
+        'arrivedAt': FieldValue.delete(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('clearCheckIn Firestore error: $e');
+    }
+    _addStatus(LocationTrackingStatus.idle);
   }
 
   Future<void> setSharingEnabled(bool enabled) async {
@@ -489,7 +851,7 @@ class LocationService {
     } on LocationTrackingException {
       rethrow;
     } catch (error) {
-      _statusController.add(LocationTrackingStatus.error);
+      _addStatus(LocationTrackingStatus.error);
       throw Exception('Không thể cập nhật chia sẻ vị trí: $error');
     }
   }
@@ -519,6 +881,16 @@ class LocationService {
         'allowedViewers': stored,
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
+
+      try {
+        await _rtdbLocationRef(uid).update({
+          'ownerUid': uid,
+          'allowedViewers': stored,
+          'updatedAt': ServerValue.timestamp,
+        });
+      } catch (e) {
+        debugPrint('RTDB setAllowedViewers error: $e');
+      }
     } catch (error) {
       throw Exception('Không thể cập nhật người được xem vị trí: $error');
     }
@@ -528,12 +900,27 @@ class LocationService {
     final uid = _auth.currentUser?.uid;
     if (uid == null || uid.isEmpty) return;
     try {
+      final snapshot = await _rtdbLocationRef(uid).get();
+      if (snapshot.exists && snapshot.value is Map) {
+        final data = Map<String, dynamic>.from(snapshot.value as Map);
+        if (data['isSharing'] == true) {
+          _addStatus(LocationTrackingStatus.tracking);
+          final rawExpiry = data['shareExpiresAt'];
+          if (rawExpiry is int) {
+            final expiresAt = DateTime.fromMillisecondsSinceEpoch(rawExpiry);
+            if (DateTime.now().isAfter(expiresAt)) {
+              await clearCheckIn();
+              return;
+            }
+          }
+          return;
+        }
+      }
+
       final existing = await _locationRef(uid).get();
       final data = existing.data();
       if (existing.exists && data?['isSharing'] == true) {
-        _statusController.add(LocationTrackingStatus.tracking);
-        // If there was an active live session but the timer was lost (app restart),
-        // check expiry and clear if past deadline.
+        _addStatus(LocationTrackingStatus.tracking);
         final rawExpiry = data?['shareExpiresAt'];
         if (rawExpiry is Timestamp) {
           final expiresAt = rawExpiry.toDate();
@@ -543,18 +930,15 @@ class LocationService {
           }
         }
       } else {
-        _statusController.add(LocationTrackingStatus.idle);
+        _addStatus(LocationTrackingStatus.idle);
       }
     } catch (_) {
-      _statusController.add(LocationTrackingStatus.idle);
+      _addStatus(LocationTrackingStatus.idle);
     }
   }
 
   Future<void> stopTracking() async {
-    final subscription = _positionSubscription;
-    _positionSubscription = null;
-    await subscription?.cancel();
-    _statusController.add(LocationTrackingStatus.idle);
+    _addStatus(LocationTrackingStatus.idle);
   }
 
   Future<void> setBackgroundMode(bool background) async {
@@ -565,7 +949,7 @@ class LocationService {
   Future<int?> _readBatteryLevel() async {
     final now = DateTime.now();
     if (_lastBatteryReadAt != null &&
-        now.difference(_lastBatteryReadAt!) < const Duration(minutes: 5)) {
+        now.difference(_lastBatteryReadAt!) < const Duration(minutes: 15)) {
       return _cachedBatteryLevel;
     }
     try {
@@ -591,14 +975,23 @@ class LocationService {
     final results = <String, LocationModel>{};
     await Future.wait(friendIds.map((friendUid) async {
       try {
-        final snapshot = await _locationRef(friendUid).get();
-        if (!snapshot.exists) return;
-        final location = LocationModel.fromFirestore(snapshot);
-        if (location.isSharing && location.hasCoordinate && !location.isExpired) {
-          results[friendUid] = location;
+        final snapshot = await _rtdbLocationRef(friendUid).get();
+        if (snapshot.exists && snapshot.value != null) {
+          final location = LocationModel.fromRealtimeSnapshot(snapshot);
+          if (location.isSharing && location.hasCoordinate && !location.isExpired) {
+            results[friendUid] = location;
+            return;
+          }
         }
-      } on FirebaseException catch (error) {
-        if (error.code != 'permission-denied') rethrow;
+        final doc = await _locationRef(friendUid).get();
+        if (doc.exists) {
+          final location = LocationModel.fromFirestore(doc);
+          if (location.isSharing && location.hasCoordinate && !location.isExpired) {
+            results[friendUid] = location;
+          }
+        }
+      } catch (error) {
+        debugPrint('Error getting location for $friendUid: $error');
       }
     }));
     return results;

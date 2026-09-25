@@ -15,6 +15,7 @@ import '../../../providers/settings_provider.dart';
 
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../../common/skeleton_loader.dart';
 import '../../common/user_avatar.dart';
 import '../../../core/constants/app_info.dart';
 import 'edit_profile_sheet.dart';
@@ -51,9 +52,7 @@ class ProfileScreen extends ConsumerWidget {
         ),
       ),
       body: user == null
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primary),
-            )
+          ? const SkeletonProfile()
           : SingleChildScrollView(
               padding: const EdgeInsets.all(AppDimens.spaceLg),
               child: Column(
@@ -66,7 +65,7 @@ class ProfileScreen extends ConsumerWidget {
                       gradient: isDark
                           ? AppColors.darkCardGradient
                           : const LinearGradient(
-                              colors: [AppColors.white, Color(0xFFFCE4EC)],
+                              colors: [AppColors.white, AppColors.lightSurfaceLight],
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                             ),
@@ -509,8 +508,8 @@ class ProfileScreen extends ConsumerWidget {
                           ),
                           subtitle: Text(
                             lang == 'vi'
-                                ? 'Vị trí, Chặn, Quyền hệ thống, Điều khoản & v1.0.2'
-                                : 'Location, Blocks, System Permissions & v1.0.2',
+                                ? 'Vị trí, Chặn, Quyền hệ thống, Điều khoản & v${AppInfo.appVersion}'
+                                : 'Location, Blocks, System Permissions & v${AppInfo.appVersion}',
                             style: AppTypography.caption(
                               color: isDark
                                   ? AppColors.darkTextMuted
@@ -555,14 +554,14 @@ class ProfileScreen extends ConsumerWidget {
                         ListTile(
                           leading: const Icon(
                             LucideIcons.trash2,
-                            color: AppColors.error,
+                            color: AppColors.errorBrand,
                           ),
                           title: Text(
                             lang == 'vi'
                                 ? 'Xóa tài khoản vĩnh viễn'
                                 : 'Delete Account Permanently',
                             style: AppTypography.bodyBold(
-                              color: AppColors.error,
+                              color: AppColors.errorBrand,
                             ),
                           ),
                           subtitle: Text(
@@ -570,12 +569,12 @@ class ProfileScreen extends ConsumerWidget {
                                 ? 'Xóa toàn bộ ảnh, video, bạn bè và dữ liệu'
                                 : 'Permanently purge all photos, media & account',
                             style: AppTypography.caption(
-                              color: AppColors.error.withValues(alpha: 0.75),
+                              color: AppColors.errorBrand.withValues(alpha: 0.75),
                             ),
                           ),
                           trailing: const Icon(
                             LucideIcons.chevronRight,
-                            color: AppColors.error,
+                            color: AppColors.errorBrand,
                             size: 18,
                           ),
                           onTap: () => _showDeleteAccountDialog(context, ref, lang, isDark),
@@ -697,19 +696,19 @@ class ProfileScreen extends ConsumerWidget {
                   : AppColors.lightSurface,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppDimens.radius2Xl),
-                side: const BorderSide(color: AppColors.error, width: 1.5),
+                side: const BorderSide(color: AppColors.errorBrand, width: 1.5),
               ),
               title: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: AppColors.error.withValues(alpha: 0.15),
+                      color: AppColors.errorBrand.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
                       LucideIcons.alertTriangle,
-                      color: AppColors.error,
+                      color: AppColors.errorBrand,
                       size: 24,
                     ),
                   ),
@@ -720,7 +719,7 @@ class ProfileScreen extends ConsumerWidget {
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: AppColors.error,
+                        color: AppColors.errorBrand,
                       ),
                     ),
                   ),
@@ -840,7 +839,7 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.error,
+                    backgroundColor: AppColors.errorBrand,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(AppDimens.radiusMd),
@@ -931,7 +930,7 @@ class ProfileScreen extends ConsumerWidget {
           const Text(
             '• ',
             style: TextStyle(
-              color: AppColors.error,
+              color: AppColors.errorBrand,
               fontWeight: FontWeight.bold,
             ),
           ),

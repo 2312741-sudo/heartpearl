@@ -191,7 +191,7 @@ class _SelfieReactionModalState extends State<SelfieReactionModal>
     return Container(
       height: MediaQuery.of(context).size.height * 0.85,
       decoration: const BoxDecoration(
-        color: Color(0xFF140D1B),
+        color: AppColors.modalDarkBackground,
         borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
       child: Stack(
@@ -399,7 +399,7 @@ class _SelfieReactionModalState extends State<SelfieReactionModal>
           if (_isScreenFlashing)
             Positioned.fill(
               child: Container(
-                color: const Color(0xFFFFF7E6).withValues(alpha: 0.95),
+                color: AppColors.screenFlashWarm.withValues(alpha: 0.95),
               ),
             ),
         ],

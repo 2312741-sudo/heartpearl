@@ -66,6 +66,9 @@ class AppStrings {
       'chat_title': 'Tin nhắn',
       'chat_placeholder': 'Nhắn tin...',
       'chat_empty': 'Bạn chưa có cuộc trò chuyện nào',
+      'chat_status_sent': 'Đã gửi',
+      'chat_status_delivered': 'Đã nhận',
+      'chat_status_seen': 'Đã xem',
 
       // Friends
       'friends_title': 'Bạn bè',
@@ -235,6 +238,9 @@ class AppStrings {
       'chat_title': 'Messages',
       'chat_placeholder': 'Message...',
       'chat_empty': 'No conversations yet',
+      'chat_status_sent': 'Sent',
+      'chat_status_delivered': 'Delivered',
+      'chat_status_seen': 'Seen',
 
       // Friends
       'friends_title': 'Friends',

@@ -49,11 +49,36 @@ void main() async {
   );
 }
 
-class HeartPearlApp extends ConsumerWidget {
+class HeartPearlApp extends ConsumerStatefulWidget {
   const HeartPearlApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HeartPearlApp> createState() => _HeartPearlAppState();
+}
+
+class _HeartPearlAppState extends ConsumerState<HeartPearlApp> {
+  String? _initializedFcmUid;
+
+  @override
+  void initState() {
+    super.initState();
+    // Listen to auth state changes to initialize FCM exactly once per user session.
+    // Using ref.listen in initState avoids triggering FCM setup on every rebuild.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.listenManual(authStateProvider, (previous, next) {
+        final uid = next.value?.uid;
+        if (uid != null && uid != _initializedFcmUid) {
+          _initializedFcmUid = uid;
+          ref.read(notificationServiceProvider).initializeFCM(uid);
+        } else if (uid == null) {
+          _initializedFcmUid = null;
+        }
+      }, fireImmediately: true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final themeMode = ref.watch(settingsProvider).themeMode;
     final authState = ref.watch(authStateProvider);
 
@@ -70,8 +95,6 @@ class HeartPearlApp extends ConsumerWidget {
       home: authState.when(
         data: (user) {
           if (user != null) {
-            // Initialize FCM notifications for logged in user
-            ref.read(notificationServiceProvider).initializeFCM(user.uid);
             return const MainScaffold();
           }
           return const WelcomeScreen();

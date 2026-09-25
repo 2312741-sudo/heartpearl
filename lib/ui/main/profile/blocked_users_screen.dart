@@ -10,6 +10,7 @@ import '../../../core/utils/haptic_helper.dart';
 import '../../../models/user_model.dart';
 import '../../../providers/friends_provider.dart';
 import '../../../providers/settings_provider.dart';
+import '../../common/skeleton_loader.dart';
 import '../../common/user_avatar.dart';
 
 class BlockedUsersScreen extends ConsumerStatefulWidget {
@@ -139,7 +140,7 @@ class _BlockedUsersScreenState extends ConsumerState<BlockedUsersScreen> {
             },
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const SkeletonListView(count: 3),
         error: (_, _) =>
             Center(child: Text(AppStrings.tr('safety_error', lang: lang))),
       ),

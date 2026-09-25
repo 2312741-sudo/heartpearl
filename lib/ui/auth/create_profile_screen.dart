@@ -14,6 +14,7 @@ import '../../providers/settings_provider.dart';
 import '../../services/content_filter_service.dart';
 import '../common/app_text_field.dart';
 import '../common/gradient_button.dart';
+import '../common/image_crop_screen.dart';
 
 class CreateProfileScreen extends ConsumerStatefulWidget {
   const CreateProfileScreen({super.key});
@@ -42,15 +43,25 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
     HapticHelper.light();
     final picked = await _picker.pickImage(
       source: ImageSource.gallery,
-      maxWidth: 600,
-      maxHeight: 600,
-      imageQuality: 85,
+      imageQuality: 95,
     );
 
-    if (picked != null) {
-      setState(() {
-        _avatarFile = File(picked.path);
-      });
+    if (picked != null && mounted) {
+      final cropped = await Navigator.of(context).push<File>(
+        MaterialPageRoute(
+          builder: (_) => ImageCropScreen(
+            imageFile: File(picked.path),
+            cropStyle: CropStyle.circle,
+            initialAspectRatio: 1.0,
+            title: 'Cắt ảnh đại diện',
+          ),
+        ),
+      );
+      if (cropped != null && mounted) {
+        setState(() {
+          _avatarFile = cropped;
+        });
+      }
     }
   }
 

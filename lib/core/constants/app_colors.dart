@@ -34,13 +34,19 @@ class AppColors {
   static const Color lightTextMuted = Color(0xFF9E657F);
 
   // Status & UI
-  static const Color success = Color(0xFF2ECC71);
-  static const Color error = Color(0xFFE74C3C);
-  static const Color warning = Color(0xFFF39C12);
-  static const Color info = Color(0xFF3498DB);
+  static const Color success = Color(0xFF6FAE8C); // Warm sage green
+  static const Color error = Color(0xFFE74C3C); // System alert red
+  static const Color errorBrand = primaryDark; // Dùng thay error ở các chỗ liên quan xóa/hủy trong ngữ cảnh thương hiệu
+  static const Color warning = Color(0xFFD9A455); // Warm amber
+  static const Color info = Color(0xFF8B7FC7); // Warm lavender blue
   static const Color white = Color(0xFFFFFFFF);
   static const Color black = Color(0xFF000000);
   static const Color transparent = Colors.transparent;
+
+  // Flash & Modal
+  static const Color screenFlash = Color(0xFFFFFBEA); // Front camera screen flash
+  static const Color screenFlashWarm = Color(0xFFFFF7E6); // Selfie modal screen flash
+  static const Color modalDarkBackground = Color(0xFF140D1B); // Dark modal backdrop
 
   // Gradients
   static const LinearGradient primaryGradient = LinearGradient(

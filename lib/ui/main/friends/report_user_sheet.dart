@@ -81,19 +81,41 @@ class _ReportUserSheetState extends ConsumerState<ReportUserSheet> {
       'other': AppStrings.tr('safety_report_other', lang: lang),
     };
 
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: AppDimens.spaceLg,
-          right: AppDimens.spaceLg,
-          top: AppDimens.spaceLg,
-          bottom: MediaQuery.viewInsetsOf(context).bottom + AppDimens.spaceLg,
+    final surfaceColor = isDark ? AppColors.darkSurface : AppColors.lightSurface;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: surfaceColor,
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppDimens.radius2Xl),
         ),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+        ),
+      ),
+      padding: EdgeInsets.only(
+        left: AppDimens.spaceLg,
+        right: AppDimens.spaceLg,
+        top: AppDimens.spaceMd,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + AppDimens.spaceLg,
+      ),
+      child: SafeArea(
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: AppDimens.spaceMd),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white24 : Colors.black12,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
               Text(
                 AppStrings.tr('safety_report_title', lang: lang),
                 style: AppTypography.h2(

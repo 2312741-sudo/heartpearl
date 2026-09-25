@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -13,6 +14,7 @@ import '../../../providers/feed_provider.dart';
 import '../../../services/content_filter_service.dart';
 import '../../common/app_text_field.dart';
 import '../../common/gradient_button.dart';
+import '../../common/image_crop_screen.dart';
 
 class EditProfileSheet extends ConsumerStatefulWidget {
   final UserModel user;
@@ -52,13 +54,23 @@ class _EditProfileSheetState extends ConsumerState<EditProfileSheet> {
     HapticHelper.light();
     final picked = await _picker.pickImage(
       source: ImageSource.gallery,
-      maxWidth: 600,
-      maxHeight: 600,
-      imageQuality: 85,
+      imageQuality: 95,
     );
 
-    if (picked != null) {
-      setState(() => _newAvatarFile = File(picked.path));
+    if (picked != null && mounted) {
+      final cropped = await Navigator.of(context).push<File>(
+        MaterialPageRoute(
+          builder: (_) => ImageCropScreen(
+            imageFile: File(picked.path),
+            cropStyle: CropStyle.circle,
+            initialAspectRatio: 1.0,
+            title: 'Cắt ảnh đại diện',
+          ),
+        ),
+      );
+      if (cropped != null && mounted) {
+        setState(() => _newAvatarFile = cropped);
+      }
     }
   }
 
@@ -207,7 +219,28 @@ class _EditProfileSheetState extends ConsumerState<EditProfileSheet> {
                     child: _newAvatarFile != null
                         ? Image.file(_newAvatarFile!, fit: BoxFit.cover)
                         : (widget.user.avatarUrl != null
-                            ? Image.network(widget.user.avatarUrl!, fit: BoxFit.cover)
+                            ? CachedNetworkImage(
+                                imageUrl: widget.user.avatarUrl!,
+                                fit: BoxFit.cover,
+                                placeholder: (context, url) => const Center(
+                                  child: SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                ),
+                                errorWidget: (context, url, error) => Center(
+                                  child: Text(
+                                    widget.user.displayName.isNotEmpty
+                                        ? widget.user.displayName[0].toUpperCase()
+                                        : '?',
+                                    style: AppTypography.h1(color: AppColors.white),
+                                  ),
+                                ),
+                              )
                             : Center(
                                 child: Text(
                                   widget.user.displayName.isNotEmpty

@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 class LocationModel {
   final String uid;
@@ -9,6 +10,7 @@ class LocationModel {
   final double speed;
   final int? batteryLevel;
   final bool isSharing;
+  final bool isOnline;
   final List<String> allowedViewers;
 
   /// True while a timed Live Location session is actively streaming.
@@ -16,6 +18,11 @@ class LocationModel {
 
   /// When the live session expires (null = unlimited / not live).
   final DateTime? shareExpiresAt;
+
+  /// Pinned place metadata (Zenly Dwell Time)
+  final String? currentPlaceType;
+  final String? currentPlaceLabel;
+  final DateTime? arrivedAt;
 
   const LocationModel({
     required this.uid,
@@ -25,14 +32,36 @@ class LocationModel {
     required this.accuracy,
     required this.speed,
     required this.isSharing,
+    this.isOnline = true,
     this.batteryLevel,
     this.allowedViewers = const [],
     this.liveSessionActive = false,
     this.shareExpiresAt,
+    this.currentPlaceType,
+    this.currentPlaceLabel,
+    this.arrivedAt,
   });
 
   factory LocationModel.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
     return LocationModel.fromMap(doc.data() ?? const <String, dynamic>{}, uid: doc.id);
+  }
+
+  factory LocationModel.fromRealtimeSnapshot(DataSnapshot snapshot) {
+    final raw = snapshot.value;
+    if (raw == null || raw is! Map) {
+      return LocationModel(
+        uid: snapshot.key ?? '',
+        lat: 0.0,
+        lng: 0.0,
+        timestamp: DateTime.fromMillisecondsSinceEpoch(0),
+        accuracy: 0.0,
+        speed: 0.0,
+        isSharing: false,
+        isOnline: false,
+      );
+    }
+    final data = Map<String, dynamic>.from(raw);
+    return LocationModel.fromMap(data, uid: snapshot.key ?? '');
   }
 
   factory LocationModel.fromMap(Map<String, dynamic> data, {String uid = ''}) {
@@ -43,8 +72,12 @@ class LocationModel {
     DateTime timestamp = DateTime.fromMillisecondsSinceEpoch(0);
     if (updatedAt is Timestamp) {
       timestamp = updatedAt.toDate();
+    } else if (updatedAt is int) {
+      timestamp = DateTime.fromMillisecondsSinceEpoch(updatedAt);
     } else if (capturedAt is Timestamp) {
       timestamp = capturedAt.toDate();
+    } else if (capturedAt is int) {
+      timestamp = DateTime.fromMillisecondsSinceEpoch(capturedAt);
     } else if (data['timestamp'] is Timestamp) {
       timestamp = (data['timestamp'] as Timestamp).toDate();
     } else if (data['timestamp'] is int) {
@@ -68,7 +101,25 @@ class LocationModel {
 
     DateTime? shareExpiresAt;
     final raw = data['shareExpiresAt'];
-    if (raw is Timestamp) shareExpiresAt = raw.toDate();
+    if (raw is Timestamp) {
+      shareExpiresAt = raw.toDate();
+    } else if (raw is int) {
+      shareExpiresAt = DateTime.fromMillisecondsSinceEpoch(raw);
+    } else if (raw is String) {
+      shareExpiresAt = DateTime.tryParse(raw);
+    }
+
+    DateTime? arrivedAt;
+    final rawArrivedAt = data['arrivedAt'];
+    if (rawArrivedAt is Timestamp) {
+      arrivedAt = rawArrivedAt.toDate();
+    } else if (rawArrivedAt is int) {
+      arrivedAt = DateTime.fromMillisecondsSinceEpoch(rawArrivedAt);
+    } else if (rawArrivedAt is String) {
+      arrivedAt = DateTime.tryParse(rawArrivedAt);
+    }
+
+    final isOnline = data.containsKey('isOnline') ? _asBool(data['isOnline']) : true;
 
     return LocationModel(
       uid: data['uid']?.toString() ?? data['ownerUid']?.toString() ?? uid,
@@ -79,9 +130,13 @@ class LocationModel {
       speed: speed,
       batteryLevel: battery,
       isSharing: _asBool(data['isSharing']),
+      isOnline: isOnline,
       allowedViewers: _readStringList(data['allowedViewers']),
       liveSessionActive: _asBool(data['liveSessionActive']),
       shareExpiresAt: shareExpiresAt,
+      currentPlaceType: data['currentPlaceType']?.toString(),
+      currentPlaceLabel: data['currentPlaceLabel']?.toString(),
+      arrivedAt: arrivedAt,
     );
   }
 
@@ -96,9 +151,13 @@ class LocationModel {
       'speed': speed,
       'batteryLevel': batteryLevel,
       'isSharing': isSharing,
+      'isOnline': isOnline,
       'allowedViewers': allowedViewers,
       'liveSessionActive': liveSessionActive,
       'shareExpiresAt': shareExpiresAt?.millisecondsSinceEpoch,
+      'currentPlaceType': currentPlaceType,
+      'currentPlaceLabel': currentPlaceLabel,
+      'arrivedAt': arrivedAt?.millisecondsSinceEpoch,
     };
   }
 
@@ -116,6 +175,37 @@ class LocationModel {
     return DateTime.now().isAfter(exp);
   }
 
+  bool get hasPlace => currentPlaceType != null || currentPlaceLabel != null;
+
+  String? get placeEmoji {
+    if (currentPlaceType == null) return null;
+    switch (currentPlaceType!.toLowerCase()) {
+      case 'home':
+        return '🏠';
+      case 'work':
+        return '🏢';
+      case 'school':
+        return '🏫';
+      default:
+        return '📍';
+    }
+  }
+
+  String? get dwellDurationText {
+    final arr = arrivedAt;
+    if (arr == null) return null;
+    final diff = DateTime.now().difference(arr);
+    if (diff.isNegative || diff.inMinutes < 1) return 'Vừa đến';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} phút';
+    if (diff.inHours < 24) {
+      final hours = diff.inHours;
+      final minutes = diff.inMinutes % 60;
+      if (minutes == 0) return '$hours giờ';
+      return '${hours}g ${minutes}p';
+    }
+    return '${diff.inDays} ngày';
+  }
+
   bool isStale({DateTime? now, Duration maxAge = const Duration(minutes: 10)}) {
     final effectiveNow = now ?? DateTime.now();
     return effectiveNow.difference(timestamp) > maxAge;
@@ -131,8 +221,12 @@ class LocationModel {
       'speed': speed,
       'batteryLevel': batteryLevel,
       'isSharing': isSharing,
+      'isOnline': isOnline,
       'allowedViewers': allowedViewers,
       'liveSessionActive': liveSessionActive,
+      'currentPlaceType': currentPlaceType,
+      'currentPlaceLabel': currentPlaceLabel,
+      'arrivedAt': arrivedAt != null ? Timestamp.fromDate(arrivedAt!) : null,
     };
   }
 
@@ -144,9 +238,13 @@ class LocationModel {
     double? speed,
     int? batteryLevel,
     bool? isSharing,
+    bool? isOnline,
     List<String>? allowedViewers,
     bool? liveSessionActive,
     Object? shareExpiresAt = _sentinel,
+    Object? currentPlaceType = _sentinel,
+    Object? currentPlaceLabel = _sentinel,
+    Object? arrivedAt = _sentinel,
   }) {
     return LocationModel(
       uid: uid,
@@ -157,16 +255,25 @@ class LocationModel {
       speed: speed ?? this.speed,
       batteryLevel: batteryLevel ?? this.batteryLevel,
       isSharing: isSharing ?? this.isSharing,
+      isOnline: isOnline ?? this.isOnline,
       allowedViewers: allowedViewers ?? this.allowedViewers,
       liveSessionActive: liveSessionActive ?? this.liveSessionActive,
       shareExpiresAt: shareExpiresAt == _sentinel
           ? this.shareExpiresAt
           : shareExpiresAt as DateTime?,
+      currentPlaceType: currentPlaceType == _sentinel
+          ? this.currentPlaceType
+          : currentPlaceType as String?,
+      currentPlaceLabel: currentPlaceLabel == _sentinel
+          ? this.currentPlaceLabel
+          : currentPlaceLabel as String?,
+      arrivedAt: arrivedAt == _sentinel
+          ? this.arrivedAt
+          : arrivedAt as DateTime?,
     );
   }
 }
 
-// Sentinel for copyWith nullable field support.
 const Object _sentinel = Object();
 
 List<String> _readStringList(dynamic value) {
@@ -191,4 +298,3 @@ bool _asBool(dynamic value, [bool fallback = false]) {
   if (value is String) return value.toLowerCase() == 'true';
   return fallback;
 }
-

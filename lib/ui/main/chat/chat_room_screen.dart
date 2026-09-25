@@ -7,6 +7,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_dimens.dart';
 import '../../../core/constants/app_typography.dart';
 import '../../../core/l10n/app_strings.dart';
+import '../../../core/utils/date_helper.dart';
 import '../../../core/utils/haptic_helper.dart';
 import '../../../models/chat_model.dart';
 import '../../../providers/auth_provider.dart';
@@ -62,6 +63,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     final user = ref.read(userProfileProvider).value;
     if (user != null) {
       ref.read(chatServiceProvider).markChatAsRead(_chatId, user.uid);
+      ref.read(chatServiceProvider).markMessagesAsSeen(_chatId, viewerId: user.uid);
     }
   }
 
@@ -77,9 +79,11 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     super.dispose();
   }
 
+  bool _isSending = false;
+
   Future<void> _handleSend() async {
     final text = _textController.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || _isSending) return;
 
     if (ContentFilterService.isObjectionable(text)) {
       HapticHelper.heavy();
@@ -96,7 +100,13 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     final user = ref.read(userProfileProvider).value;
     if (user == null) return;
 
+    // Guard against spam taps
+    _isSending = true;
     HapticHelper.light();
+
+    // Optimistic clear: empty the field immediately so UI feels instant.
+    // We keep a copy to restore if the send fails.
+    _textController.clear();
 
     try {
       await ref
@@ -111,18 +121,25 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
             recipientName: widget.friendName,
             recipientAvatar: widget.friendAvatar ?? '',
           );
-      _textController.clear();
     } catch (_) {
-      if (!mounted) return;
-      final lang = ref.read(settingsProvider).language;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            AppStrings.tr('safety_interaction_blocked', lang: lang),
+      // Restore text so user can retry
+      if (mounted) {
+        _textController.text = text;
+        _textController.selection = TextSelection.fromPosition(
+          TextPosition(offset: text.length),
+        );
+        final lang = ref.read(settingsProvider).language;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppStrings.tr('safety_interaction_blocked', lang: lang),
+            ),
+            backgroundColor: AppColors.error,
           ),
-          backgroundColor: AppColors.error,
-        ),
-      );
+        );
+      }
+    } finally {
+      _isSending = false;
     }
   }
 
@@ -224,6 +241,20 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     final isBlocked = user?.blockedUsers.contains(widget.friendId) ?? false;
     final messagesAsync = ref.watch(chatMessagesProvider(_chatId));
 
+    // Automatically mark incoming friend messages as seen while user is in this chat room
+    ref.listen<AsyncValue<List<ChatMessageModel>>>(
+      chatMessagesProvider(_chatId),
+      (previous, next) {
+        next.whenData((msgs) {
+          final uid = user?.uid;
+          if (uid != null &&
+              msgs.any((m) => m.senderId == widget.friendId && m.status != 'seen')) {
+            ref.read(chatServiceProvider).markMessagesAsSeen(_chatId, viewerId: uid);
+          }
+        });
+      },
+    );
+
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -298,22 +329,30 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                     );
                   }
 
+                  // Find index of the latest message sent by current user
+                  final firstMyMessageIndex =
+                      messages.indexWhere((m) => m.senderId == user?.uid);
+
                   return ListView.builder(
                     reverse: true,
                     padding: const EdgeInsets.symmetric(
-                      horizontal: AppDimens.spaceBase,
+                       horizontal: AppDimens.spaceBase,
                       vertical: AppDimens.spaceSm,
                     ),
                     itemCount: messages.length,
                     itemBuilder: (context, index) {
                       final message = messages[index];
                       final isMe = message.senderId == user?.uid;
+                      final isLatestMyMessage =
+                          isMe && (firstMyMessageIndex == index);
 
                       return _MessageBubble(
                         message: message,
                         isMe: isMe,
+                        isLatestMyMessage: isLatestMyMessage,
                         friendAvatar: widget.friendAvatar,
                         friendName: widget.friendName,
+                        lang: lang,
                       );
                     },
                   );
@@ -419,19 +458,109 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
 class _MessageBubble extends StatelessWidget {
   final ChatMessageModel message;
   final bool isMe;
+  final bool isLatestMyMessage;
   final String? friendAvatar;
   final String friendName;
+  final String lang;
 
   const _MessageBubble({
     required this.message,
     required this.isMe,
+    this.isLatestMyMessage = false,
     this.friendAvatar,
     required this.friendName,
+    required this.lang,
   });
+
+  Widget _buildStatusIcon(String status) {
+    if (status == 'seen') {
+      return const Icon(
+        LucideIcons.checkCheck,
+        size: 13,
+        color: Color(0xFF67E8F9), // Cyan accent for seen
+      );
+    } else if (status == 'delivered') {
+      return Icon(
+        LucideIcons.checkCheck,
+        size: 13,
+        color: Colors.white.withValues(alpha: 0.85),
+      );
+    } else {
+      return Icon(
+        LucideIcons.check,
+        size: 12,
+        color: Colors.white.withValues(alpha: 0.7),
+      );
+    }
+  }
+
+  Widget _buildLatestStatusCaption(bool isDark) {
+    final status = message.status;
+    final mutedColor =
+        isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted;
+
+    if (status == 'seen') {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (friendAvatar != null && friendAvatar!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: ClipOval(
+                child: CachedNetworkImage(
+                  imageUrl: friendAvatar!,
+                  width: 14,
+                  height: 14,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            )
+          else
+            const Icon(
+              LucideIcons.checkCheck,
+              size: 13,
+              color: AppColors.primary,
+            ),
+          const SizedBox(width: 2),
+          Text(
+            AppStrings.tr('chat_status_seen', lang: lang),
+            style: AppTypography.caption(
+              color: isDark ? AppColors.primaryLight : AppColors.primary,
+            ),
+          ),
+        ],
+      );
+    } else if (status == 'delivered') {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(LucideIcons.checkCheck, size: 13, color: mutedColor),
+          const SizedBox(width: 4),
+          Text(
+            AppStrings.tr('chat_status_delivered', lang: lang),
+            style: AppTypography.caption(color: mutedColor),
+          ),
+        ],
+      );
+    } else {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(LucideIcons.check, size: 12, color: mutedColor),
+          const SizedBox(width: 4),
+          Text(
+            AppStrings.tr('chat_status_sent', lang: lang),
+            style: AppTypography.caption(color: mutedColor),
+          ),
+        ],
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isReaction = message.type == 'reaction';
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -446,57 +575,135 @@ class _MessageBubble extends StatelessWidget {
             const SizedBox(width: AppDimens.spaceSm),
           ],
           Flexible(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                gradient: isMe ? AppColors.primaryGradient : null,
-                color: isMe
-                    ? null
-                    : (isDark ? AppColors.darkSurface : AppColors.lightSurface),
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(AppDimens.radiusLg),
-                  topRight: const Radius.circular(AppDimens.radiusLg),
-                  bottomLeft: Radius.circular(isMe ? AppDimens.radiusLg : 4),
-                  bottomRight: Radius.circular(isMe ? 4 : AppDimens.radiusLg),
-                ),
-                border: isMe
-                    ? null
-                    : Border.all(
-                        color: isDark
-                            ? AppColors.darkBorder
-                            : AppColors.lightBorder,
-                      ),
-              ),
-              child: Column(
-                crossAxisAlignment: isMe
-                    ? CrossAxisAlignment.end
-                    : CrossAxisAlignment.start,
-                children: [
-                  if (message.photoUrl != null) ...[
-                    ClipRRect(
+            child: Column(
+              crossAxisAlignment: isMe
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
+              children: [
+                // ── Reaction context: show the original photo being reacted to ──
+                if (isReaction && message.reactedPhotoUrl != null) ...[
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 4),
+                    decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(AppDimens.radiusMd),
-                      child: CachedNetworkImage(
-                        imageUrl: message.photoUrl!,
-                        width: 180,
-                        height: 220,
-                        fit: BoxFit.cover,
+                      border: Border.all(
+                        color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
                       ),
                     ),
-                    const SizedBox(height: 6),
-                  ],
-                  if (message.text.isNotEmpty)
-                    Text(
-                      message.text,
-                      style: AppTypography.body(
-                        color: isMe
-                            ? AppColors.white
-                            : (isDark
-                                  ? AppColors.darkTextPrimary
-                                  : AppColors.lightTextPrimary),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(AppDimens.radiusMd),
+                      child: Stack(
+                        children: [
+                          CachedNetworkImage(
+                            imageUrl: message.reactedPhotoUrl!,
+                            width: 140,
+                            height: 100,
+                            fit: BoxFit.cover,
+                          ),
+                          Positioned.fill(
+                            child: Container(
+                              color: Colors.black.withValues(alpha: 0.25),
+                              alignment: Alignment.center,
+                              child: Text(
+                                isMe ? 'Ảnh bạn đã react' : 'React ảnh của bạn',
+                                style: AppTypography.caption(
+                                  color: AppColors.white,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
+                  ),
                 ],
-              ),
+
+                // ── Message bubble ──
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    gradient: isMe ? AppColors.primaryGradient : null,
+                    color: isMe
+                        ? null
+                        : (isDark ? AppColors.darkSurface : AppColors.lightSurface),
+                    borderRadius: BorderRadius.only(
+                      topLeft: const Radius.circular(AppDimens.radiusLg),
+                      topRight: const Radius.circular(AppDimens.radiusLg),
+                      bottomLeft: Radius.circular(isMe ? AppDimens.radiusLg : 4),
+                      bottomRight: Radius.circular(isMe ? 4 : AppDimens.radiusLg),
+                    ),
+                    border: isMe
+                        ? null
+                        : Border.all(
+                            color: isDark
+                                ? AppColors.darkBorder
+                                : AppColors.lightBorder,
+                          ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: isMe
+                        ? CrossAxisAlignment.end
+                        : CrossAxisAlignment.start,
+                    children: [
+                      // Selfie image (for selfie reactions)
+                      if (message.photoUrl != null) ...[
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(AppDimens.radiusMd),
+                          child: CachedNetworkImage(
+                            imageUrl: message.photoUrl!,
+                            width: 180,
+                            height: 220,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                      ],
+                      if (message.text.isNotEmpty)
+                        Text(
+                          message.text,
+                          style: AppTypography.body(
+                            color: isMe
+                                ? AppColors.white
+                                : (isDark
+                                      ? AppColors.darkTextPrimary
+                                      : AppColors.lightTextPrimary),
+                          ),
+                        ),
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Text(
+                            DateHelper.formatShortTime(message.createdAt),
+                            style: AppTypography.caption(
+                              color: isMe
+                                  ? Colors.white.withValues(alpha: 0.7)
+                                  : (isDark
+                                      ? AppColors.darkTextMuted
+                                      : AppColors.lightTextMuted),
+                            ),
+                          ),
+                          if (isMe) ...[
+                            const SizedBox(width: 4),
+                            _buildStatusIcon(message.status),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                // ── Status caption for latest message sent by me ──
+                if (isLatestMyMessage) ...[
+                  const SizedBox(height: 3),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: _buildLatestStatusCaption(isDark),
+                  ),
+                ],
+              ],
             ),
           ),
         ],

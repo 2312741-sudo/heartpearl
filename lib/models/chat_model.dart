@@ -80,8 +80,10 @@ class ChatMessageModel {
   final String id;
   final String senderId;
   final String text;
-  final String? photoUrl;
+  final String? photoUrl;        // selfie / reaction image sent by sender
+  final String? reactedPhotoUrl; // original photo being reacted to (for context bubble)
   final String type; // 'text', 'reaction', 'photo'
+  final String status; // 'sent', 'delivered', 'seen'
   final DateTime createdAt;
 
   const ChatMessageModel({
@@ -89,7 +91,9 @@ class ChatMessageModel {
     required this.senderId,
     required this.text,
     this.photoUrl,
+    this.reactedPhotoUrl,
     this.type = 'text',
+    this.status = 'sent',
     required this.createdAt,
   });
 
@@ -108,7 +112,9 @@ class ChatMessageModel {
       senderId: data['senderId'] as String? ?? '',
       text: data['text'] as String? ?? '',
       photoUrl: data['photoUrl'] as String?,
+      reactedPhotoUrl: data['reactedPhotoUrl'] as String?,
       type: data['type'] as String? ?? 'text',
+      status: data['status'] as String? ?? 'sent',
       createdAt: parsedDate,
     );
   }
@@ -118,7 +124,9 @@ class ChatMessageModel {
       'senderId': senderId,
       'text': text,
       'photoUrl': photoUrl,
+      'reactedPhotoUrl': reactedPhotoUrl,
       'type': type,
+      'status': status,
       'createdAt': Timestamp.fromDate(createdAt),
     };
   }

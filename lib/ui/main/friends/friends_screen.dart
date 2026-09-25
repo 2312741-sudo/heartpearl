@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -13,6 +14,7 @@ import '../../../providers/friends_provider.dart';
 import '../../../providers/settings_provider.dart';
 import '../../common/app_text_field.dart';
 import '../../common/gradient_button.dart';
+import '../../common/skeleton_loader.dart';
 import '../../common/user_avatar.dart';
 import '../chat/chat_room_screen.dart';
 import 'report_user_sheet.dart';
@@ -251,14 +253,28 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(
-                        LucideIcons.users,
-                        size: 56,
-                        color: isDark
-                            ? AppColors.darkTextMuted
-                            : AppColors.lightTextMuted,
+                      Container(
+                        width: 96,
+                        height: 96,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: isDark
+                              ? AppColors.darkSurface
+                              : AppColors.lightSurface,
+                          boxShadow: AppDimens.glowShadow(
+                            AppColors.primary,
+                            opacity: 0.25,
+                          ),
+                        ),
+                        child: Icon(
+                          LucideIcons.users,
+                          size: 48,
+                          color: isDark
+                              ? AppColors.darkTextMuted
+                              : AppColors.lightTextMuted,
+                        ),
                       ),
-                      const SizedBox(height: AppDimens.spaceBase),
+                      const SizedBox(height: AppDimens.spaceLg),
                       Text(
                         AppStrings.tr('friends_empty', lang: lang),
                         style: AppTypography.h3(
@@ -269,7 +285,7 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
                       ),
                     ],
                   ),
-                );
+                ).animate().fadeIn(duration: 400.ms).scale(begin: const Offset(0.9, 0.9));
               }
 
               return ListView.separated(
@@ -321,7 +337,9 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
                           showModalBottomSheet(
                             context: context,
                             isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
+                            backgroundColor: isDark
+                                ? AppColors.darkSurface
+                                : AppColors.lightSurface,
                             builder: (_) => ReportUserSheet(
                               targetUid: friend.uid,
                               targetName: friend.displayName,
@@ -379,13 +397,14 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
                         ),
                       ],
                     ),
-                  );
+                  ).animate().fadeIn(
+                    duration: 300.ms,
+                    delay: (index.clamp(0, 8) * 50).ms,
+                  ).slideY(begin: 0.08, end: 0);
                 },
               );
             },
-            loading: () => const Center(
-              child: CircularProgressIndicator(color: AppColors.primary),
-            ),
+            loading: () => const SkeletonListView(),
             error: (err, stack) => Center(child: Text('Lỗi: $err')),
           ),
 
@@ -397,14 +416,28 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(
-                        LucideIcons.mail,
-                        size: 56,
-                        color: isDark
-                            ? AppColors.darkTextMuted
-                            : AppColors.lightTextMuted,
+                      Container(
+                        width: 96,
+                        height: 96,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: isDark
+                              ? AppColors.darkSurface
+                              : AppColors.lightSurface,
+                          boxShadow: AppDimens.glowShadow(
+                            AppColors.primary,
+                            opacity: 0.25,
+                          ),
+                        ),
+                        child: Icon(
+                          LucideIcons.mail,
+                          size: 48,
+                          color: isDark
+                              ? AppColors.darkTextMuted
+                              : AppColors.lightTextMuted,
+                        ),
                       ),
-                      const SizedBox(height: AppDimens.spaceBase),
+                      const SizedBox(height: AppDimens.spaceLg),
                       Text(
                         'Không có lời mời nào',
                         style: AppTypography.h3(
@@ -415,7 +448,7 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
                       ),
                     ],
                   ),
-                );
+                ).animate().fadeIn(duration: 400.ms).scale(begin: const Offset(0.9, 0.9));
               }
 
               return ListView.builder(
@@ -505,13 +538,14 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
                         ),
                       ],
                     ),
-                  );
+                  ).animate().fadeIn(
+                    duration: 300.ms,
+                    delay: (index.clamp(0, 8) * 50).ms,
+                  ).slideY(begin: 0.08, end: 0);
                 },
               );
             },
-            loading: () => const Center(
-              child: CircularProgressIndicator(color: AppColors.primary),
-            ),
+            loading: () => const SkeletonListView(),
             error: (err, stack) => Center(child: Text('Lỗi: $err')),
           ),
 

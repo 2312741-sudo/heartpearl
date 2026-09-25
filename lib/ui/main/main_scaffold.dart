@@ -36,6 +36,11 @@ class _MainScaffoldState extends ConsumerState<MainScaffold>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Register tab-switch callback so notification handler can jump to any tab
+    // without pushing a new route (avoids Navigator stack pollution).
+    AppNavigation.registerTabSwitchCallback((index) {
+      if (mounted) setState(() => _currentIndex = index);
+    });
     _initWidgetLaunch();
   }
 

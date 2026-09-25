@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../core/constants/app_colors.dart';
@@ -12,6 +13,7 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/chat_provider.dart';
 import '../../../providers/settings_provider.dart';
 import '../../common/app_badge.dart';
+import '../../common/skeleton_loader.dart';
 import '../../common/user_avatar.dart';
 import 'chat_room_screen.dart';
 
@@ -24,6 +26,22 @@ class ChatListScreen extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final user = ref.watch(userProfileProvider).value;
     final chatsAsync = ref.watch(chatRoomsProvider);
+
+    ref.listen<AsyncValue<List<ChatRoomModel>>>(
+      chatRoomsProvider,
+      (previous, next) {
+        next.whenData((chats) {
+          final uid = user?.uid;
+          if (uid == null) return;
+          for (final chat in chats) {
+            final unread = chat.unreadCount[uid] ?? 0;
+            if (unread > 0) {
+              ref.read(chatServiceProvider).markMessagesAsDelivered(chat.id, recipientId: uid);
+            }
+          }
+        });
+      },
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -43,17 +61,40 @@ class ChatListScreen extends ConsumerWidget {
       ),
       body: chatsAsync.when(
         data: (chats) {
+          final uid = user?.uid;
+          if (uid != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              for (final chat in chats) {
+                final unread = chat.unreadCount[uid] ?? 0;
+                if (unread > 0) {
+                  ref.read(chatServiceProvider).markMessagesAsDelivered(chat.id, recipientId: uid);
+                }
+              }
+            });
+          }
           if (chats.isEmpty) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    LucideIcons.messageCircle,
-                    size: 64,
-                    color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                  Container(
+                    width: 96,
+                    height: 96,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+                      boxShadow: AppDimens.glowShadow(
+                        AppColors.primary,
+                        opacity: 0.25,
+                      ),
+                    ),
+                    child: Icon(
+                      LucideIcons.messageCircle,
+                      size: 48,
+                      color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                    ),
                   ),
-                  const SizedBox(height: AppDimens.spaceBase),
+                  const SizedBox(height: AppDimens.spaceLg),
                   Text(
                     AppStrings.tr('chat_empty', lang: lang),
                     style: AppTypography.h3(
@@ -62,7 +103,7 @@ class ChatListScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-            );
+            ).animate().fadeIn(duration: 400.ms).scale(begin: const Offset(0.9, 0.9));
           }
 
           return ListView.separated(
@@ -139,13 +180,14 @@ class ChatListScreen extends ConsumerWidget {
                     ),
                   );
                 },
-              );
+              ).animate().fadeIn(
+                duration: 300.ms,
+                delay: (index.clamp(0, 8) * 50).ms,
+              ).slideY(begin: 0.08, end: 0);
             },
           );
         },
-        loading: () => const Center(
-          child: CircularProgressIndicator(color: AppColors.primary),
-        ),
+        loading: () => const SkeletonListView(),
         error: (err, stack) => Center(child: Text('Lỗi: $err')),
       ),
     );

@@ -1,9 +1,14 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
+import '../core/utils/camera_filters.dart';
+import '../core/utils/media_helper.dart';
 import '../models/photo_model.dart';
 import '../models/user_model.dart';
-import '../core/utils/media_helper.dart';
+import 'camera_effects_service.dart';
+import 'friend_service.dart';
 
 class PhotoService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -160,7 +165,140 @@ class PhotoService {
     }
   }
 
-  // Stream Inbox Photos
+  // In-memory sender profile cache to avoid redundant Firestore reads
+  // across multiple stream events. Keyed by userId, evicted when service is GC'd.
+  final Map<String, UserModel> _senderCache = {};
+
+  /// Clear the cached sender profiles to force a fresh fetch from Firestore
+  void clearSenderCache() {
+    _senderCache.clear();
+  }
+
+  /// Publish photo or video in the background without blocking the UI.
+  /// Runs completely detached from any widget lifecycle.
+  Future<String?> publishMediaInBackground({
+    required String senderId,
+    required Set<String> recipientUids,
+    required String filePath,
+    required bool isVideo,
+    String? caption,
+    BeautyFilter? filter,
+    double filterIntensity = 0.65,
+    BeautySettings beauty = const BeautySettings(),
+    bool isMirrored = false,
+  }) async {
+    try {
+      final activeFilter = filter ?? BeautyFilter.all.first;
+      final allowedRecipientIds = await FriendService().filterAllowedRecipients(
+        senderUid: senderId,
+        recipientUids: recipientUids,
+      );
+
+      if (allowedRecipientIds.isEmpty) return null;
+
+      String mediaUrl;
+      String? videoUrl;
+
+      if (isVideo) {
+        // 1. Generate video thumbnail frame
+        final thumbFile = await MediaHelper.generateVideoThumbnail(filePath);
+        String? thumbUrl;
+        if (thumbFile != null) {
+          File thumbToUpload = thumbFile;
+          File? renderedThumb;
+          if (!activeFilter.isOriginal || beauty.hasEffect) {
+            renderedThumb = await CameraEffectsService().renderPhoto(
+              source: thumbFile,
+              filter: activeFilter,
+              filterIntensity: filterIntensity,
+              beauty: beauty,
+            );
+            thumbToUpload = renderedThumb;
+          }
+          try {
+            thumbUrl = await uploadPhoto(
+              file: thumbToUpload,
+              userId: senderId,
+            );
+            try {
+              await thumbFile.delete();
+              if (renderedThumb != null && renderedThumb.path != thumbFile.path) {
+                await renderedThumb.delete();
+              }
+            } catch (_) {}
+          } catch (e) {
+            debugPrint('Background video thumb error: $e');
+          }
+        }
+
+        // 2. Hardware Video Compression (reducing from 35MB to ~2MB with fast-start streaming)
+        File uploadVideoFile = File(filePath);
+        try {
+          final compressedPath = await MediaHelper.compressVideo(filePath);
+          if (compressedPath != null && compressedPath != filePath) {
+            uploadVideoFile = File(compressedPath);
+          }
+        } catch (e) {
+          debugPrint('Background video compression error: $e');
+        }
+
+        // 3. Upload video
+        videoUrl = await uploadVideo(
+          file: uploadVideoFile,
+          userId: senderId,
+        );
+
+        if (uploadVideoFile.path != filePath) {
+          try {
+            await uploadVideoFile.delete();
+          } catch (_) {}
+        }
+
+        mediaUrl = thumbUrl ?? videoUrl;
+      } else {
+        File photoToUpload = File(filePath);
+        File? renderedPhoto;
+        if (!activeFilter.isOriginal || beauty.hasEffect) {
+          renderedPhoto = await CameraEffectsService().renderPhoto(
+            source: photoToUpload,
+            filter: activeFilter,
+            filterIntensity: filterIntensity,
+            beauty: beauty,
+          );
+          photoToUpload = renderedPhoto;
+        }
+
+        mediaUrl = await uploadPhoto(
+          file: photoToUpload,
+          userId: senderId,
+        );
+
+        if (renderedPhoto != null && renderedPhoto.path != filePath) {
+          try {
+            await renderedPhoto.delete();
+          } catch (_) {}
+        }
+      }
+
+      final docId = await sendPhoto(
+        senderId: senderId,
+        recipientIds: allowedRecipientIds,
+        imageUrl: mediaUrl,
+        videoUrl: videoUrl,
+        caption: caption?.trim().isNotEmpty == true ? caption!.trim() : null,
+        mediaType: isVideo ? 'video' : 'photo',
+        isMirrored: isMirrored,
+        filter: !activeFilter.isOriginal || beauty.hasEffect,
+      );
+
+      return docId;
+    } catch (e) {
+      debugPrint('PhotoService publishMediaInBackground error: $e');
+      return null;
+    }
+  }
+
+  // Stream Inbox Photos — optimized: parallel sender reads, no N+1 Firestore calls
   Stream<List<PhotoModel>> streamInbox(String userId) {
     return _db
         .collection('photos')
@@ -169,19 +307,32 @@ class PhotoService {
         .limit(50)
         .snapshots()
         .asyncMap((snapshot) async {
-      final photos = <PhotoModel>[];
-      for (final doc in snapshot.docs) {
-        UserModel? senderUser;
-        final senderId = doc.data()['senderId'] as String?;
-        if (senderId != null) {
-          final userDoc = await _db.collection('users').doc(senderId).get();
-          if (userDoc.exists) {
-            senderUser = UserModel.fromFirestore(userDoc);
+      // Collect unique sender IDs that are NOT already in the cache
+      final uniqueSenderIds = snapshot.docs
+          .map((d) => d.data()['senderId'] as String?)
+          .whereType<String>()
+          .toSet()
+          .where((id) => !_senderCache.containsKey(id))
+          .toList();
+
+      // Fetch all unknown senders in parallel (one round-trip per unique sender)
+      if (uniqueSenderIds.isNotEmpty) {
+        final futures = uniqueSenderIds.map(
+          (id) => _db.collection('users').doc(id).get(),
+        );
+        final results = await Future.wait(futures, eagerError: false);
+        for (final doc in results) {
+          if (doc.exists) {
+            _senderCache[doc.id] = UserModel.fromFirestore(doc);
           }
         }
-        photos.add(PhotoModel.fromFirestore(doc, senderUser: senderUser));
       }
-      return photos;
+
+      return snapshot.docs.map((doc) {
+        final senderId = doc.data()['senderId'] as String?;
+        final senderUser = senderId != null ? _senderCache[senderId] : null;
+        return PhotoModel.fromFirestore(doc, senderUser: senderUser);
+      }).toList();
     });
   }
 
@@ -291,17 +442,26 @@ class PhotoService {
     required PhotoModel photo,
     required UserModel currentUser,
     required String text,
-    String? photoUrl,
+    String? photoUrl, // selfie URL (for selfie reactions)
   }) async {
     final participants = [currentUser.uid, photo.senderId]..sort();
     final chatId = participants.join('_');
 
-    // Add message
+    // Determine the original photo URL to show as context in the bubble.
+    // For video posts the imageUrl is the thumbnail; fall back to videoUrl only
+    // if no thumbnail was stored.
+    final originalPhotoUrl = photo.imageUrl.isNotEmpty
+        ? photo.imageUrl
+        : photo.videoUrl;
+
+    // Add message — always type 'reaction' so the bubble can render context
     await _db.collection('chats').doc(chatId).collection('messages').add({
       'senderId': currentUser.uid,
       'text': text,
-      'photoUrl': photoUrl,
-      'type': photoUrl != null ? 'reaction' : 'text',
+      'photoUrl': photoUrl,           // selfie image (may be null for text reactions)
+      'reactedPhotoUrl': originalPhotoUrl, // original photo being reacted to
+      'type': 'reaction',
+      'status': 'sent',
       'createdAt': FieldValue.serverTimestamp(),
     });
 
@@ -326,7 +486,7 @@ class PhotoService {
           'avatar': friendAvatar,
         },
       },
-      'lastMessage': photoUrl != null ? '📷 $text' : text,
+      'lastMessage': photoUrl != null ? '📷 $text' : '💬 $text',
       'updatedAt': FieldValue.serverTimestamp(),
       'unreadCount.${photo.senderId}': FieldValue.increment(1),
     }, SetOptions(merge: true));

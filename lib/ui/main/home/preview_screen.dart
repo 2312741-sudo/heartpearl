@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -11,18 +12,17 @@ import '../../../core/constants/app_typography.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/utils/camera_filters.dart';
 import '../../../core/utils/haptic_helper.dart';
-import '../../../core/utils/media_helper.dart';
 import '../../../models/user_model.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/feed_provider.dart';
 import '../../../providers/friends_provider.dart';
 import '../../../providers/settings_provider.dart';
-import '../../../services/camera_effects_service.dart';
 import '../../../services/content_filter_service.dart';
 import '../../../services/media_downloader_service.dart';
 import '../../common/camera_effect_layer.dart';
 import '../../common/frosted_container.dart';
 import '../../common/gradient_button.dart';
+import '../../common/image_crop_screen.dart';
 import '../../common/user_avatar.dart';
 
 class PreviewScreen extends ConsumerStatefulWidget {
@@ -51,9 +51,9 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
   final _captionController = TextEditingController();
   final Set<String> _selectedFriendIds = {};
 
+  late String _currentFilePath;
   VideoPlayerController? _videoController;
   bool _isUploading = false;
-  double _uploadProgress = 0.0;
   bool _showFriendPicker = false;
   bool _isSaving = false;
 
@@ -65,7 +65,7 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
 
     try {
       final success = await MediaDownloaderService.saveCapturedMedia(
-        filePath: widget.filePath,
+        filePath: _currentFilePath,
         isVideo: widget.isVideo,
         filter: widget.filter,
         filterIntensity: widget.filterIntensity,
@@ -121,9 +121,31 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
     }
   }
 
+  Future<void> _openCropScreen() async {
+    HapticHelper.light();
+    final cropped = await Navigator.of(context).push<File>(
+      MaterialPageRoute(
+        builder: (_) => ImageCropScreen(
+          imageFile: File(_currentFilePath),
+          cropStyle: CropStyle.rectangle,
+          initialAspectRatio: 3 / 4,
+          title: 'Cắt ảnh',
+        ),
+      ),
+    );
+
+    if (cropped != null && mounted) {
+      setState(() {
+        _currentFilePath = cropped.path;
+      });
+      FileImage(File(cropped.path)).evict();
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _currentFilePath = widget.filePath;
     if (widget.isVideo) {
       _initVideo();
     }
@@ -182,174 +204,57 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
       return;
     }
 
-    setState(() {
-      _isUploading = true;
-      _uploadProgress = 0.0;
-    });
+    if (_isUploading) return;
+    _isUploading = true;
 
+    final selectedRecipients = Set<String>.from(_selectedFriendIds);
+    final filePath = _currentFilePath;
+    final isVideo = widget.isVideo;
+    final filter = widget.filter;
+    final filterIntensity = widget.filterIntensity;
+    final beauty = widget.beauty;
+    final isMirrored = widget.isMirrored;
     final photoService = ref.read(photoServiceProvider);
 
-    try {
-      final allowedRecipientIds = await ref
-          .read(friendServiceProvider)
-          .filterAllowedRecipients(
-            senderUid: user.uid,
-            recipientUids: _selectedFriendIds,
-          );
-      if (allowedRecipientIds.isEmpty) {
-        throw StateError(
-          AppStrings.tr('safety_interaction_blocked', lang: lang),
-        );
-      }
+    // 1. Instant haptic feedback
+    HapticHelper.success();
 
-      String mediaUrl;
-      String? videoUrl;
-
-      if (widget.isVideo) {
-        // 1. Generate video review thumbnail frame using native AVAssetImageGenerator
-        final thumbFile = await MediaHelper.generateVideoThumbnail(
-          widget.filePath,
-        );
-        String? thumbUrl;
-        if (thumbFile != null) {
-          File thumbToUpload = thumbFile;
-          File? renderedThumb;
-          if (!widget.filter.isOriginal || widget.beauty.hasEffect) {
-            renderedThumb = await CameraEffectsService().renderPhoto(
-              source: thumbFile,
-              filter: widget.filter,
-              filterIntensity: widget.filterIntensity,
-              beauty: widget.beauty,
-            );
-            thumbToUpload = renderedThumb;
-          }
-          try {
-            thumbUrl = await photoService.uploadPhoto(
-              file: thumbToUpload,
-              userId: user.uid,
-            );
-            // Clean up temporary thumbnail
-            try {
-              await thumbFile.delete();
-              if (renderedThumb != null &&
-                  renderedThumb.path != thumbFile.path) {
-                await renderedThumb.delete();
-              }
-            } catch (_) {}
-          } catch (e) {
-            debugPrint('Error uploading video thumbnail: $e');
-          }
-        }
-
-        // 2. Hardware Video Compression (reducing from 35MB to ~2MB with fast-start streaming)
-        File uploadVideoFile = File(widget.filePath);
-        try {
-          final compressedPath = await MediaHelper.compressVideo(
-            widget.filePath,
-          );
-          if (compressedPath != null && compressedPath != widget.filePath) {
-            uploadVideoFile = File(compressedPath);
-          }
-        } catch (e) {
-          debugPrint('Video compression error: $e');
-        }
-
-        // 3. Upload video file with progress tracking
-        videoUrl = await photoService.uploadVideo(
-          file: uploadVideoFile,
-          userId: user.uid,
-          onProgress: (p) => setState(() => _uploadProgress = p),
-        );
-
-        // Clean up temporary compressed file
-        if (uploadVideoFile.path != widget.filePath) {
-          try {
-            await uploadVideoFile.delete();
-          } catch (_) {}
-        }
-
-        // If thumbnail generation succeeded, use it for preview; otherwise fallback to videoUrl
-        mediaUrl = thumbUrl ?? videoUrl;
-      } else {
-        File photoToUpload = File(widget.filePath);
-        File? renderedPhoto;
-        if (!widget.filter.isOriginal || widget.beauty.hasEffect) {
-          renderedPhoto = await CameraEffectsService().renderPhoto(
-            source: photoToUpload,
-            filter: widget.filter,
-            filterIntensity: widget.filterIntensity,
-            beauty: widget.beauty,
-          );
-          photoToUpload = renderedPhoto;
-        }
-        mediaUrl = await photoService.uploadPhoto(
-          file: photoToUpload,
-          userId: user.uid,
-          onProgress: (p) => setState(() => _uploadProgress = p),
-        );
-        if (renderedPhoto != null && renderedPhoto.path != widget.filePath) {
-          try {
-            await renderedPhoto.delete();
-          } catch (_) {}
-        }
-      }
-
-      final finalRecipientIds = await ref
-          .read(friendServiceProvider)
-          .filterAllowedRecipients(
-            senderUid: user.uid,
-            recipientUids: allowedRecipientIds,
-          );
-      if (finalRecipientIds.isEmpty) {
-        throw StateError(
-          AppStrings.tr('safety_interaction_blocked', lang: lang),
-        );
-      }
-
-      await photoService.sendPhoto(
-        senderId: user.uid,
-        recipientIds: finalRecipientIds,
-        imageUrl: mediaUrl,
-        videoUrl: videoUrl,
-        caption: _captionController.text.trim().isNotEmpty
-            ? _captionController.text.trim()
-            : null,
-        mediaType: widget.isVideo ? 'video' : 'photo',
-        isMirrored: widget.isMirrored,
-        filter: !widget.filter.isOriginal || widget.beauty.hasEffect,
-      );
-
-      // Note: User's own sent photos are not saved to their own home widget (widgets only show photos from friends)
-
-      HapticHelper.success();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              widget.isVideo
+    // 2. Immediate user feedback: positive notification that media is on its way
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(LucideIcons.checkCircle2, color: Colors.white, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              isVideo
                   ? AppStrings.tr('home_success_video', lang: lang)
                   : AppStrings.tr('home_success_photo', lang: lang),
             ),
-            backgroundColor: AppColors.success,
-          ),
-        );
-        Navigator.of(context).pop();
-      }
-    } catch (e) {
-      HapticHelper.heavy();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Lỗi gửi: ${e.toString()}'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isUploading = false);
-      }
-    }
+          ],
+        ),
+        backgroundColor: AppColors.success,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+
+    // 3. Pop PreviewScreen immediately in < 20ms — user never waits!
+    Navigator.of(context).pop();
+
+    // 4. Detached background publish execution
+    unawaited(
+      photoService.publishMediaInBackground(
+        senderId: user.uid,
+        recipientUids: selectedRecipients,
+        filePath: filePath,
+        isVideo: isVideo,
+        caption: caption.isNotEmpty ? caption : null,
+        filter: filter,
+        filterIntensity: filterIntensity,
+        beauty: beauty,
+        isMirrored: isMirrored,
+      ),
+    );
   }
 
   @override
@@ -438,6 +343,34 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                                 ),
                               ),
                             ],
+                          ),
+                        ),
+                        const SizedBox(width: AppDimens.spaceSm),
+                      ],
+
+                      // Crop Button (Photo only)
+                      if (!widget.isVideo) ...[
+                        GestureDetector(
+                          onTap: _isSaving ? null : _openCropScreen,
+                          child: FrostedContainer(
+                            borderRadius: AppDimens.radiusFull,
+                            padding: const EdgeInsets.all(10),
+                            backgroundColor: isDark
+                                ? const Color(0x331E0D26)
+                                : AppColors.lightSurface.withValues(alpha: 0.9),
+                            border: Border.all(
+                              color: isDark
+                                  ? Colors.white.withValues(alpha: 0.12)
+                                  : AppColors.lightBorder.withValues(alpha: 0.6),
+                              width: 1,
+                            ),
+                            child: Icon(
+                              LucideIcons.crop,
+                              color: isDark
+                                  ? AppColors.white
+                                  : AppColors.lightTextPrimary,
+                              size: 22,
+                            ),
                           ),
                         ),
                         const SizedBox(width: AppDimens.spaceSm),
@@ -541,9 +474,15 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                                           color: AppColors.primary,
                                         ),
                                       ))
-                              : Image.file(
-                                  File(widget.filePath),
-                                  fit: BoxFit.cover,
+                              : InteractiveViewer(
+                                  minScale: 1.0,
+                                  maxScale: 4.0,
+                                  clipBehavior: Clip.hardEdge,
+                                  child: Image.file(
+                                    File(_currentFilePath),
+                                    key: ValueKey(_currentFilePath),
+                                    fit: BoxFit.cover,
+                                  ),
                                 ),
                         ),
                       ),
@@ -802,7 +741,7 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                   // Send Button
                   GradientButton(
                     text: _isUploading
-                        ? '${(_uploadProgress * 100).toInt()}% ${AppStrings.tr('home_sending', lang: lang)}'
+                        ? AppStrings.tr('home_sending', lang: lang)
                         : AppStrings.tr('home_send', lang: lang),
                     isLoading: _isUploading,
                     icon: const Icon(

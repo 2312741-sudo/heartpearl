@@ -16,8 +16,9 @@ class AppNavigation {
       if (navigatorKey.currentState != null) {
         action();
       } else {
-        // Fallback retry if navigator is still building (cold start from push notification)
-        Future.delayed(const Duration(milliseconds: 300), () {
+        // Fallback retry if navigator is still building (cold start from push notification).
+        // 100ms is enough for first frame; 300ms was noticeable as a delay.
+        Future.delayed(const Duration(milliseconds: 100), () {
           if (navigatorKey.currentState != null) {
             action();
           }
@@ -79,6 +80,27 @@ class AppNavigation {
         builder: (context) => FriendsScreen(initialIndex: initialIndex),
       ),
     );
+  }
+
+  /// Safe tab switcher — used by notification handler to jump directly to a tab
+  /// without pushing a new route. Calls the registered tab callback if any.
+  static void Function(int index)? _tabSwitchCallback;
+
+  /// Register the tab-switch callback from MainScaffold.
+  static void registerTabSwitchCallback(void Function(int index) callback) {
+    _tabSwitchCallback = callback;
+  }
+
+  /// Navigate directly to the Inbox tab (tab index 1) and pop any open routes.
+  static void navigateToInbox() {
+    popToRoot();
+    _tabSwitchCallback?.call(1);
+  }
+
+  /// Navigate directly to any tab by index and pop any open routes.
+  static void navigateToTab(int index) {
+    popToRoot();
+    _tabSwitchCallback?.call(index);
   }
 
   /// Navigate cleanly to NotificationsScreen without stacking

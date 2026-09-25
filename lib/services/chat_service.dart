@@ -74,6 +74,7 @@ class ChatService {
         'text': trimmed,
         'photoUrl': photoUrl,
         'type': type,
+        'status': 'sent',
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -136,12 +137,87 @@ class ChatService {
         containsUid(documents[1], firstUid);
   }
 
+  // Mark all unread messages received by recipient in this chat as delivered
+  Future<void> markMessagesAsDelivered(
+    String chatId, {
+    String? recipientId,
+    String? senderId,
+  }) async {
+    try {
+      final query = await _db
+          .collection('chats')
+          .doc(chatId)
+          .collection('messages')
+          .where('status', isEqualTo: 'sent')
+          .limit(30)
+          .get();
+
+      if (query.docs.isEmpty) return;
+
+      final batch = _db.batch();
+      var hasUpdates = false;
+
+      for (final doc in query.docs) {
+        final data = doc.data();
+        final docSenderId = data['senderId'] as String?;
+        final isTarget = (senderId != null && docSenderId == senderId) ||
+            (recipientId != null && docSenderId != recipientId);
+
+        if (isTarget) {
+          batch.update(doc.reference, {'status': 'delivered'});
+          hasUpdates = true;
+        }
+      }
+
+      if (hasUpdates) {
+        await batch.commit();
+      }
+    } catch (_) {}
+  }
+
+  // Mark all unread messages received by viewer in this chat as seen
+  Future<void> markMessagesAsSeen(
+    String chatId, {
+    required String viewerId,
+  }) async {
+    try {
+      final query = await _db
+          .collection('chats')
+          .doc(chatId)
+          .collection('messages')
+          .where('status', whereIn: ['sent', 'delivered'])
+          .limit(40)
+          .get();
+
+      if (query.docs.isEmpty) return;
+
+      final batch = _db.batch();
+      var hasUpdates = false;
+
+      for (final doc in query.docs) {
+        final data = doc.data();
+        if (data['senderId'] != viewerId) {
+          batch.update(doc.reference, {'status': 'seen'});
+          hasUpdates = true;
+        }
+      }
+
+      if (hasUpdates) {
+        await batch.commit();
+      }
+    } catch (_) {}
+  }
+
   // Mark chat as read
   Future<void> markChatAsRead(String chatId, String userId) async {
     try {
-      await _db.collection('chats').doc(chatId).set({
+      await _db.collection('chats').doc(chatId).update({
         'unreadCount.$userId': 0,
-      }, SetOptions(merge: true));
+      }).catchError((_) async {
+        await _db.collection('chats').doc(chatId).set({
+          'unreadCount': {userId: 0},
+        }, SetOptions(merge: true));
+      });
     } catch (_) {}
   }
 }

@@ -11,6 +11,7 @@ import '../../../providers/friends_provider.dart';
 import '../../../providers/location_provider.dart';
 import '../../../providers/settings_provider.dart';
 import '../../../services/location_sharing_duration.dart';
+import '../../common/skeleton_loader.dart';
 import '../../common/user_avatar.dart';
 
 class LocationPrivacyScreen extends ConsumerStatefulWidget {
@@ -321,7 +322,7 @@ class _LocationPrivacyScreenState
           ),
           const SizedBox(height: AppDimens.spaceSm),
           friendsAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
+            loading: () => const SkeletonListView(count: 3),
             error: (error, _) => Text(error.toString()),
             data: (friends) {
               if (friends.isEmpty) {

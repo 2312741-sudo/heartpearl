@@ -1,21 +1,36 @@
+import 'dart:async';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import '../core/navigation/app_navigation.dart';
+import '../firebase_options.dart';
 import '../models/notification_model.dart';
 import 'auth_service.dart';
+import 'chat_service.dart';
 import 'widget_service.dart';
 
 /// Top-level background message handler (must be top-level, not a class method)
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // Background isolate does not share the main isolate's Firebase instance.
+  // Must initialize Firebase before accessing any Firebase service.
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   if (message.data['type'] == 'location_widget_update') {
     // App is in background/terminated — update widget data from Firestore
     try {
       await WidgetService.initializeHomeWidget();
       await WidgetService.updateLocationWidget();
     } catch (_) {}
+  } else if (message.data['type'] == 'chat_message') {
+    final chatId = message.data['chatId'] as String?;
+    final senderId = message.data['senderId'] as String?;
+    if (chatId != null && chatId.isNotEmpty) {
+      try {
+        await ChatService().markMessagesAsDelivered(chatId, senderId: senderId);
+      } catch (_) {}
+    }
   }
 }
 
@@ -33,13 +48,32 @@ class NotificationService {
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
   final AuthService _authService = AuthService();
 
+  // Saved subscriptions so we can cancel before re-registering.
+  // Without this, every call to initializeFCM adds another listener on top
+  // of the old one → memory leak + duplicate notification handling.
+  StreamSubscription<String>? _tokenRefreshSub;
+  StreamSubscription<RemoteMessage>? _onMessageSub;
+  StreamSubscription<RemoteMessage>? _onMessageOpenedAppSub;
+
   /// Register the background message handler — call once at app start (before runApp)
   static void registerBackgroundHandler() {
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   }
 
-  // Initialize FCM
+  /// Cancel all active FCM stream subscriptions.
+  Future<void> dispose() async {
+    await _tokenRefreshSub?.cancel();
+    await _onMessageSub?.cancel();
+    await _onMessageOpenedAppSub?.cancel();
+    _tokenRefreshSub = null;
+    _onMessageSub = null;
+    _onMessageOpenedAppSub = null;
+  }
+
+  // Initialize FCM — safe to call again when user changes (subscriptions are replaced).
   Future<void> initializeFCM(String userId) async {
+    // Cancel previous subscriptions before registering new ones for the new user.
+    await dispose();
     try {
       final settings = await _fcm.requestPermission(
         alert: true,
@@ -86,8 +120,9 @@ class NotificationService {
           await _authService.updateFCMToken(userId, token);
         }
 
-        // Listen for token updates (e.g. when APNS arrives after initial launch)
-        _fcm.onTokenRefresh.listen((newToken) async {
+        // Listen for token updates — save subscription to cancel on dispose/re-init.
+        // Capture userId by value so token is always written to the correct user doc.
+        _tokenRefreshSub = _fcm.onTokenRefresh.listen((newToken) async {
           debugPrint('[FCM] FCM token refreshed: $newToken');
           await _authService.updateFCMToken(userId, newToken);
         });
@@ -96,16 +131,24 @@ class NotificationService {
       }
 
       // Listen for foreground data messages (app open)
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
+      _onMessageSub = FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
         if (message.data['type'] == 'location_widget_update') {
           try {
             await WidgetService.updateLocationWidget();
           } catch (_) {}
+        } else if (message.data['type'] == 'chat_message') {
+          final chatId = message.data['chatId'] as String?;
+          final senderId = message.data['senderId'] as String?;
+          if (chatId != null && chatId.isNotEmpty) {
+            try {
+              await ChatService().markMessagesAsDelivered(chatId, senderId: senderId);
+            } catch (_) {}
+          }
         }
       });
 
       // Listen for when user taps notification to open app from background
-      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      _onMessageOpenedAppSub = FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
         handleNotificationClick(message);
       });
 
@@ -114,10 +157,14 @@ class NotificationService {
       if (initialMessage != null) {
         handleNotificationClick(initialMessage);
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[FCM] initializeFCM error: $e');
+    }
   }
 
-  /// Handle outside-app notification clicks and deep-link to the right screen
+  /// Handle outside-app notification clicks and deep-link to the right screen.
+  /// Uses AppNavigation.navigateToInbox() for photo/reaction notifications so the
+  /// user lands directly in the Inbox tab rather than the Notifications list screen.
   static void handleNotificationClick(RemoteMessage message) {
     final data = message.data;
     final type = data['type'] as String?;
@@ -139,8 +186,13 @@ class NotificationService {
         AppNavigation.navigateToFriends(
           initialIndex: type == 'friend_request' ? 1 : 0,
         );
-      } else if (type == 'photo' || type == 'reaction') {
-        AppNavigation.navigateToNotifications();
+      } else if (type == 'photo' || type == 'new_photo' || type == 'reaction') {
+        // Jump directly to Inbox tab — no extra screen push required.
+        // 'new_photo' is the type written by sendPhoto(), 'photo' is the legacy type.
+        AppNavigation.navigateToInbox();
+      } else if (type == 'message') {
+        // Text reaction — also in inbox
+        AppNavigation.navigateToInbox();
       }
     });
   }

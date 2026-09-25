@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -21,10 +22,13 @@ import '../../common/app_badge.dart';
 import '../../common/camera_effect_layer.dart';
 import '../../../core/utils/media_helper.dart';
 import '../../common/frosted_container.dart';
+import '../../common/image_crop_screen.dart';
 import '../chat/chat_list_screen.dart';
 import '../friends/friends_screen.dart';
 import '../notifications/notifications_screen.dart';
 import 'preview_screen.dart';
+import 'widgets/camera_controls.dart';
+import 'widgets/camera_filter_bar.dart';
 
 class CameraScreen extends ConsumerStatefulWidget {
   final bool isActive;
@@ -227,6 +231,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     _controller = null;
     if (mounted) setState(() {});
     if (c != null) {
+      try {
+        await c.pausePreview();
+      } catch (_) {}
       _pendingDispose = c.dispose();
     }
   }
@@ -427,6 +434,15 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         } catch (_) {}
       }
 
+      if (!mounted || !widget.isActive) {
+        await newController.dispose();
+        _isSwitchingCamera = false;
+        if (mounted) {
+          setState(() => _isTransitioningLens = false);
+        }
+        return;
+      }
+
       if (mounted) {
         setState(() {
           _controller = newController;
@@ -561,7 +577,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     _isProcessing = true;
 
     try {
-      final xFile = await _imagePicker.pickMedia(imageQuality: 92);
+      final xFile = await _imagePicker.pickMedia(imageQuality: 95);
       if (xFile != null && mounted) {
         final pathLower = xFile.path.toLowerCase();
         final isVideo =
@@ -570,23 +586,56 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             pathLower.endsWith('.avi') ||
             pathLower.endsWith('.m4v');
 
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => PreviewScreen(
-              filePath: xFile.path,
-              isVideo: isVideo,
-              isMirrored: false,
-              filter: _selectedFilter,
-              filterIntensity: _filterIntensity,
-              beauty: _beauty,
+        if (isVideo) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => PreviewScreen(
+                filePath: xFile.path,
+                isVideo: true,
+                isMirrored: false,
+                filter: _selectedFilter,
+                filterIntensity: _filterIntensity,
+                beauty: _beauty,
+              ),
             ),
-          ),
-        );
+          );
+        } else {
+          // Open Zoom & Crop screen with 3:4 default aspect ratio
+          final cropped = await Navigator.of(context).push<File>(
+            MaterialPageRoute(
+              builder: (_) => ImageCropScreen(
+                imageFile: File(xFile.path),
+                cropStyle: CropStyle.rectangle,
+                initialAspectRatio: 3 / 4,
+                title: 'Chỉnh sửa ảnh',
+              ),
+            ),
+          );
+
+          if (cropped != null && mounted) {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => PreviewScreen(
+                  filePath: cropped.path,
+                  isVideo: false,
+                  isMirrored: false,
+                  filter: _selectedFilter,
+                  filterIntensity: _filterIntensity,
+                  beauty: _beauty,
+                ),
+              ),
+            );
+          }
+        }
       }
     } catch (e) {
       debugPrint('Pick gallery error: $e');
     } finally {
-      _isProcessing = false;
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      } else {
+        _isProcessing = false;
+      }
     }
   }
 
@@ -871,7 +920,6 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     final bottomInset = MediaQuery.of(context).padding.bottom;
     final navBarClearance = 74.0 + bottomInset;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final hasActiveFilter = _selectedFilter.type != BeautyFilterType.normal;
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.black : AppColors.lightBackground,
@@ -1416,179 +1464,38 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
                 const SizedBox(height: 6),
 
-                // 3. Multi-Category Filter Carousel & Beauty Controls
-                if (!_isRecording) _buildFilterAndBeautyBar(isDark),
-
-                const SizedBox(height: 6),
-
-                // Intensity Slider right above capture button (fixed height avoids any viewfinder resizing)
-                if (!_isRecording) _buildIntensitySlider(isDark, hasActiveFilter),
+                // 3. Multi-Category Filter Carousel, Intensity Slider & Beauty Controls
+                CameraFilterBar(
+                  selectedFilter: _selectedFilter,
+                  selectedCategory: _selectedCategory,
+                  filterIntensity: _filterIntensity,
+                  beauty: _beauty,
+                  isDark: isDark,
+                  isRecording: _isRecording,
+                  onSelectFilter: _selectFilter,
+                  onSelectCategory: (cat) =>
+                      setState(() => _selectedCategory = cat),
+                  onIntensityChanged: (val) {
+                    setState(() => _filterIntensity = val);
+                    _saveEffectsSoon();
+                  },
+                  onReset: _resetEffects,
+                  onOpenBeauty: () => _showBeautySettingsSheet(isDark),
+                ),
 
                 const SizedBox(height: 6),
 
                 // 4. Bottom Shutter & Controls (positioned above bottom navigation bar)
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppDimens.spaceLg,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      // 1. Pick Media from Gallery
-                      GestureDetector(
-                        onTap: _pickMediaFromGallery,
-                        child: FrostedContainer(
-                          borderRadius: AppDimens.radiusFull,
-                          padding: const EdgeInsets.all(14),
-                          backgroundColor: isDark
-                              ? const Color(0x331E0D26)
-                              : AppColors.lightSurface.withValues(alpha: 0.9),
-                          border: Border.all(
-                            color: isDark
-                                ? Colors.white.withValues(alpha: 0.12)
-                                : AppColors.lightBorder.withValues(alpha: 0.6),
-                            width: 1,
-                          ),
-                          child: Icon(
-                            LucideIcons.image,
-                            color: isDark
-                                ? AppColors.white
-                                : AppColors.lightTextPrimary,
-                            size: 24,
-                          ),
-                        ),
-                      ),
-
-                      // 2. Shutter Button (Tap: Photo, Press & Hold: Video - Anti-Stuck)
-                      Listener(
-                        behavior: HitTestBehavior.opaque,
-                        onPointerDown: (_) => _handlePointerDown(),
-                        onPointerUp: (_) => _handlePointerUp(),
-                        onPointerCancel: (_) => _handlePointerCancel(),
-                        child: AnimatedScale(
-                          scale: (_isButtonPressed || _isRecording)
-                              ? 0.92
-                              : 1.0,
-                          duration: const Duration(milliseconds: 120),
-                          curve: Curves.easeOutCubic,
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              // Outer Progress Ring for Recording
-                              SizedBox(
-                                width: 86,
-                                height: 86,
-                                child: AnimatedBuilder(
-                                  animation: _recordProgressController,
-                                  builder: (context, child) {
-                                    return CircularProgressIndicator(
-                                      value: _isRecording
-                                          ? _recordProgressController.value
-                                          : 0.0,
-                                      strokeWidth: 4,
-                                      valueColor:
-                                          const AlwaysStoppedAnimation<Color>(
-                                            AppColors.primaryLight,
-                                          ),
-                                      backgroundColor: _isRecording
-                                          ? (isDark
-                                                ? Colors.white24
-                                                : AppColors.lightBorder)
-                                          : Colors.transparent,
-                                    );
-                                  },
-                                ),
-                              ),
-
-                              // Outer ring border
-                              Container(
-                                width: 80,
-                                height: 80,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: (_isRecording || _isButtonPressed)
-                                        ? AppColors.primaryLight
-                                        : (isDark
-                                              ? Colors.white.withValues(
-                                                  alpha: 0.8,
-                                                )
-                                              : AppColors.primary.withValues(
-                                                  alpha: 0.35,
-                                                )),
-                                    width: 3.5,
-                                  ),
-                                ),
-                              ),
-
-                              // Inner Shutter Button
-                              AnimatedContainer(
-                                duration: const Duration(milliseconds: 150),
-                                width: _isRecording ? 48 : 64,
-                                height: _isRecording ? 48 : 64,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient: AppColors.primaryGradient,
-                                  boxShadow: AppDimens.glowShadow(
-                                    AppColors.primary,
-                                    opacity: (_isRecording || _isButtonPressed)
-                                        ? 0.8
-                                        : 0.4,
-                                  ),
-                                ),
-                                child: _isRecording
-                                    ? Center(
-                                        child: Container(
-                                          width: 18,
-                                          height: 18,
-                                          decoration: BoxDecoration(
-                                            color: AppColors.white,
-                                            borderRadius: BorderRadius.circular(
-                                              4,
-                                            ),
-                                            boxShadow: const [
-                                              BoxShadow(
-                                                color: Colors.black26,
-                                                blurRadius: 4,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      )
-                                    : null,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      // 3. Flip Camera Facing (Front <-> Back only)
-                      GestureDetector(
-                        onTap: _toggleCameraFacing,
-                        child: FrostedContainer(
-                          borderRadius: AppDimens.radiusFull,
-                          padding: const EdgeInsets.all(14),
-                          backgroundColor: isDark
-                              ? const Color(0x331E0D26)
-                              : AppColors.lightSurface.withValues(alpha: 0.9),
-                          border: Border.all(
-                            color: isDark
-                                ? Colors.white.withValues(alpha: 0.12)
-                                : AppColors.lightBorder.withValues(alpha: 0.6),
-                            width: 1,
-                          ),
-                          child: Icon(
-                            LucideIcons.switchCamera,
-                            color: isDark
-                                ? AppColors.white
-                                : AppColors.lightTextPrimary,
-                            size: 24,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                CameraControls(
+                  onPickGallery: _pickMediaFromGallery,
+                  onPointerDown: _handlePointerDown,
+                  onPointerUp: _handlePointerUp,
+                  onPointerCancel: _handlePointerCancel,
+                  onFlipCamera: _toggleCameraFacing,
+                  isButtonPressed: _isButtonPressed,
+                  isRecording: _isRecording,
+                  recordProgressAnimation: _recordProgressController,
+                  isDark: isDark,
                 ),
 
                 // Bottom clearance for floating MainScaffold bottom nav bar
@@ -1599,353 +1506,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
           // Screen Flash Overlay for front camera
           if (_isScreenFlashing)
-            Positioned.fill(child: Container(color: const Color(0xFFFFFBEA))),
+            Positioned.fill(child: Container(color: AppColors.screenFlash)),
         ],
       ),
-    );
-  }
-
-  Widget _buildIntensitySlider(bool isDark, bool hasActiveFilter) {
-    return SizedBox(
-      height: 36,
-      child: AnimatedOpacity(
-        opacity: hasActiveFilter && !_isRecording ? 1.0 : 0.0,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeInOut,
-        child: IgnorePointer(
-          ignoring: !hasActiveFilter || _isRecording,
-          child: Center(
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 270),
-              margin: const EdgeInsets.symmetric(horizontal: 24),
-              child: FrostedContainer(
-                borderRadius: AppDimens.radiusFull,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 2,
-                ),
-                backgroundColor: isDark
-                    ? const Color(0xCC1E0D26)
-                    : AppColors.lightSurface.withValues(alpha: 0.95),
-                border: Border.all(
-                  color: isDark ? Colors.white24 : AppColors.lightBorder,
-                  width: 1,
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      LucideIcons.slidersHorizontal,
-                      size: 13,
-                      color: isDark
-                          ? Colors.white70
-                          : AppColors.lightTextSecondary,
-                    ),
-                    const SizedBox(width: 5),
-                    Text(
-                      'Cường độ',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: isDark
-                            ? Colors.white70
-                            : AppColors.lightTextSecondary,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: SliderTheme(
-                        data: SliderTheme.of(context).copyWith(
-                          trackHeight: 2.5,
-                          thumbShape: const RoundSliderThumbShape(
-                            enabledThumbRadius: 6,
-                          ),
-                          overlayShape: const RoundSliderOverlayShape(
-                            overlayRadius: 12,
-                          ),
-                          activeTrackColor: AppColors.primary,
-                          inactiveTrackColor: isDark
-                              ? Colors.white24
-                              : AppColors.lightBorder,
-                          thumbColor: AppColors.primary,
-                        ),
-                        child: Slider(
-                          value: _filterIntensity,
-                          min: 0.0,
-                          max: 1.0,
-                          onChanged: (val) {
-                            setState(() => _filterIntensity = val);
-                            _saveEffectsSoon();
-                          },
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 32,
-                      child: Text(
-                        '${(_filterIntensity * 100).round()}%',
-                        textAlign: TextAlign.right,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: isDark
-                              ? Colors.white
-                              : AppColors.lightTextPrimary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFilterAndBeautyBar(bool isDark) {
-    final categoryFilters = [
-      if (_selectedCategory == FilterCategory.natural) BeautyFilter.all.first,
-      ...BeautyFilter.inCategory(_selectedCategory),
-    ];
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // A. Filter Carousel for current category
-        SizedBox(
-          height: 38,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: AppDimens.spaceLg),
-            itemCount: categoryFilters.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 8),
-            itemBuilder: (context, index) {
-              final filter = categoryFilters[index];
-              final isSelected = filter.type == _selectedFilter.type;
-              final swatchColors = filter.thumbnailColors.length >= 2
-                  ? filter.thumbnailColors
-                  : [filter.thumbnailColors.first, filter.thumbnailColors.first];
-
-              return GestureDetector(
-                onTap: () => _selectFilter(filter),
-                child: FrostedContainer(
-                  borderRadius: AppDimens.radiusFull,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  backgroundColor: isSelected
-                      ? AppColors.primary.withValues(alpha: 0.85)
-                      : (isDark
-                            ? const Color(0x4D1E0D26)
-                            : AppColors.lightSurface.withValues(alpha: 0.9)),
-                  border: Border.all(
-                    color: isSelected
-                        ? AppColors.primaryLight
-                        : (isDark ? Colors.white24 : AppColors.lightBorder),
-                    width: isSelected ? 1.5 : 1,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (!filter.isOriginal) ...[
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(colors: swatchColors),
-                            border: Border.all(
-                              color: isSelected ? Colors.white : Colors.white54,
-                              width: 0.8,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 5),
-                      ],
-                      Text(filter.icon, style: const TextStyle(fontSize: 12)),
-                      const SizedBox(width: 4),
-                      Text(
-                        filter.name,
-                        style: AppTypography.medium.copyWith(
-                          color: isSelected
-                              ? AppColors.white
-                              : (isDark
-                                    ? AppColors.white
-                                    : AppColors.lightTextPrimary),
-                          fontSize: 12,
-                          fontWeight: isSelected
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-
-        const SizedBox(height: 6),
-
-        // C. Category Bar + Reset + Beauty Button
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppDimens.spaceLg),
-          child: Row(
-            children: [
-              // 1. Reset button
-              GestureDetector(
-                onTap: () {
-                  HapticHelper.light();
-                  _resetEffects();
-                },
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isDark
-                        ? const Color(0x4D1E0D26)
-                        : AppColors.lightSurface.withValues(alpha: 0.9),
-                    border: Border.all(
-                      color: isDark ? Colors.white24 : AppColors.lightBorder,
-                      width: 1,
-                    ),
-                  ),
-                  child: Icon(
-                    LucideIcons.rotateCcw,
-                    size: 14,
-                    color: isDark
-                        ? Colors.white70
-                        : AppColors.lightTextSecondary,
-                  ),
-                ),
-              ),
-
-              const SizedBox(width: 8),
-
-              // 2. Scrollable Category Chips
-              Expanded(
-                child: SizedBox(
-                  height: 32,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: FilterCategory.values.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(width: 6),
-                    itemBuilder: (context, index) {
-                      final category = FilterCategory.values[index];
-                      final isSelected = category == _selectedCategory;
-
-                      return GestureDetector(
-                        onTap: () {
-                          HapticHelper.selection();
-                          setState(() => _selectedCategory = category);
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            color: isSelected
-                                ? (isDark
-                                      ? Colors.white.withValues(alpha: 0.18)
-                                      : AppColors.primary.withValues(
-                                          alpha: 0.12,
-                                        ))
-                                : Colors.transparent,
-                            border: Border.all(
-                              color: isSelected
-                                  ? AppColors.primaryLight
-                                  : Colors.transparent,
-                              width: 1,
-                            ),
-                          ),
-                          child: Text(
-                            '${category.icon} ${category.label}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: isSelected
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                              color: isSelected
-                                  ? (isDark
-                                        ? AppColors.white
-                                        : AppColors.primary)
-                                  : (isDark
-                                        ? Colors.white60
-                                        : AppColors.lightTextSecondary),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-
-              const SizedBox(width: 8),
-
-              // 3. Beauty Settings Button
-              GestureDetector(
-                onTap: () {
-                  HapticHelper.selection();
-                  _showBeautySettingsSheet(isDark);
-                },
-                child: Container(
-                  height: 32,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    color: _beauty.hasEffect
-                        ? AppColors.primary.withValues(alpha: 0.22)
-                        : (isDark
-                              ? const Color(0x4D1E0D26)
-                              : AppColors.lightSurface.withValues(alpha: 0.9)),
-                    border: Border.all(
-                      color: _beauty.hasEffect
-                          ? AppColors.primary
-                          : (isDark ? Colors.white24 : AppColors.lightBorder),
-                      width: 1,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        LucideIcons.sparkles,
-                        size: 14,
-                        color: _beauty.hasEffect
-                            ? AppColors.primaryLight
-                            : (isDark
-                                  ? AppColors.white
-                                  : AppColors.lightTextPrimary),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Làm đẹp',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: _beauty.hasEffect
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                          color: _beauty.hasEffect
-                              ? AppColors.primaryLight
-                              : (isDark
-                                    ? AppColors.white
-                                    : AppColors.lightTextPrimary),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 

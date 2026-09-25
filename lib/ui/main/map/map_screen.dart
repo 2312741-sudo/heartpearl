@@ -21,6 +21,7 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/location_provider.dart';
 import '../../../providers/settings_provider.dart';
 import '../../../services/widget_service.dart';
+import 'add_place_sheet.dart';
 import 'live_location_sheet.dart';
 import '../profile/location_privacy_screen.dart';
 
@@ -118,9 +119,11 @@ class _MapScreenState extends ConsumerState<MapScreen>
   /// Opens the Live Location sheet to start a timed session.
   void _showLiveSheet() {
     HapticHelper.medium();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -255,19 +258,24 @@ class _MapScreenState extends ConsumerState<MapScreen>
         _centerOnMeOnce();
       }
 
-      // 3. Listen to live position changes while actively viewing the map
+      // 3. Listen to position changes for the local blue-dot display.
+      //    medium accuracy is sufficient here — we're just drawing a marker,
+      //    not sharing with friends. distanceFilter 20 m avoids micro-jitter.
       _positionSub?.cancel();
       final streamSettings = Platform.isIOS
           ? AppleSettings(
-              accuracy: LocationAccuracy.high,
-              distanceFilter: 10,
+              accuracy: LocationAccuracy.medium,
+              distanceFilter: 20,
+              // pauseLocationUpdatesAutomatically: true is fine for the display
+              // stream — when user leaves the map tab we cancel it in
+              // didChangeAppLifecycleState anyway.
               pauseLocationUpdatesAutomatically: true,
               showBackgroundLocationIndicator: false,
               allowBackgroundLocationUpdates: false,
             )
           : const LocationSettings(
-              accuracy: LocationAccuracy.high,
-              distanceFilter: 10,
+              accuracy: LocationAccuracy.medium,
+              distanceFilter: 20,
             );
 
       _positionSub = Geolocator.getPositionStream(
@@ -326,23 +334,23 @@ class _MapScreenState extends ConsumerState<MapScreen>
     }
   }
 
-  void _zoomIn() {
+  void _showAddPlaceSheet({double? lat, double? lng}) {
     HapticHelper.selection();
-    final currentZoom = _mapController.camera.zoom;
-    _mapController.move(_mapController.camera.center, (currentZoom + 1).clamp(3.0, 18.5));
+    AddPlaceSheet.show(
+      context,
+      lat: lat ?? _myPosition?.latitude,
+      lng: lng ?? _myPosition?.longitude,
+    );
   }
 
-  void _zoomOut() {
-    HapticHelper.selection();
-    final currentZoom = _mapController.camera.zoom;
-    _mapController.move(_mapController.camera.center, (currentZoom - 1).clamp(3.0, 18.5));
-  }
+
 
   void _showMapStyleSheet() {
     HapticHelper.selection();
     final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet(
       context: context,
+      backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -356,14 +364,42 @@ class _MapScreenState extends ConsumerState<MapScreen>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: AppDimens.spaceBase),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white24 : Colors.black26,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
               Text(
                 'Kiểu bản đồ',
-                style: AppTypography.h3(),
+                style: AppTypography.h3(
+                  color: isDark
+                      ? AppColors.darkTextPrimary
+                      : AppColors.lightTextPrimary,
+                ),
               ),
               const SizedBox(height: 12),
               ListTile(
-                leading: const Icon(LucideIcons.moon),
-                title: const Text('Giao diện tối (Dark Mode)'),
+                leading: Icon(
+                  LucideIcons.moon,
+                  color: isDark
+                      ? AppColors.darkTextPrimary
+                      : AppColors.lightTextPrimary,
+                ),
+                title: Text(
+                  'Giao diện tối (Dark Mode)',
+                  style: TextStyle(
+                    color: isDark
+                        ? AppColors.darkTextPrimary
+                        : AppColors.lightTextPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 trailing: (_userMapStyle == MapStyle.dark ||
                         (_userMapStyle == null && isDark))
                     ? const Icon(LucideIcons.check, color: AppColors.primary)
@@ -375,8 +411,21 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 },
               ),
               ListTile(
-                leading: const Icon(LucideIcons.map),
-                title: const Text('Đường phố (Google Maps)'),
+                leading: Icon(
+                  LucideIcons.map,
+                  color: isDark
+                      ? AppColors.darkTextPrimary
+                      : AppColors.lightTextPrimary,
+                ),
+                title: Text(
+                  'Đường phố (Google Maps)',
+                  style: TextStyle(
+                    color: isDark
+                        ? AppColors.darkTextPrimary
+                        : AppColors.lightTextPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 trailing: (_userMapStyle == MapStyle.street ||
                         (_userMapStyle == null && !isDark))
                     ? const Icon(LucideIcons.check, color: AppColors.primary)
@@ -388,8 +437,21 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 },
               ),
               ListTile(
-                leading: const Icon(LucideIcons.satellite),
-                title: const Text('Ảnh vệ tinh (Satellite)'),
+                leading: Icon(
+                  LucideIcons.satellite,
+                  color: isDark
+                      ? AppColors.darkTextPrimary
+                      : AppColors.lightTextPrimary,
+                ),
+                title: Text(
+                  'Ảnh vệ tinh (Satellite)',
+                  style: TextStyle(
+                    color: isDark
+                        ? AppColors.darkTextPrimary
+                        : AppColors.lightTextPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 trailing: _userMapStyle == MapStyle.satellite
                     ? const Icon(LucideIcons.check, color: AppColors.primary)
                     : null,
@@ -412,10 +474,17 @@ class _MapScreenState extends ConsumerState<MapScreen>
     _displayPositions.removeWhere((uid, _) => !nextIds.contains(uid));
     _targetPositions.removeWhere((uid, _) => !nextIds.contains(uid));
 
+    var anyMoved = false;
     for (final item in locations) {
       final uid = item.friend.uid;
       final target = LatLng(item.location.lat, item.location.lng);
       _friendData[uid] = item;
+      final prevTarget = _targetPositions[uid];
+      if (prevTarget == null ||
+          prevTarget.latitude != target.latitude ||
+          prevTarget.longitude != target.longitude) {
+        anyMoved = true;
+      }
       _startPositions[uid] = _displayPositions[uid] ?? target;
       _targetPositions[uid] = target;
     }
@@ -436,6 +505,13 @@ class _MapScreenState extends ConsumerState<MapScreen>
           );
         } catch (_) {}
       });
+    }
+
+    // Skip the 1.2-second animation loop if none of the coordinates moved
+    // (e.g. only battery level, speed, or timestamp was updated).
+    if (!anyMoved) {
+      if (mounted) setState(() {});
+      return;
     }
 
     _animationStartedAt = DateTime.now();
@@ -521,6 +597,9 @@ class _MapScreenState extends ConsumerState<MapScreen>
               initialZoom: 14.5,
               minZoom: 3.0,
               maxZoom: 18.5,
+              onLongPress: (tapPos, latLng) {
+                _showAddPlaceSheet(lat: latLng.latitude, lng: latLng.longitude);
+              },
               interactionOptions: const InteractionOptions(
                 flags: InteractiveFlag.all,
               ),
@@ -562,10 +641,11 @@ class _MapScreenState extends ConsumerState<MapScreen>
                   if (_myPosition != null)
                     Marker(
                       point: _myPosition!,
-                      width: 76,
-                      height: 92,
+                      width: 90,
+                      height: 105,
                       child: _OwnMarkerWidget(
                         user: userProfile,
+                        location: ownLocation,
                         isSharing: isSharing,
                         onTap: () => _showOwnDetails(userProfile, ownLocation),
                       ),
@@ -576,8 +656,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
                     if (_displayPositions[item.friend.uid] case final position?)
                       Marker(
                         point: position,
-                        width: 80,
-                        height: 96,
+                        width: 90,
+                        height: 105,
                         child: _FriendMarkerWidget(
                           friend: item.friend,
                           location: item.location,
@@ -787,47 +867,15 @@ class _MapScreenState extends ConsumerState<MapScreen>
               ),
             ),
 
-          // 4. Right side: Map controls (layers, zoom, locate)
+          // 4. Right side: Map controls (Sleek Glassmorphic Floating Stack)
           Positioned(
             right: AppDimens.spaceBase,
-            bottom: items.isNotEmpty ? 108 : 30,
+            bottom: items.isNotEmpty ? 112 : 36,
             child: SafeArea(
               top: false,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Widget guide
-                  _FloatingMapButton(
-                    icon: LucideIcons.layoutGrid,
-                    onPressed: _showWidgetGuideSheet,
-                    tooltip: 'Tiện ích Widget',
-                  ),
-                  const SizedBox(height: 6),
-
-                  // Map Style Switcher (Layers)
-                  _FloatingMapButton(
-                    icon: LucideIcons.layers,
-                    onPressed: _showMapStyleSheet,
-                    tooltip: 'Kiểu bản đồ',
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Zoom In
-                  _FloatingMapButton(
-                    icon: LucideIcons.plus,
-                    onPressed: _zoomIn,
-                    tooltip: 'Phóng to',
-                  ),
-                  const SizedBox(height: 6),
-
-                  // Zoom Out
-                  _FloatingMapButton(
-                    icon: LucideIcons.minus,
-                    onPressed: _zoomOut,
-                    tooltip: 'Thu nhỏ',
-                  ),
-                  const SizedBox(height: 14),
-
                   // Re-center on Me
                   _FloatingMapButton(
                     icon: _isLocating
@@ -836,6 +884,36 @@ class _MapScreenState extends ConsumerState<MapScreen>
                     iconColor: AppColors.primary,
                     onPressed: _recenterOnMe,
                     tooltip: 'Về vị trí của tôi',
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Pin New Place (Nhà / Nơi làm việc / Trường học)
+                  _FloatingMapButton(
+                    icon: LucideIcons.mapPinPlus,
+                    iconColor: const Color(0xFFFF4081),
+                    onPressed: () => _showAddPlaceSheet(),
+                    tooltip: 'Ghim địa điểm (Nhà, Cơ quan...)',
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Map Style Switcher (Layers)
+                  _FloatingMapButton(
+                    icon: LucideIcons.layers,
+                    onPressed: _showMapStyleSheet,
+                    tooltip: 'Kiểu bản đồ',
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Privacy / Ghost Mode
+                  _FloatingMapButton(
+                    icon: LucideIcons.shieldCheck,
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const LocationPrivacyScreen(),
+                      ),
+                    ),
+                    tooltip: 'Quyền riêng tư vị trí',
                   ),
                 ],
               ),
@@ -884,8 +962,10 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
   void _showOwnDetails(UserModel? user, LocationModel? location) {
     HapticHelper.selection();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet(
       context: context,
+      backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -895,6 +975,17 @@ class _MapScreenState extends ConsumerState<MapScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: AppDimens.spaceSm),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white24 : Colors.black26,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: CircleAvatar(
@@ -919,7 +1010,11 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 ),
                 title: Text(
                   '${user?.displayName ?? "Bạn"} (Vị trí của bạn)',
-                  style: AppTypography.h3(),
+                  style: AppTypography.h3(
+                    color: isDark
+                        ? AppColors.darkTextPrimary
+                        : AppColors.lightTextPrimary,
+                  ),
                 ),
                 subtitle: Text(
                   location?.isSharing == true
@@ -1001,6 +1096,15 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 icon: const Icon(LucideIcons.shieldCheck),
                 label: const Text('Cài đặt quyền riêng tư vị trí'),
               ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _showWidgetGuideSheet();
+                },
+                icon: const Icon(LucideIcons.layoutGrid),
+                label: const Text('Hướng dẫn thêm Widget'),
+              ),
             ],
           ),
         ),
@@ -1010,8 +1114,10 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
   void _showFriendDetails(FriendLocation item) {
     HapticHelper.selection();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet(
       context: context,
+      backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -1021,6 +1127,17 @@ class _MapScreenState extends ConsumerState<MapScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: AppDimens.spaceSm),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white24 : Colors.black26,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: CircleAvatar(
@@ -1038,15 +1155,85 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 ),
                 title: Text(
                   item.friend.displayName,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
+                    color: isDark
+                        ? AppColors.darkTextPrimary
+                        : AppColors.lightTextPrimary,
                   ),
                 ),
                 subtitle: Text(
                   '${_movementLabel(item.location.speed)} · ${_relativeTime(item.location.timestamp)}',
+                  style: TextStyle(
+                    color: isDark
+                        ? AppColors.darkTextSecondary
+                        : AppColors.lightTextSecondary,
+                  ),
                 ),
               ),
+              if (item.location.hasPlace) ...[
+                Container(
+                  margin: const EdgeInsets.symmetric(vertical: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        AppColors.primary.withValues(alpha: 0.15),
+                        AppColors.primaryDark.withValues(alpha: 0.25),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: AppColors.primary.withValues(alpha: 0.35),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white12 : Colors.white70,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          item.location.placeEmoji ?? '📍',
+                          style: const TextStyle(fontSize: 24),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${item.location.placeEmoji ?? "📍"} ${item.location.currentPlaceLabel ?? item.location.currentPlaceType ?? "Địa điểm"}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              item.location.dwellDurationText != null
+                                  ? 'Đã ở đây được ${item.location.dwellDurationText}'
+                                  : 'Vừa mới đến',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: isDark ? Colors.white70 : Colors.black87,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const Divider(),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -1166,6 +1353,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet(
       context: context,
+      backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -1182,7 +1370,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: Colors.grey.withValues(alpha: 0.3),
+                    color: isDark ? Colors.white24 : Colors.black26,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -1248,7 +1436,15 @@ class _MapScreenState extends ConsumerState<MapScreen>
               const SizedBox(height: 18),
               SizedBox(
                 width: double.infinity,
-                child: OutlinedButton.icon(
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
                   onPressed: () async {
                     Navigator.pop(ctx);
                     await WidgetService.switchToPhotoMode();
@@ -1324,11 +1520,13 @@ class _MapScreenState extends ConsumerState<MapScreen>
 /// Marker for current user ("Bạn")
 class _OwnMarkerWidget extends StatelessWidget {
   final UserModel? user;
+  final LocationModel? location;
   final bool isSharing;
   final VoidCallback onTap;
 
   const _OwnMarkerWidget({
     required this.user,
+    this.location,
     required this.isSharing,
     required this.onTap,
   });
@@ -1337,40 +1535,95 @@ class _OwnMarkerWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final avatarUrl = user?.avatarUrl;
     final displayName = user?.displayName ?? 'Bạn';
+    final hasPlace = location?.hasPlace == true;
+    final dwell = location?.dwellDurationText;
+    final placeEmoji = location?.placeEmoji ?? '📍';
 
     return GestureDetector(
       onTap: onTap,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: isSharing ? AppColors.primary : Colors.grey,
-                width: 3.5,
+          // Zenly Floating Pill above avatar if at a place
+          if (hasPlace && dwell != null)
+            Container(
+              margin: const EdgeInsets.only(bottom: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xF0180716),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white24, width: 0.8),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black38, blurRadius: 6, offset: Offset(0, 2)),
+                ],
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: (isSharing ? AppColors.primary : Colors.black)
-                      .withValues(alpha: 0.45),
-                  blurRadius: 10,
-                  offset: const Offset(0, 3),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(placeEmoji, style: const TextStyle(fontSize: 10)),
+                  const SizedBox(width: 3),
+                  Text(
+                    dwell,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isSharing ? AppColors.primary : Colors.grey,
+                    width: 3.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: (isSharing ? AppColors.primary : Colors.black)
+                          .withValues(alpha: 0.45),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: ClipOval(
-              child: avatarUrl != null && avatarUrl.trim().isNotEmpty
-                  ? CachedNetworkImage(
-                      imageUrl: avatarUrl,
-                      fit: BoxFit.cover,
-                      placeholder: (_, _) => _InitialAvatar(displayName: displayName),
-                      errorWidget: (_, _, _) => _InitialAvatar(displayName: displayName),
-                    )
-                  : _InitialAvatar(displayName: displayName),
-            ),
+                child: ClipOval(
+                  child: avatarUrl != null && avatarUrl.trim().isNotEmpty
+                      ? CachedNetworkImage(
+                          imageUrl: avatarUrl,
+                          fit: BoxFit.cover,
+                          placeholder: (_, _) => _InitialAvatar(displayName: displayName),
+                          errorWidget: (_, _, _) => _InitialAvatar(displayName: displayName),
+                        )
+                      : _InitialAvatar(displayName: displayName),
+                ),
+              ),
+
+              if (hasPlace)
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(color: Colors.black26, blurRadius: 4),
+                      ],
+                    ),
+                    child: Text(placeEmoji, style: const TextStyle(fontSize: 12)),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 3),
           Container(
@@ -1416,42 +1669,129 @@ class _FriendMarkerWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final stale = location.isStale();
     final avatarUrl = friend.avatarUrl;
+    final hasPlace = location.hasPlace;
+    final dwell = location.dwellDurationText;
+    final placeEmoji = location.placeEmoji ?? '📍';
 
     return GestureDetector(
       onTap: onTap,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: stale ? Colors.grey : AppColors.primary,
-                width: 3.5,
+          // Zenly Floating Pill: Place + Dwell time or Speed
+          if (hasPlace && dwell != null)
+            Container(
+              margin: const EdgeInsets.only(bottom: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xF0180716),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white24, width: 0.8),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black38, blurRadius: 6, offset: Offset(0, 2)),
+                ],
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: (stale ? Colors.black26 : AppColors.primary)
-                      .withValues(alpha: 0.4),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(placeEmoji, style: const TextStyle(fontSize: 10)),
+                  const SizedBox(width: 3),
+                  Text(
+                    dwell,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else if (location.speed > 2.0)
+            Container(
+              margin: const EdgeInsets.only(bottom: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xF0180716),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white24, width: 0.8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(_movementIcon(location.speed), style: const TextStyle(fontSize: 10)),
+                  const SizedBox(width: 3),
+                  Text(
+                    '${(location.speed * 3.6).round()} km/h',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // Avatar with border & mini place badge
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: stale
+                        ? Colors.grey
+                        : (hasPlace ? const Color(0xFFFF5288) : AppColors.primary),
+                    width: 3.0,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: (stale ? Colors.black26 : AppColors.primary)
+                          .withValues(alpha: 0.45),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: ClipOval(
-              child: avatarUrl != null && avatarUrl.trim().isNotEmpty
-                  ? CachedNetworkImage(
-                      imageUrl: avatarUrl,
-                      fit: BoxFit.cover,
-                      placeholder: (_, _) => _InitialAvatar(displayName: friend.displayName),
-                      errorWidget: (_, _, _) => _InitialAvatar(displayName: friend.displayName),
-                    )
-                  : _InitialAvatar(displayName: friend.displayName),
-            ),
+                child: ClipOval(
+                  child: avatarUrl != null && avatarUrl.trim().isNotEmpty
+                      ? CachedNetworkImage(
+                          imageUrl: avatarUrl,
+                          fit: BoxFit.cover,
+                          placeholder: (_, _) => _InitialAvatar(displayName: friend.displayName),
+                          errorWidget: (_, _, _) => _InitialAvatar(displayName: friend.displayName),
+                        )
+                      : _InitialAvatar(displayName: friend.displayName),
+                ),
+              ),
+
+              // Mini Place Emoji Badge at bottom-right of avatar
+              if (hasPlace)
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(color: Colors.black26, blurRadius: 4),
+                      ],
+                    ),
+                    child: Text(placeEmoji, style: const TextStyle(fontSize: 12)),
+                  ),
+                ),
+            ],
           ),
+
           const SizedBox(height: 3),
+
+          // Name pill
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
             decoration: BoxDecoration(
@@ -1459,7 +1799,7 @@ class _FriendMarkerWidget extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
-              '${_movementIcon(location.speed)} ${friend.displayName.split(' ').last}',
+              friend.displayName.split(' ').last,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -1639,42 +1979,104 @@ class _FriendLocationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final stale = item.location.isStale();
+    final hasPlace = item.location.hasPlace;
+    final placeLabel = item.location.currentPlaceLabel ?? item.location.currentPlaceType ?? '';
+    final dwell = item.location.dwellDurationText;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Material(
-      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.94),
-      borderRadius: BorderRadius.circular(18),
+      color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         onLongPress: onLongPress,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-          child: Row(
-            children: [
-              Icon(
-                item.location.speed < 0.5
-                    ? LucideIcons.circleDot
-                    : item.location.speed < 3
-                    ? LucideIcons.personStanding
-                    : LucideIcons.car,
-                size: 20,
-                color: stale ? Colors.grey : AppColors.primaryLight,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: (isDark ? const Color(0xFF1E1C24) : Colors.white).withValues(alpha: 0.92),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isDark ? Colors.white12 : Colors.black12,
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.08),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
               ),
-              const SizedBox(width: 9),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Avatar
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: AppColors.primary,
+                backgroundImage: item.friend.avatarUrl != null && item.friend.avatarUrl!.isNotEmpty
+                    ? CachedNetworkImageProvider(item.friend.avatarUrl!)
+                    : null,
+                child: item.friend.avatarUrl == null || item.friend.avatarUrl!.isEmpty
+                    ? Text(
+                        item.friend.displayName.isNotEmpty
+                            ? item.friend.displayName[0].toUpperCase()
+                            : '?',
+                        style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 10),
+              // Name & Status
               Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    item.friend.displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  Row(
+                    children: [
+                      Text(
+                        item.friend.displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      if (item.location.batteryLevel != null) ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          '🔋${item.location.batteryLevel}%',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.white60 : Colors.black54,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                  Text(
-                    '${_relativeTime(item.location.timestamp)} · ±${item.location.accuracy.round()} m',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: stale ? Colors.orange : null,
-                    ),
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      if (hasPlace) ...[
+                        Text(
+                          '${item.location.placeEmoji ?? '📍'} $placeLabel ${dwell != null ? '· $dwell' : ''}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primaryLight,
+                          ),
+                        ),
+                      ] else ...[
+                        Text(
+                          item.location.speed > 1.5
+                              ? '⚡ ${(item.location.speed * 3.6).round()} km/h'
+                              : _relativeTime(item.location.timestamp),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: stale ? Colors.orange : (isDark ? Colors.white60 : Colors.black54),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),

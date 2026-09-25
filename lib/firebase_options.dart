@@ -38,7 +38,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '592218033486',
     projectId: 'tamchau-865f3',
     authDomain: 'tamchau-865f3.firebaseapp.com',
-    databaseURL: 'https://tamchau-865f3-default-rtdb.firebaseio.com',
+    databaseURL: 'https://tamchau-865f3.asia-southeast1.firebasedatabase.app',
     storageBucket: 'tamchau-865f3.firebasestorage.app',
   );
 
@@ -47,7 +47,7 @@ class DefaultFirebaseOptions {
     appId: '1:592218033486:android:b83446b376d092f160a21f',
     messagingSenderId: '592218033486',
     projectId: 'tamchau-865f3',
-    databaseURL: 'https://tamchau-865f3-default-rtdb.firebaseio.com',
+    databaseURL: 'https://tamchau-865f3.asia-southeast1.firebasedatabase.app',
     storageBucket: 'tamchau-865f3.firebasestorage.app',
   );
 
@@ -56,7 +56,7 @@ class DefaultFirebaseOptions {
     appId: '1:592218033486:ios:e1ccfe85d2433b5a60a21f',
     messagingSenderId: '592218033486',
     projectId: 'tamchau-865f3',
-    databaseURL: 'https://tamchau-865f3-default-rtdb.firebaseio.com',
+    databaseURL: 'https://tamchau-865f3.asia-southeast1.firebasedatabase.app',
     storageBucket: 'tamchau-865f3.firebasestorage.app',
     iosBundleId: 'com.heartpearl.heartpearl',
   );

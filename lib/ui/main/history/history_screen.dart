@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../core/constants/app_colors.dart';
@@ -12,6 +13,7 @@ import '../../../providers/feed_provider.dart';
 import '../../../providers/settings_provider.dart';
 import '../../../services/media_downloader_service.dart';
 import '../../common/media_thumbnail.dart';
+import '../../common/skeleton_loader.dart';
 import '../viewer/photo_viewer_screen.dart';
 
 class HistoryScreen extends ConsumerWidget {
@@ -32,42 +34,72 @@ class HistoryScreen extends ConsumerWidget {
           ),
         ),
       ),
-      body: sentPhotosAsync.when(
-        data: (photos) {
-          if (photos.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    LucideIcons.calendarHeart,
-                    size: 64,
-                    color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+      body: RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: () async {
+          HapticHelper.light();
+          ref.invalidate(sentPhotosProvider);
+          try {
+            await ref.read(sentPhotosProvider.future);
+          } catch (_) {}
+        },
+        child: sentPhotosAsync.when(
+          data: (photos) {
+            if (photos.isEmpty) {
+              return LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 96,
+                            height: 96,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+                              boxShadow: AppDimens.glowShadow(
+                                AppColors.primary,
+                                opacity: 0.25,
+                              ),
+                            ),
+                            child: Icon(
+                              LucideIcons.calendarHeart,
+                              size: 48,
+                              color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                            ),
+                          ),
+                          const SizedBox(height: AppDimens.spaceLg),
+                          Text(
+                            AppStrings.tr('history_empty', lang: lang),
+                            style: AppTypography.h3(
+                              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ).animate().fadeIn(duration: 400.ms).scale(begin: const Offset(0.9, 0.9)),
                   ),
-                  const SizedBox(height: AppDimens.spaceBase),
-                  Text(
-                    AppStrings.tr('history_empty', lang: lang),
-                    style: AppTypography.h3(
-                      color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
+                ),
+              );
+            }
 
-          // Group photos by date
-          final Map<String, List<PhotoModel>> grouped = {};
-          for (final photo in photos) {
-            final dateKey = DateHelper.formatDateGroup(photo.createdAt);
-            grouped.putIfAbsent(dateKey, () => []).add(photo);
-          }
+            // Group photos by date
+            final Map<String, List<PhotoModel>> grouped = {};
+            for (final photo in photos) {
+              final dateKey = DateHelper.formatDateGroup(photo.createdAt);
+              grouped.putIfAbsent(dateKey, () => []).add(photo);
+            }
 
-          final dates = grouped.keys.toList();
+            final dates = grouped.keys.toList();
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(AppDimens.spaceBase),
-            itemCount: dates.length,
+            return ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(AppDimens.spaceBase),
+              itemCount: dates.length,
             itemBuilder: (context, index) {
               final date = dates[index];
               final datePhotos = grouped[date]!;
@@ -99,6 +131,7 @@ class HistoryScreen extends ConsumerWidget {
                     itemBuilder: (context, photoIndex) {
                       final photo = datePhotos[photoIndex];
                       final reactionCount = photo.reactions.length;
+                      final isMilestone = reactionCount >= 3 || (photoIndex == 0 && index == 0);
 
                       return GestureDetector(
                         onTap: () {
@@ -113,12 +146,30 @@ class HistoryScreen extends ConsumerWidget {
                         child: Container(
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(AppDimens.radiusLg),
-                            border: Border.all(
-                              color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-                            ),
+                            gradient: isMilestone ? AppColors.pearlGlowGradient : null,
+                            border: isMilestone
+                                ? null
+                                : Border.all(
+                                    color: isDark
+                                        ? AppColors.darkBorder
+                                        : AppColors.lightBorder,
+                                  ),
+                            boxShadow: isMilestone
+                                ? AppDimens.glowShadow(
+                                    AppColors.primary,
+                                    opacity: 0.35,
+                                  )
+                                : null,
                           ),
+                          padding: isMilestone
+                              ? const EdgeInsets.all(2.0)
+                              : EdgeInsets.zero,
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(AppDimens.radiusLg - 1),
+                            borderRadius: BorderRadius.circular(
+                              isMilestone
+                                  ? AppDimens.radiusLg - 2
+                                  : AppDimens.radiusLg - 1,
+                            ),
                             child: Stack(
                               fit: StackFit.expand,
                               children: [
@@ -127,6 +178,48 @@ class HistoryScreen extends ConsumerWidget {
                                   fit: BoxFit.cover,
                                   showPlayBadge: true,
                                 ),
+                                if (isMilestone)
+                                  Positioned(
+                                    top: 6,
+                                    left: 6,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 5,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        gradient: AppColors.primaryGradient,
+                                        borderRadius: BorderRadius.circular(
+                                          AppDimens.radiusFull,
+                                        ),
+                                        boxShadow: const [
+                                          BoxShadow(
+                                            color: Colors.black26,
+                                            blurRadius: 4,
+                                          ),
+                                        ],
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            LucideIcons.sparkles,
+                                            size: 9,
+                                            color: Colors.white,
+                                          ),
+                                          SizedBox(width: 2),
+                                          Text(
+                                            'Kỷ niệm',
+                                            style: TextStyle(
+                                              fontSize: 8.5,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
                                 if (reactionCount > 0)
                                   Positioned(
                                     bottom: 6,
@@ -138,7 +231,9 @@ class HistoryScreen extends ConsumerWidget {
                                       ),
                                       decoration: BoxDecoration(
                                         color: const Color(0xB3000000),
-                                        borderRadius: BorderRadius.circular(AppDimens.radiusFull),
+                                        borderRadius: BorderRadius.circular(
+                                          AppDimens.radiusFull,
+                                        ),
                                       ),
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
@@ -164,21 +259,34 @@ class HistoryScreen extends ConsumerWidget {
                             ),
                           ),
                         ),
-                      );
+                      ).animate().fadeIn(
+                        duration: 300.ms,
+                        delay: (photoIndex.clamp(0, 8) * 40).ms,
+                      ).scale(begin: const Offset(0.95, 0.95));
                     },
                   ),
                   const SizedBox(height: AppDimens.spaceLg),
                 ],
-              );
+              ).animate().fadeIn(
+                duration: 300.ms,
+                delay: (index.clamp(0, 8) * 50).ms,
+              ).slideY(begin: 0.08, end: 0);
             },
           );
         },
-        loading: () => const Center(
-          child: CircularProgressIndicator(color: AppColors.primary),
+        loading: () => const SkeletonGridView(childAspectRatio: 1.0),
+        error: (err, stack) => LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Center(child: Text('Lỗi: $err')),
+            ),
+          ),
         ),
-        error: (err, stack) => Center(child: Text('Lỗi: $err')),
       ),
-    );
+    ),
+  );
   }
 
   void _showPhotoActions(BuildContext context, WidgetRef ref, PhotoModel photo) {

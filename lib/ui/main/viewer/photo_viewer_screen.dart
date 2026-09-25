@@ -471,7 +471,7 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
             child: const Text(
               'Xóa',
               style: TextStyle(
-                color: AppColors.error,
+                color: AppColors.errorBrand,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -1020,14 +1020,14 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
                                 children: [
                                   Icon(
                                     LucideIcons.trash2,
-                                    color: AppColors.error,
+                                    color: AppColors.errorBrand,
                                     size: 18,
                                   ),
                                   SizedBox(width: 6),
                                   Text(
                                     'Xóa',
                                     style: TextStyle(
-                                      color: AppColors.error,
+                                      color: AppColors.errorBrand,
                                       fontWeight: FontWeight.w600,
                                       fontSize: 14,
                                     ),

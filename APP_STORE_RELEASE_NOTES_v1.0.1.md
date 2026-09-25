@@ -64,10 +64,10 @@ Users can delete their account and all associated personal data instantly and pe
 - Technical support and reporting contact: nthanhtam.402@gmail.com.
 
 4. Location Privacy Architecture (Guideline 5.1.2(i) Compliance):
-- Automatic continuous 24/7 background location tracking has been completely eliminated to protect user battery and privacy.
+- Automatic continuous 24/7 background location tracking is never used.
 - Location sharing operates strictly via explicit user-initiated mechanisms:
-  a) Manual Check-In: Captures a single GPS fix only when the user explicitly taps "Check-in".
-  b) Timed Live Sharing: The user explicitly selects a session duration (15m, 1h, 8h). Sessions automatically expire and clean up GPS coordinates from Firestore.
+  a) Manual Check-In: Captures a single GPS fix only when the user explicitly taps "Check-in" (foreground-only).
+  b) User-Initiated Timed Live Sharing: The user explicitly selects a session duration (1h, until end of day, unlimited). During an active live session, background updates are delivered with a prominent system indicator (showsBackgroundLocationIndicator=true / Dynamic Island blue pill) so the user's close circle can see their live journey while the phone is locked or in a pocket. The session automatically terminates upon expiry or when the user taps "Stop Live".
   c) Ghost Mode: Instantly erases all location coordinates and stops sharing immediately.
   d) Granular Audience Control: Users select specifically which friends can see their pin via Allowed Viewers list.
 

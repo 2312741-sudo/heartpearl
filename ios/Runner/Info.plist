@@ -41,6 +41,7 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
+		<string>location</string>
 		<string>remote-notification</string>
 	</array>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
@@ -72,11 +73,11 @@
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>HeartPearl needs permission to save moment photos and videos to your photo library.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>HeartPearl needs your location so you can manually check in and display your position on your close friends' map.</string>
+	<string>HeartPearl needs your location so you can check in and share your live location with close friends on the radar map.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>HeartPearl needs your location so you can manually check in and display your position on your close friends' map and widgets.</string>
+	<string>HeartPearl uses your location to update your live movement for friends in real-time during your active sharing session, even when your phone is locked or in your pocket.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
-	<string>HeartPearl needs your location so you can manually check in and display your position on your close friends' map and widgets.</string>
+	<string>HeartPearl uses your location to update your live movement for friends in real-time during your active sharing session, even when your phone is locked or in your pocket.</string>
 	<key>GOOGLE_MAPS_API_KEY</key>
 	<string>$(GOOGLE_MAPS_API_KEY)</string>
 	<key>UIApplicationSceneManifest</key>
