@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:battery_plus/battery_plus.dart';
@@ -7,12 +8,19 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../models/location_model.dart';
 import 'location_policy.dart';
 import 'location_sharing_duration.dart';
 import 'places_service.dart';
+
+// MethodChannel bridge to the native Significant-Change relay (iOS only).
+// All calls are fire-and-forget wrapped in try/catch — Android and Simulator
+// will silently no-op when the channel is not implemented.
+const MethodChannel _bgLocationChannel =
+    MethodChannel('com.heartpearl.app/background_location');
 
 enum LocationTrackingStatus {
   idle,
@@ -458,6 +466,12 @@ class LocationService {
       });
     } catch (_) {}
 
+    // Activate native Significant-Change relay so iOS can recover the session
+    // after a system-kill (best-effort — silently ignored on Android/Simulator).
+    try {
+      await _bgLocationChannel.invokeMethod<void>('startRelay');
+    } catch (_) {}
+
     // Start streaming position updates (initially in active moving mode)
     _startLiveSubscription(uid, expiresAt, duration, isStationary: false);
 
@@ -585,6 +599,11 @@ class LocationService {
         await _rtdbLocationRef(uid).onDisconnect().cancel();
       } catch (_) {}
     }
+
+    // Stop native Significant-Change relay (best-effort — no-op on Android/Simulator).
+    try {
+      await _bgLocationChannel.invokeMethod<void>('stopRelay');
+    } catch (_) {}
 
     if (clearFirestore && uid != null && uid.isNotEmpty) {
       // Clear RTDB
@@ -1105,6 +1124,10 @@ class LocationService {
       // Ensure GPS permission is still granted
       await requestSharingPermission();
 
+      // Flush any location captured by the native relay while the process was dead.
+      // This updates RTDB/Firestore immediately so friends see the correct position.
+      await flushPendingBackgroundLocation(uid, expiresAt, duration);
+
       // Reset stationary state
       _isStationary = false;
       _stationarySince = DateTime.now();
@@ -1119,6 +1142,74 @@ class LocationService {
       _addStatus(LocationTrackingStatus.idle);
     }
   }
+
+  /// Reads the last position stored by [BackgroundLocationRelay] during a
+  /// system-kill event and writes it to RTDB/Firestore.
+  ///
+  /// Only processes fixes that are less than 6 hours old. Clears the pending
+  /// key from UserDefaults after a successful flush. Safe to call on Android
+  /// or Simulator (will silently no-op if the channel is unavailable).
+  Future<void> flushPendingBackgroundLocation(
+    String uid,
+    DateTime? expiresAt,
+    LocationSharingDuration duration,
+  ) async {
+    try {
+      final jsonString = await _bgLocationChannel
+          .invokeMethod<String>('readPendingLocation');
+      if (jsonString == null || jsonString.isEmpty) return;
+
+      final Map<String, dynamic> payload =
+          (jsonDecode(jsonString) as Map<Object?, Object?>)
+              .map((k, v) => MapEntry(k.toString(), v));
+
+      final double? lat   = (payload['lat']   as num?)?.toDouble();
+      final double? lng   = (payload['lng']   as num?)?.toDouble();
+      final double? acc   = (payload['accuracy'] as num?)?.toDouble();
+      final double  spd   = ((payload['speed'] as num?) ?? 0).toDouble();
+      final double? tsMs  = (payload['timestamp'] as num?)?.toDouble();
+
+      if (lat == null || lng == null || acc == null || tsMs == null) return;
+
+      final fixTime = DateTime.fromMillisecondsSinceEpoch(tsMs.toInt());
+      final age     = DateTime.now().difference(fixTime);
+
+      // Reject stale fixes (> 6 hours).
+      if (age > const Duration(hours: 6)) {
+        await _bgLocationChannel.invokeMethod<void>('clearPendingLocation');
+        return;
+      }
+
+      // Reconstruct a Position-compatible object from the JSON payload.
+      final position = Position(
+        latitude:  lat,
+        longitude: lng,
+        accuracy:  acc,
+        speed:     spd,
+        heading:   0,
+        altitude:  0,
+        altitudeAccuracy: 0,
+        headingAccuracy:  0,
+        speedAccuracy:    0,
+        timestamp: fixTime,
+      );
+
+      final battery = await _readBatteryLevel();
+      await _writeLivePosition(
+        uid, position, expiresAt, duration, battery,
+        forceFirestore: true,
+      );
+      debugPrint('[LocationService] Flushed pending background location '
+          '(age ${age.inMinutes}min) → ($lat, $lng)');
+
+      await _bgLocationChannel.invokeMethod<void>('clearPendingLocation');
+    } on MissingPluginException {
+      // Channel not registered (Android, Simulator) — silently skip.
+    } catch (e) {
+      debugPrint('[LocationService] flushPendingBackgroundLocation error: $e');
+    }
+  }
+
 
   /// Legacy alias — forwards to [resumeLiveSharingIfNeeded].
   Future<void> startTracking() => resumeLiveSharingIfNeeded();

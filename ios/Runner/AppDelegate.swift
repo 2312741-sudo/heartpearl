@@ -69,6 +69,12 @@ import workmanager_apple
       AppDelegate.setupCustomChannels(messenger: controller.binaryMessenger)
     }
 
+    // Auto-restart Significant-Change relay if it was active before iOS killed the process.
+    // This fires when iOS relaunches the app due to a significant-change event.
+    if BackgroundLocationRelay.shared.isEnabled {
+      BackgroundLocationRelay.shared.startMonitoring()
+    }
+
     return result
   }
 
@@ -209,6 +215,36 @@ import workmanager_apple
           result(true)
         }
       } else {
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
+    // 4. Background Location Relay Channel
+    // Bridges Dart ↔ Significant-Change CLLocationManager for post-system-kill recovery.
+    let bgLocationChannel = FlutterMethodChannel(
+      name: "com.heartpearl.app/background_location",
+      binaryMessenger: messenger
+    )
+    bgLocationChannel.setMethodCallHandler { (call, result) in
+      switch call.method {
+      case "startRelay":
+        BackgroundLocationRelay.shared.setEnabled(true)
+        BackgroundLocationRelay.shared.startMonitoring()
+        result(nil)
+
+      case "stopRelay":
+        BackgroundLocationRelay.shared.stopMonitoring()
+        BackgroundLocationRelay.shared.setEnabled(false)
+        result(nil)
+
+      case "readPendingLocation":
+        result(BackgroundLocationRelay.shared.readPendingLocation())
+
+      case "clearPendingLocation":
+        BackgroundLocationRelay.shared.clearPendingLocation()
+        result(nil)
+
+      default:
         result(FlutterMethodNotImplemented)
       }
     }
