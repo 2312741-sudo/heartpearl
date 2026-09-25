@@ -159,7 +159,11 @@ class _MapScreenState extends ConsumerState<MapScreen>
     );
     if (confirmed != true || !mounted) return;
     HapticHelper.light();
-    await ref.read(locationServiceProvider).stopLiveSharing(clearFirestore: true);
+    try {
+      await ref.read(locationServiceProvider).stopLiveSharing(clearFirestore: true);
+    } catch (e) {
+      debugPrint('[MapScreen] _stopLive error: $e');
+    }
     if (mounted) {
       _initUserLocation();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -260,21 +264,23 @@ class _MapScreenState extends ConsumerState<MapScreen>
         _centerOnMeOnce();
       }
 
-      // 2. Query fresh GPS position
-      final currentPos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 10),
-        ),
-      );
-      if (mounted) {
-        setState(() {
-          _myPosition = LatLng(currentPos.latitude, currentPos.longitude);
-          _myAccuracy = currentPos.accuracy;
-        });
-        _cacheOwnPosition(currentPos.latitude, currentPos.longitude);
-        _centerOnMeOnce();
-      }
+      // 2. Query fresh GPS position (non-blocking: don't let GPS delay abort step 3)
+      try {
+        final currentPos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+            timeLimit: Duration(seconds: 5),
+          ),
+        );
+        if (mounted) {
+          setState(() {
+            _myPosition = LatLng(currentPos.latitude, currentPos.longitude);
+            _myAccuracy = currentPos.accuracy;
+          });
+          _cacheOwnPosition(currentPos.latitude, currentPos.longitude);
+          _centerOnMeOnce();
+        }
+      } catch (_) {}
 
       // If live sharing is active, LocationService already manages the native background stream.
       // Do NOT start a competing Geolocator.getPositionStream which would overwrite native AppleSettings.
@@ -573,11 +579,36 @@ class _MapScreenState extends ConsumerState<MapScreen>
       next.whenData(_acceptLocations);
     });
 
+    ref.listen<AsyncValue<LocationTrackingStatus>>(
+      locationTrackingStatusProvider,
+      (previous, next) {
+        final status = next.value;
+        if (status == LocationTrackingStatus.serviceDisabled && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Dịch vụ vị trí đang tắt. Vui lòng bật vị trí trong Cài đặt.'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        } else if (status == LocationTrackingStatus.permissionDenied && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Quyền truy cập vị trí bị từ chối.'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+      },
+    );
+
     ref.listen<AsyncValue<LocationModel?>>(ownLocationProvider, (previous, next) {
       final isSharing = next.value?.isSharing == true;
       if (isSharing && _positionSub != null) {
         _positionSub?.cancel();
         _positionSub = null;
+      } else if (!isSharing && _positionSub == null) {
+        // Live sharing stopped or inactive: ensure local GPS display stream is active
+        _initUserLocation();
       }
     });
 

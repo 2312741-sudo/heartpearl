@@ -78,6 +78,7 @@ class LocationService {
   Position? _stationaryAnchor;
   DateTime? _stationarySince;
   LocationPermission? _lastPermission;
+  bool _userExplicitlyStopped = false;
 
   final _positionStreamController = StreamController<Position>.broadcast();
   Stream<Position> get positionStream => _positionStreamController.stream;
@@ -197,21 +198,64 @@ class LocationService {
     });
   }
 
-  /// Streams a friend's location updates via Firebase Realtime Database.
+  /// Streams a friend's location updates via Firebase Realtime Database with Firestore fallback.
   /// Subscriptions receive low-latency (~30-50ms) push updates with onDisconnect awareness.
   Stream<LocationModel?> streamFriendLocation(String friendUid) {
     final cleanUid = friendUid.trim();
     if (cleanUid.isEmpty) return Stream.value(null);
-    return _rtdbLocationRef(cleanUid).onValue.map((event) {
-      final snapshot = event.snapshot;
-      if (!snapshot.exists || snapshot.value == null) return null;
-      final location = LocationModel.fromRealtimeSnapshot(snapshot);
-      // Respect expiry server-side: if expired, treat as not sharing.
-      if (!location.isSharing || !location.hasCoordinate || location.isExpired) {
-        return null;
-      }
-      return location;
-    });
+
+    late StreamController<LocationModel?> controller;
+    StreamSubscription? rtdbSub;
+    StreamSubscription? firestoreSub;
+
+    controller = StreamController<LocationModel?>(
+      onListen: () {
+        // 1. Primary: RTDB for instant ~30ms real-time updates
+        try {
+          rtdbSub = _rtdbLocationRef(cleanUid).onValue.listen(
+            (event) {
+              final snapshot = event.snapshot;
+              if (snapshot.exists && snapshot.value != null) {
+                final location = LocationModel.fromRealtimeSnapshot(snapshot);
+                if (location.isSharing && location.hasCoordinate && !location.isExpired) {
+                  if (!controller.isClosed) controller.add(location);
+                  return;
+                }
+              }
+            },
+            onError: (Object error) {
+              debugPrint('[LocationService] RTDB streamFriendLocation error for $cleanUid: $error');
+            },
+          );
+        } catch (_) {}
+
+        // 2. Secondary fallback: Firestore document snapshots for reliable persistence
+        try {
+          firestoreSub = _locationRef(cleanUid).snapshots().listen(
+            (doc) {
+              if (doc.exists && doc.data() != null) {
+                final location = LocationModel.fromFirestore(doc);
+                if (location.isSharing && location.hasCoordinate && !location.isExpired) {
+                  if (!controller.isClosed) controller.add(location);
+                  return;
+                }
+              }
+              if (!controller.isClosed) controller.add(null);
+            },
+            onError: (Object error) {
+              debugPrint('[LocationService] Firestore streamFriendLocation error for $cleanUid: $error');
+              if (!controller.isClosed) controller.add(null);
+            },
+          );
+        } catch (_) {}
+      },
+      onCancel: () async {
+        await rtdbSub?.cancel();
+        await firestoreSub?.cancel();
+      },
+    );
+
+    return controller.stream;
   }
 
   Future<LocationModel?> getOwnLocation() async {
@@ -406,6 +450,7 @@ class LocationService {
     await stopLiveSharing(clearFirestore: false);
 
     final uid = _requireCurrentUid();
+    _userExplicitlyStopped = false;
     await requestSharingPermission();
 
     // Reset stationary tracking state
@@ -572,6 +617,7 @@ class LocationService {
   /// Stops the live streaming session. If [clearFirestore] is true, also
   /// sets isSharing=false and purges coordinates (Ghost Mode behaviour).
   Future<void> stopLiveSharing({bool clearFirestore = true}) async {
+    _userExplicitlyStopped = true;
     final sub = _liveSubscription;
     _liveSubscription = null;
     _expiryTimer?.cancel();
@@ -591,22 +637,24 @@ class LocationService {
     _isStationary = false;
     _stationaryAnchor = null;
     _stationarySince = null;
+    _addStatus(LocationTrackingStatus.idle);
     await sub?.cancel();
 
     final uid = _auth.currentUser?.uid;
     if (uid != null && uid.isNotEmpty) {
       try {
-        await _rtdbLocationRef(uid).onDisconnect().cancel();
+        await _rtdbLocationRef(uid).onDisconnect().cancel().timeout(const Duration(seconds: 2));
       } catch (_) {}
     }
 
-    // Stop native Significant-Change relay (best-effort — no-op on Android/Simulator).
+    // Stop native Significant-Change relay and wipe pending location in UserDefaults
     try {
       await _bgLocationChannel.invokeMethod<void>('stopRelay');
+      await _bgLocationChannel.invokeMethod<void>('clearPendingLocation');
     } catch (_) {}
 
     if (clearFirestore && uid != null && uid.isNotEmpty) {
-      // Clear RTDB
+      // Clear RTDB with 4s timeout so UI never hangs
       try {
         await _rtdbLocationRef(uid).update({
           'ownerUid': uid,
@@ -625,12 +673,12 @@ class LocationService {
           'currentPlaceLabel': null,
           'arrivedAt': null,
           'updatedAt': ServerValue.timestamp,
-        });
+        }).timeout(const Duration(seconds: 4));
       } catch (error) {
-        debugPrint('stopLiveSharing RTDB error: $error');
+        debugPrint('[LocationService] stopLiveSharing RTDB error: $error');
       }
 
-      // Clear Firestore
+      // Clear Firestore with 4s timeout
       try {
         await _locationRef(uid).set({
           'ownerUid': uid,
@@ -649,11 +697,10 @@ class LocationService {
           'currentPlaceLabel': FieldValue.delete(),
           'arrivedAt': FieldValue.delete(),
           'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+        }, SetOptions(merge: true)).timeout(const Duration(seconds: 4));
       } catch (error) {
-        debugPrint('stopLiveSharing Firestore error: $error');
+        debugPrint('[LocationService] stopLiveSharing Firestore error: $error');
       }
-      _addStatus(LocationTrackingStatus.idle);
     }
   }
 
@@ -683,8 +730,8 @@ class LocationService {
       accuracy: position.accuracy,
     )) { return; }
 
-    // Filter out noisy low-accuracy jitter (e.g. indoors/tunnels where error circle > 65m)
-    if (position.accuracy > 65.0) {
+    // Filter out noisy low-accuracy jitter (accuracy > 150m indicates cell-tower/no GPS lock)
+    if (position.accuracy > 150.0) {
       return;
     }
 
@@ -780,6 +827,9 @@ class LocationService {
     int? battery, {
     bool forceFirestore = false,
   }) async {
+    if (_userExplicitlyStopped || _liveSubscription == null) {
+      return;
+    }
     try {
       final speed = position.speed.isFinite && position.speed > 0
           ? position.speed.clamp(0, 200).toDouble()
@@ -1064,6 +1114,7 @@ class LocationService {
   Future<void> resumeLiveSharingIfNeeded() async {
     final uid = _auth.currentUser?.uid;
     if (uid == null || uid.isEmpty) return;
+    if (_userExplicitlyStopped) return;
     // Don't open a second stream if one is already active.
     if (_liveSubscription != null) return;
 
@@ -1154,6 +1205,12 @@ class LocationService {
     DateTime? expiresAt,
     LocationSharingDuration duration,
   ) async {
+    if (_userExplicitlyStopped || (!isLiveActive && _currentDuration == null)) {
+      try {
+        await _bgLocationChannel.invokeMethod<void>('clearPendingLocation');
+      } catch (_) {}
+      return;
+    }
     try {
       final jsonString = await _bgLocationChannel
           .invokeMethod<String>('readPendingLocation');

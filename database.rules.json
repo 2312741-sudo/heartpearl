@@ -2,7 +2,7 @@
   "rules": {
     "locations": {
       "$uid": {
-        ".read": "auth != null && (auth.uid === $uid || (data.child('isSharing').val() === true && (!data.child('allowedViewers').exists() || data.child('allowedViewers').val() === null || data.child('allowedViewers').hasChild(auth.uid))))",
+        ".read": "auth != null",
         ".write": "auth != null && auth.uid === $uid"
       }
     },
