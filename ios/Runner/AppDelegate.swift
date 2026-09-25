@@ -12,6 +12,28 @@ import workmanager_apple
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+  private var backgroundTaskId: UIBackgroundTaskIdentifier = .invalid
+
+  override func applicationDidEnterBackground(_ application: UIApplication) {
+    super.applicationDidEnterBackground(application)
+    // Request background execution time from iOS so network writes and GPS fixes in flight complete cleanly
+    backgroundTaskId = application.beginBackgroundTask(withName: "HeartPearlLocationKeepAlive") { [weak self] in
+      guard let self = self else { return }
+      if self.backgroundTaskId != .invalid {
+        application.endBackgroundTask(self.backgroundTaskId)
+        self.backgroundTaskId = .invalid
+      }
+    }
+  }
+
+  override func applicationWillEnterForeground(_ application: UIApplication) {
+    super.applicationWillEnterForeground(application)
+    if backgroundTaskId != .invalid {
+      application.endBackgroundTask(backgroundTaskId)
+      backgroundTaskId = .invalid
+    }
+  }
+
   override func applicationDidBecomeActive(_ application: UIApplication) {
     super.applicationDidBecomeActive(application)
     // Clear app icon badge number when user opens or returns to the app

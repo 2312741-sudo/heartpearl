@@ -335,7 +335,7 @@ void main() {
   });
 
   group('Adaptive Tracking State Machine Tests', () {
-    test('Stationary criteria detection: speed < 1.0 m/s and anchor dist < 40m', () {
+    test('Stationary criteria detection: speed < 0.6 m/s and anchor dist < 25m', () {
       const anchorLat = 10.7769;
       const anchorLng = 106.7009;
 
@@ -345,29 +345,29 @@ void main() {
       final dist = LocationPolicy.distanceMetres(anchorLat, anchorLng, currentLat, currentLng);
       const speed = 0.3;
 
-      final isStationary = (speed < 1.0 && dist < 40.0);
-      expect(dist, lessThan(40.0));
+      final isStationary = (speed < 0.6 && dist < 25.0);
+      expect(dist, lessThan(25.0));
       expect(isStationary, isTrue);
     });
 
-    test('Moving wake-up criteria: speed >= 1.5 m/s or anchor dist >= 50m triggers wake-up', () {
+    test('Moving wake-up criteria: walking speed >= 0.8 m/s or anchor dist >= 25m triggers wake-up', () {
       const anchorLat = 10.7769;
       const anchorLng = 106.7009;
 
-      // 1. In motion by speed (running/vehicle)
-      const speed = 2.5;
-      const distSmall = 10.0;
-      final wakesBySpeed = speed >= 1.5 || distSmall >= 50.0;
+      // 1. In motion by walking speed (>= 0.8 m/s ~ 2.9 km/h)
+      const speed = 0.9;
+      const distSmall = 5.0;
+      final wakesBySpeed = speed >= 0.8 || distSmall >= 25.0;
       expect(wakesBySpeed, isTrue);
 
-      // 2. In motion by moving away from anchor (> 50m)
-      const walkSpeed = 0.8;
-      const distantLat = 10.7780; // ~120m away
+      // 2. In motion by moving away from anchor (>= 25m)
+      const slowDriftSpeed = 0.4;
+      const distantLat = 10.7773; // ~45m away
       const distantLng = 106.7009;
       final distLarge = LocationPolicy.distanceMetres(anchorLat, anchorLng, distantLat, distantLng);
-      expect(distLarge, greaterThan(50.0));
+      expect(distLarge, greaterThan(25.0));
 
-      final wakesByDist = walkSpeed >= 1.5 || distLarge >= 50.0;
+      final wakesByDist = slowDriftSpeed >= 0.8 || distLarge >= 25.0;
       expect(wakesByDist, isTrue);
     });
 

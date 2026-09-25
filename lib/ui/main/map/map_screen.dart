@@ -51,6 +51,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
   LatLng? _myPosition;
   double? _myAccuracy;
   StreamSubscription<Position>? _positionSub;
+  StreamSubscription<Position>? _locationServiceSub;
 
   bool _hasCentered = false;
   bool _isLocating = false;
@@ -117,10 +118,10 @@ class _MapScreenState extends ConsumerState<MapScreen>
   }
 
   /// Opens the Live Location sheet to start a timed session.
-  void _showLiveSheet() {
+  Future<void> _showLiveSheet() async {
     HapticHelper.medium();
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    showModalBottomSheet(
+    final result = await showModalBottomSheet<dynamic>(
       context: context,
       isScrollControlled: true,
       backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
@@ -129,6 +130,10 @@ class _MapScreenState extends ConsumerState<MapScreen>
       ),
       builder: (_) => const LiveLocationSheet(),
     );
+    if (result != null && mounted) {
+      _positionSub?.cancel();
+      _positionSub = null;
+    }
   }
 
   /// Confirms and stops an active live session.
@@ -156,6 +161,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
     HapticHelper.light();
     await ref.read(locationServiceProvider).stopLiveSharing(clearFirestore: true);
     if (mounted) {
+      _initUserLocation();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(AppStrings.tr('live_stopped', lang: lang)),
@@ -171,6 +177,17 @@ class _MapScreenState extends ConsumerState<MapScreen>
     WidgetsBinding.instance.addObserver(this);
     _initUserLocation();
     _loadSavedMapStyle();
+
+    // Stream live position updates from LocationService for zero-latency local marker display
+    _locationServiceSub = ref.read(locationServiceProvider).positionStream.listen((pos) {
+      if (mounted) {
+        setState(() {
+          _myPosition = LatLng(pos.latitude, pos.longitude);
+          _myAccuracy = pos.accuracy;
+        });
+        _cacheOwnPosition(pos.latitude, pos.longitude);
+      }
+    });
   }
 
   Future<void> _loadSavedMapStyle() async {
@@ -195,6 +212,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _animationTimer?.cancel();
+    _locationServiceSub?.cancel();
     _positionSub?.cancel();
     _mapController.dispose();
     super.dispose();
@@ -256,6 +274,14 @@ class _MapScreenState extends ConsumerState<MapScreen>
         });
         _cacheOwnPosition(currentPos.latitude, currentPos.longitude);
         _centerOnMeOnce();
+      }
+
+      // If live sharing is active, LocationService already manages the native background stream.
+      // Do NOT start a competing Geolocator.getPositionStream which would overwrite native AppleSettings.
+      if (ref.read(locationServiceProvider).isLiveActive) {
+        _positionSub?.cancel();
+        _positionSub = null;
+        return;
       }
 
       // 3. Listen to position changes for the local blue-dot display.
@@ -545,6 +571,14 @@ class _MapScreenState extends ConsumerState<MapScreen>
       next,
     ) {
       next.whenData(_acceptLocations);
+    });
+
+    ref.listen<AsyncValue<LocationModel?>>(ownLocationProvider, (previous, next) {
+      final isSharing = next.value?.isSharing == true;
+      if (isSharing && _positionSub != null) {
+        _positionSub?.cancel();
+        _positionSub = null;
+      }
     });
 
     final locationsAsync = ref.watch(friendLocationsProvider);

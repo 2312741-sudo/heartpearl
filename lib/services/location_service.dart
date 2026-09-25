@@ -71,6 +71,9 @@ class LocationService {
   DateTime? _stationarySince;
   LocationPermission? _lastPermission;
 
+  final _positionStreamController = StreamController<Position>.broadcast();
+  Stream<Position> get positionStream => _positionStreamController.stream;
+
   bool get isStationary => _isStationary;
   LocationPermission? get lastPermission => _lastPermission;
 
@@ -426,6 +429,9 @@ class LocationService {
     _stationaryAnchor = initialPosition;
     final expiresAt = duration.expiresAt();
 
+    // Broadcast initial position immediately for local map rendering
+    _positionStreamController.add(initialPosition);
+
     // Write initial position + session metadata to RTDB & Firestore.
     final battery = await _readBatteryLevel();
     await _writeLivePosition(uid, initialPosition, expiresAt, duration, battery, forceFirestore: true);
@@ -669,7 +675,9 @@ class LocationService {
         : 0.0;
 
     _evaluateDwellPlace(position.latitude, position.longitude, speed);
-    final isAtPlace = _currentPlaceType != null;
+
+    // Broadcast raw position immediately for zero-latency local map rendering
+    _positionStreamController.add(position);
 
     // Anchor tracking for stationary sleep vs moving wake-up
     _stationaryAnchor ??= position;
@@ -681,14 +689,14 @@ class LocationService {
     );
 
     // 1. Stationary vs Moving State Machine (Adaptive Battery Saver)
-    final appearsStationary = (speed < 1.0 && distFromAnchor < 40.0) || isAtPlace;
+    final appearsStationary = speed < 0.6 && distFromAnchor < 25.0;
 
     if (appearsStationary) {
       _stationarySince ??= now;
       final stillFor = now.difference(_stationarySince!);
 
-      // If still for >= 2 minutes (or immediately at pinned place), switch to low-power sleep mode
-      if (!_isStationary && (stillFor >= const Duration(minutes: 2) || isAtPlace)) {
+      // If still for >= 2 minutes, switch to low-power sleep mode
+      if (!_isStationary && stillFor >= const Duration(minutes: 2)) {
         _isStationary = true;
         debugPrint('[LocationService] Switching to stationary sleep mode at '
             '(${position.latitude}, ${position.longitude})');
@@ -696,8 +704,8 @@ class LocationService {
         _armHeartbeatTimer(uid, expiresAt, duration, isStationary: true);
       }
     } else {
-      // User is moving (> 1.5 m/s or moved > 50m from anchor)
-      final isMoving = speed >= 1.5 || distFromAnchor >= 50.0;
+      // User is moving: walking speed (>= 0.8 m/s ~ 2.9 km/h) or moved > 25m from anchor
+      final isMoving = speed >= 0.8 || distFromAnchor >= 25.0;
       if (isMoving) {
         _stationaryAnchor = position;
         _stationarySince = null;
@@ -727,13 +735,13 @@ class LocationService {
       final elapsed = now.difference(lastAt);
 
       if (_isStationary) {
-        // While stationary: update keep-alive every 3 min or when moved >= 25m
-        if (dist < 25.0 && elapsed < const Duration(minutes: 3)) {
+        // While stationary: update if moved >= 15m or every 45s
+        if (dist < 15.0 && elapsed < const Duration(seconds: 45)) {
           return;
         }
       } else {
-        // While moving: write if moved >= 5m OR if 8s elapsed
-        if (dist < 5.0 && elapsed < const Duration(seconds: 8)) {
+        // While moving: write if moved >= 5m OR every 4s
+        if (dist < 5.0 && elapsed < const Duration(seconds: 4)) {
           return;
         }
       }
@@ -875,8 +883,8 @@ class LocationService {
     if (Platform.isAndroid) {
       return AndroidSettings(
         accuracy: isStationary ? LocationAccuracy.medium : LocationAccuracy.high,
-        distanceFilter: isStationary ? 80 : 5,
-        intervalDuration: Duration(seconds: isStationary ? 60 : 4),
+        distanceFilter: isStationary ? 25 : 5,
+        intervalDuration: Duration(seconds: isStationary ? 45 : 4),
         foregroundNotificationConfig: const ForegroundNotificationConfig(
           notificationTitle: 'HeartPearl Live',
           notificationText: 'Đang chia sẻ vị trí trực tiếp với bạn bè',
@@ -889,7 +897,7 @@ class LocationService {
     if (Platform.isIOS) {
       return AppleSettings(
         accuracy: isStationary ? LocationAccuracy.medium : LocationAccuracy.bestForNavigation,
-        distanceFilter: isStationary ? 80 : 5,
+        distanceFilter: isStationary ? 25 : 5,
         activityType: isStationary ? ActivityType.other : ActivityType.fitness,
         pauseLocationUpdatesAutomatically: false,
         showBackgroundLocationIndicator: !hasAlways,
@@ -898,7 +906,7 @@ class LocationService {
     }
     return LocationSettings(
       accuracy: isStationary ? LocationAccuracy.medium : LocationAccuracy.high,
-      distanceFilter: isStationary ? 80 : 5,
+      distanceFilter: isStationary ? 25 : 5,
     );
   }
 
@@ -1209,5 +1217,6 @@ class LocationService {
     await stopLiveSharing(clearFirestore: false);
     await stopTracking();
     await _statusController.close();
+    await _positionStreamController.close();
   }
 }
