@@ -213,9 +213,9 @@ void main() {
 
     test('AppInfo constants are defined and valid', () {
       expect(AppInfo.appName, 'HeartPearl');
-      expect(AppInfo.appVersion, '1.0.3');
-      expect(AppInfo.buildNumber, '9');
-      expect(AppInfo.fullVersion, '1.0.3 (Build 9)');
+      expect(AppInfo.appVersion, '1.0.4');
+      expect(AppInfo.buildNumber, '10');
+      expect(AppInfo.fullVersion, '1.0.4 (Build 10)');
       expect(AppInfo.bundleId, 'com.heartpearl.heartpearl');
       expect(AppInfo.supportEmail, 'nthanhtam.402@gmail.com');
       expect(AppInfo.copyright, contains('HeartPearl'));
