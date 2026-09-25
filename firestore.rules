@@ -31,12 +31,16 @@ service cloud.firestore {
 
     function validLocationDocument(userId, locationData) {
       return locationData.keys().hasOnly([
-          'ownerUid', 'geo', 'updatedAt', 'capturedAt', 'accuracy',
-          'speed', 'batteryLevel', 'isSharing', 'allowedViewers'
+          'ownerUid', 'geo', 'lat', 'lng', 'updatedAt', 'capturedAt', 'accuracy',
+          'speed', 'batteryLevel', 'isSharing', 'isOnline', 'liveSessionActive',
+          'shareExpiresAt', 'shareDurationLabel', 'currentPlaceType',
+          'currentPlaceLabel', 'arrivedAt', 'allowedViewers'
         ])
         && locationData.ownerUid == userId
         && locationData.updatedAt == request.time
         && (!('geo' in locationData) || locationData.geo is latlng)
+        && (!('lat' in locationData) || locationData.lat is number)
+        && (!('lng' in locationData) || locationData.lng is number)
         && (!('capturedAt' in locationData) || locationData.capturedAt is timestamp)
         && (!('accuracy' in locationData) || (
           locationData.accuracy is number
@@ -54,6 +58,13 @@ service cloud.firestore {
           && locationData.batteryLevel <= 100
         ))
         && (!('isSharing' in locationData) || locationData.isSharing is bool)
+        && (!('isOnline' in locationData) || locationData.isOnline is bool)
+        && (!('liveSessionActive' in locationData) || locationData.liveSessionActive is bool)
+        && (!('shareExpiresAt' in locationData) || locationData.shareExpiresAt is timestamp)
+        && (!('shareDurationLabel' in locationData) || locationData.shareDurationLabel is string)
+        && (!('currentPlaceType' in locationData) || locationData.currentPlaceType is string)
+        && (!('currentPlaceLabel' in locationData) || locationData.currentPlaceLabel is string)
+        && (!('arrivedAt' in locationData) || locationData.arrivedAt is timestamp)
         && (!('allowedViewers' in locationData) || (
           locationData.allowedViewers is list
           && locationData.allowedViewers.size() <= 500

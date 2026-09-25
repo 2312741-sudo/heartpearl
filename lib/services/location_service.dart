@@ -51,6 +51,7 @@ class LocationService {
   Timer? _expiryTimer;
   Timer? _heartbeatTimer;
   LocationSharingDuration? _currentDuration;
+  DateTime? _currentExpiresAt;
   DateTime? _lastBatteryReadAt;
   int? _cachedBatteryLevel;
   double? _lastWrittenLat;
@@ -397,7 +398,29 @@ class LocationService {
     }
 
     final expiresAt = duration.expiresAt();
+
+    // Write initial position + session metadata to RTDB & Firestore.
+    final battery = await _readBatteryLevel();
+    await _writeLivePosition(uid, initialPosition, expiresAt, duration, battery, forceFirestore: true);
+
+    // Delegate all streaming / heartbeat / expiry wiring to shared helper.
+    await _beginLiveStream(uid, expiresAt, duration);
+  }
+
+  /// Core live-stream wiring shared by [startLiveSharing] and
+  /// [resumeLiveSharingIfNeeded].
+  ///
+  /// Sets [_currentDuration], [_currentExpiresAt], registers the RTDB
+  /// `onDisconnect` hook, opens [Geolocator.getPositionStream],
+  /// starts the 45-second heartbeat timer, and schedules the local expiry
+  /// timer when [expiresAt] is non-null.
+  Future<void> _beginLiveStream(
+    String uid,
+    DateTime? expiresAt,
+    LocationSharingDuration duration,
+  ) async {
     _currentDuration = duration;
+    _currentExpiresAt = expiresAt;
 
     // Register onDisconnect hook in RTDB
     try {
@@ -406,10 +429,6 @@ class LocationService {
         'updatedAt': ServerValue.timestamp,
       });
     } catch (_) {}
-
-    // Write initial position + session metadata to RTDB & Firestore.
-    final battery = await _readBatteryLevel();
-    await _writeLivePosition(uid, initialPosition, expiresAt, duration, battery, forceFirestore: true);
 
     // Start streaming position updates with auto-restart on error.
     final settings = _buildLiveSettings();
@@ -489,6 +508,7 @@ class LocationService {
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
     _currentDuration = null;
+    _currentExpiresAt = null;
     _lastWrittenLat = null;
     _lastWrittenLng = null;
     _lastWrittenAt = null;
@@ -560,7 +580,7 @@ class LocationService {
 
   /// Returns remaining time string for the active session, or null.
   String? liveCountdown(String lang) {
-    return _currentDuration?.countdownLabel(lang);
+    return _currentDuration?.countdownLabel(lang, fixedExpiresAt: _currentExpiresAt);
   }
 
   // ---------------------------------------------------------------------------
@@ -896,46 +916,86 @@ class LocationService {
     }
   }
 
-  Future<void> startTracking() async {
+  /// Resumes an active live session after app restart by re-opening the GPS
+  /// position stream with the remaining expiry time.
+  ///
+  /// Called from [locationTrackingBootstrapProvider] at app startup. If no
+  /// active session is found, emits [LocationTrackingStatus.idle].
+  Future<void> resumeLiveSharingIfNeeded() async {
     final uid = _auth.currentUser?.uid;
     if (uid == null || uid.isEmpty) return;
+    // Don't open a second stream if one is already active.
+    if (_liveSubscription != null) return;
+
     try {
+      // ------ Try RTDB first (faster, cheaper) ------
+      DateTime? expiresAt;
+      String? durationLabel;
+      bool found = false;
+
       final snapshot = await _rtdbLocationRef(uid).get();
       if (snapshot.exists && snapshot.value is Map) {
         final data = Map<String, dynamic>.from(snapshot.value as Map);
         if (data['isSharing'] == true) {
-          _addStatus(LocationTrackingStatus.tracking);
           final rawExpiry = data['shareExpiresAt'];
           if (rawExpiry is int) {
-            final expiresAt = DateTime.fromMillisecondsSinceEpoch(rawExpiry);
+            expiresAt = DateTime.fromMillisecondsSinceEpoch(rawExpiry);
             if (DateTime.now().isAfter(expiresAt)) {
               await clearCheckIn();
               return;
             }
           }
-          return;
+          durationLabel = data['shareDurationLabel']?.toString();
+          found = true;
         }
       }
 
-      final existing = await _locationRef(uid).get();
-      final data = existing.data();
-      if (existing.exists && data?['isSharing'] == true) {
-        _addStatus(LocationTrackingStatus.tracking);
-        final rawExpiry = data?['shareExpiresAt'];
-        if (rawExpiry is Timestamp) {
-          final expiresAt = rawExpiry.toDate();
-          if (DateTime.now().isAfter(expiresAt)) {
-            await clearCheckIn();
-            return;
+      // ------ Fallback to Firestore ------
+      if (!found) {
+        final existing = await _locationRef(uid).get();
+        final data = existing.data();
+        if (existing.exists && data?['isSharing'] == true) {
+          final rawExpiry = data?['shareExpiresAt'];
+          if (rawExpiry is Timestamp) {
+            expiresAt = rawExpiry.toDate();
+            if (DateTime.now().isAfter(expiresAt)) {
+              await clearCheckIn();
+              return;
+            }
           }
+          durationLabel = data?['shareDurationLabel']?.toString();
+          found = true;
         }
-      } else {
-        _addStatus(LocationTrackingStatus.idle);
       }
-    } catch (_) {
+
+      if (!found) {
+        _addStatus(LocationTrackingStatus.idle);
+        return;
+      }
+
+      // Resolve duration enum from persisted label
+      final duration = switch (durationLabel) {
+        '1h' => LocationSharingDuration.oneHour,
+        'today' => LocationSharingDuration.untilEndOfDay,
+        'unlimited' => LocationSharingDuration.unlimited,
+        _ => LocationSharingDuration.unlimited,
+      };
+
+      // Ensure GPS permission is still granted
+      await requestSharingPermission();
+
+      // Re-open the live GPS stream with the remaining time
+      await _beginLiveStream(uid, expiresAt, duration);
+      debugPrint('[LocationService] Resumed live session — '
+          'duration=$durationLabel, expiresAt=$expiresAt');
+    } catch (e) {
+      debugPrint('[LocationService] resumeLiveSharingIfNeeded error: $e');
       _addStatus(LocationTrackingStatus.idle);
     }
   }
+
+  /// Legacy alias — forwards to [resumeLiveSharingIfNeeded].
+  Future<void> startTracking() => resumeLiveSharingIfNeeded();
 
   Future<void> stopTracking() async {
     _addStatus(LocationTrackingStatus.idle);

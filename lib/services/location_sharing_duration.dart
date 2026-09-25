@@ -69,12 +69,16 @@ enum LocationSharingDuration {
   }
 
   /// Returns a formatted countdown string, e.g. "Còn 0g 45p" or "Còn 23g 12p".
-  /// Returns null if [unlimited] or already expired.
-  String? countdownLabel(String lang, {DateTime? now}) {
-    final exp = expiresAt();
-    if (exp == null) return null;
+  ///
+  /// [fixedExpiresAt] must be the expiry timestamp captured once at session
+  /// start (via [expiresAt()]). Passing `null` (unlimited sessions) returns
+  /// `null`.  Previously this method called [expiresAt()] internally, which
+  /// recalculated "now + 1 hour" on every invocation — the countdown never
+  /// decreased.
+  String? countdownLabel(String lang, {required DateTime? fixedExpiresAt, DateTime? now}) {
+    if (fixedExpiresAt == null) return null;
     final effective = now ?? DateTime.now();
-    final diff = exp.difference(effective);
+    final diff = fixedExpiresAt.difference(effective);
     if (diff.isNegative) return null;
     final hours = diff.inHours;
     final minutes = diff.inMinutes.remainder(60);

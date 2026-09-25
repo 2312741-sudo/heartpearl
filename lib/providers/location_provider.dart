@@ -41,7 +41,7 @@ final locationTrackingBootstrapProvider = Provider<void>((ref) {
   if (sharing) {
     Future.microtask(() async {
       try {
-        await service.startTracking();
+        await service.resumeLiveSharingIfNeeded();
       } catch (_) {}
     });
   } else {

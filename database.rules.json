@@ -1,0 +1,14 @@
+{
+  "rules": {
+    "locations": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || (data.child('isSharing').val() === true && (!data.child('allowedViewers').exists() || data.child('allowedViewers').val() === null || data.child('allowedViewers').hasChild(auth.uid))))",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "$other": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}
