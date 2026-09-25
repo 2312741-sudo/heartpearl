@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="HeartPearl Test Simulator" xmlns="http://www.topografix.com/GPX/1/1">
+  <!-- Lái xe dọc đường Tôn Đức Thắng -> Cầu Ba Son (~36 km/h ~ 10 m/s) -->
+  <wpt lat="10.771650" lon="106.704750">
+    <time>2026-09-25T07:05:00Z</time>
+    <name>Bến Bạch Đằng - Bắt đầu lái xe</name>
+  </wpt>
+  <wpt lat="10.773100" lon="106.705600">
+    <time>2026-09-25T07:05:08Z</time>
+  </wpt>
+  <wpt lat="10.774500" lon="106.706400">
+    <time>2026-09-25T07:05:16Z</time>
+  </wpt>
+  <wpt lat="10.776000" lon="106.707200">
+    <time>2026-09-25T07:05:24Z</time>
+  </wpt>
+  <wpt lat="10.777500" lon="106.708100">
+    <time>2026-09-25T07:05:32Z</time>
+  </wpt>
+  <wpt lat="10.779000" lon="106.709000">
+    <time>2026-09-25T07:05:40Z</time>
+  </wpt>
+  <wpt lat="10.780600" lon="106.710000">
+    <time>2026-09-25T07:05:48Z</time>
+    <name>Lên Cầu Ba Son</name>
+  </wpt>
+  <wpt lat="10.782200" lon="106.711200">
+    <time>2026-09-25T07:05:56Z</time>
+  </wpt>
+  <wpt lat="10.783800" lon="106.712500">
+    <time>2026-09-25T07:06:04Z</time>
+    <name>Thủ Thiêm - Kết thúc</name>
+  </wpt>
+</gpx>

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="HeartPearl Test Simulator" xmlns="http://www.topografix.com/GPX/1/1">
+  <!-- Đi bộ Phố Đi Bộ Nguyễn Huệ -> Bến Bạch Đằng (~4 km/h) -->
+  <wpt lat="10.775320" lon="106.701780">
+    <time>2026-09-25T07:00:00Z</time>
+    <name>Nguyễn Huệ - Bắt đầu đi bộ</name>
+  </wpt>
+  <wpt lat="10.775010" lon="106.702020">
+    <time>2026-09-25T07:00:10Z</time>
+  </wpt>
+  <wpt lat="10.774700" lon="106.702280">
+    <time>2026-09-25T07:00:20Z</time>
+  </wpt>
+  <wpt lat="10.774390" lon="106.702520">
+    <time>2026-09-25T07:00:30Z</time>
+  </wpt>
+  <wpt lat="10.774080" lon="106.702770">
+    <time>2026-09-25T07:00:40Z</time>
+  </wpt>
+  <wpt lat="10.773780" lon="106.703020">
+    <time>2026-09-25T07:00:50Z</time>
+  </wpt>
+  <wpt lat="10.773480" lon="106.703270">
+    <time>2026-09-25T07:01:00Z</time>
+  </wpt>
+  <wpt lat="10.773170" lon="106.703510">
+    <time>2026-09-25T07:01:10Z</time>
+  </wpt>
+  <wpt lat="10.772870" lon="106.703760">
+    <time>2026-09-25T07:01:20Z</time>
+  </wpt>
+  <wpt lat="10.772560" lon="106.704010">
+    <time>2026-09-25T07:01:30Z</time>
+  </wpt>
+  <wpt lat="10.772260" lon="106.704250">
+    <time>2026-09-25T07:01:40Z</time>
+  </wpt>
+  <wpt lat="10.771950" lon="106.704500">
+    <time>2026-09-25T07:01:50Z</time>
+  </wpt>
+  <wpt lat="10.771650" lon="106.704750">
+    <time>2026-09-25T07:02:00Z</time>
+    <name>Bến Bạch Đằng</name>
+  </wpt>
+</gpx>
