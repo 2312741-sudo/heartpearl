@@ -1294,6 +1294,58 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 ],
               ),
               const SizedBox(height: 16),
+              // Wake-up ping button (calls friend's device to refresh location on demand)
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.tonalIcon(
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    HapticHelper.medium();
+                    final messenger = ScaffoldMessenger.of(context);
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Đang gửi tín hiệu đánh thức vị trí của ${item.friend.displayName}...',
+                        ),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                    try {
+                      await ref
+                          .read(locationServiceProvider)
+                          .requestFriendLocationWakeup(
+                            targetFriendUid: item.friend.uid,
+                            friendName: item.friend.displayName,
+                          );
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Đã gửi tín hiệu tới ${item.friend.displayName}! Vị trí sẽ tự động cập nhật.',
+                          ),
+                          backgroundColor: AppColors.primary,
+                          duration: const Duration(seconds: 3),
+                        ),
+                      );
+                    } catch (e) {
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text('Không thể gửi tín hiệu: $e'),
+                          backgroundColor: AppColors.error,
+                        ),
+                      );
+                    }
+                  },
+                  icon: const Icon(LucideIcons.locateFixed, size: 18),
+                  label: const Text('Đánh thức vị trí bạn bè'),
+                ),
+              ),
+              const SizedBox(height: 10),
               Row(
                 children: [
                   Expanded(

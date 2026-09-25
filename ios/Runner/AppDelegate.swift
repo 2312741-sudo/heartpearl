@@ -283,6 +283,11 @@ import workmanager_apple
       return
     }
 
+    if type == "location_ping" {
+      // Woken up in background by friend's on-demand ping: trigger immediate GPS fix
+      BackgroundLocationRelay.shared.requestImmediateLocation()
+    }
+
     // Pass to Flutter / Firebase for other notification types
     super.application(
       application,

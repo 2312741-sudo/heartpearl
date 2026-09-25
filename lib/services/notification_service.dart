@@ -9,6 +9,7 @@ import '../firebase_options.dart';
 import '../models/notification_model.dart';
 import 'auth_service.dart';
 import 'chat_service.dart';
+import 'location_service.dart';
 import 'widget_service.dart';
 
 /// Top-level background message handler (must be top-level, not a class method)
@@ -22,6 +23,11 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     try {
       await WidgetService.initializeHomeWidget();
       await WidgetService.updateLocationWidget();
+    } catch (_) {}
+  } else if (message.data['type'] == 'location_ping') {
+    // Case A: App is in background/suspended — friend requested location
+    try {
+      await LocationService().publishWakeupLocation();
     } catch (_) {}
   } else if (message.data['type'] == 'chat_message') {
     final chatId = message.data['chatId'] as String?;
@@ -136,6 +142,11 @@ class NotificationService {
           try {
             await WidgetService.updateLocationWidget();
           } catch (_) {}
+        } else if (message.data['type'] == 'location_ping') {
+          // Received ping while in foreground: silently respond with current fix
+          try {
+            LocationService().publishWakeupLocation();
+          } catch (_) {}
         } else if (message.data['type'] == 'chat_message') {
           final chatId = message.data['chatId'] as String?;
           final senderId = message.data['senderId'] as String?;
@@ -182,6 +193,12 @@ class NotificationService {
             friendAvatar: friendAvatar,
           );
         }
+      } else if (type == 'location_ping') {
+        // Case B: User tapped notification after app was swiped-closed / terminated
+        AppNavigation.navigateToMap();
+        try {
+          LocationService().publishWakeupLocation();
+        } catch (_) {}
       } else if (type == 'friend_request' || type == 'friend_accept') {
         AppNavigation.navigateToFriends(
           initialIndex: type == 'friend_request' ? 1 : 0,

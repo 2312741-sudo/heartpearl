@@ -91,6 +91,12 @@ class AppNavigation {
     _tabSwitchCallback = callback;
   }
 
+  /// Navigate directly to the Map tab (tab index 0) and pop any open routes.
+  static void navigateToMap() {
+    popToRoot();
+    _tabSwitchCallback?.call(0);
+  }
+
   /// Navigate directly to the Inbox tab (tab index 1) and pop any open routes.
   static void navigateToInbox() {
     popToRoot();

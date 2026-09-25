@@ -81,6 +81,7 @@ export const onNotificationCreated = functions.firestore.onDocumentCreated(
                 body,
               },
               sound: 'default',
+              contentAvailable: true,
             },
           },
           headers: {

@@ -61,6 +61,19 @@ final class BackgroundLocationRelay: NSObject, CLLocationManagerDelegate {
         locationManager.stopMonitoringSignificantLocationChanges()
     }
 
+    /// Requests an immediate one-shot location update from CoreLocation.
+    /// Triggered when the app is woken up in the background by a friend's ping.
+    func requestImmediateLocation() {
+        let status: CLAuthorizationStatus
+        if #available(iOS 14.0, *) {
+            status = locationManager.authorizationStatus
+        } else {
+            status = CLLocationManager.authorizationStatus()
+        }
+        guard status == .authorizedAlways || status == .authorizedWhenInUse else { return }
+        locationManager.requestLocation()
+    }
+
     // MARK: – CLLocationManagerDelegate
 
     func locationManager(_ manager: CLLocationManager,

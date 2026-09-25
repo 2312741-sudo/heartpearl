@@ -1304,6 +1304,79 @@ class LocationService {
     }
   }
 
+  /// One-shot on-demand location publisher triggered by a friend's wake-up ping.
+  /// Works in foreground or background without opening long-running subscriptions.
+  Future<void> publishWakeupLocation() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null || uid.isEmpty) return;
+
+    try {
+      Position? position;
+      try {
+        position = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            timeLimit: Duration(seconds: 8),
+          ),
+        );
+      } catch (_) {
+        position = await Geolocator.getLastKnownPosition();
+      }
+
+      if (position == null) return;
+      if (!LocationPolicy.isValidFix(
+        lat: position.latitude,
+        lng: position.longitude,
+        accuracy: position.accuracy,
+      )) {
+        return;
+      }
+
+      final battery = await _readBatteryLevel();
+      await _writeLivePosition(
+        uid,
+        position,
+        _currentExpiresAt,
+        _currentDuration ?? LocationSharingDuration.unlimited,
+        battery,
+        forceFirestore: true,
+      );
+      debugPrint('[LocationService] Published on-demand wake-up location fix to RTDB/Firestore!');
+    } catch (e) {
+      debugPrint('[LocationService] publishWakeupLocation error: $e');
+    }
+  }
+
+  /// Sends a wake-up ping to [targetFriendUid] to trigger their device to publish
+  /// their latest location fix. Creates a notification document with type 'location_ping'
+  /// which Cloud Functions dispatches as high-priority push + APNs silent wake-up.
+  Future<void> requestFriendLocationWakeup({
+    required String targetFriendUid,
+    required String friendName,
+  }) async {
+    final senderUid = _auth.currentUser?.uid;
+    if (senderUid == null || senderUid.isEmpty) return;
+
+    String senderName = 'Một người bạn';
+    try {
+      final myDoc = await _db.collection('users').doc(senderUid).get();
+      senderName = myDoc.data()?['displayName'] as String? ??
+          myDoc.data()?['username'] as String? ??
+          senderName;
+    } catch (_) {}
+
+    await _db.collection('notifications').add({
+      'userId': targetFriendUid,
+      'senderId': senderUid,
+      'type': 'location_ping',
+      'title': '📍 Yêu cầu vị trí',
+      'body': '$senderName vừa mở xem vị trí của bạn. Chạm để chia sẻ ngay!',
+      'createdAt': FieldValue.serverTimestamp(),
+      'read': false,
+    });
+    debugPrint('[LocationService] Sent location_ping to $targetFriendUid ($friendName)');
+  }
+
   Future<void> dispose() async {
     await stopLiveSharing(clearFirestore: false);
     await stopTracking();
