@@ -51,6 +51,7 @@ class AppTheme {
         labelSmall: AppTypography.micro(color: AppColors.darkTextMuted),
       ),
       snackBarTheme: SnackBarThemeData(
+        backgroundColor: AppColors.darkSurfaceLight,
         contentTextStyle: AppTypography.body(color: AppColors.white),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
@@ -121,6 +122,7 @@ class AppTheme {
         labelSmall: AppTypography.micro(color: AppColors.lightTextMuted),
       ),
       snackBarTheme: SnackBarThemeData(
+        backgroundColor: AppColors.lightTextPrimary,
         contentTextStyle: AppTypography.body(color: AppColors.white),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(

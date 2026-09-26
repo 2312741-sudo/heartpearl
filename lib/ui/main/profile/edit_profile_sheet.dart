@@ -108,19 +108,6 @@ class _EditProfileSheetState extends ConsumerState<EditProfileSheet> {
     final photoService = ref.read(photoServiceProvider);
 
     try {
-      if (username != widget.user.username) {
-        final available = await authService.isUsernameAvailable(username);
-        if (!available) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Username này đã có người sử dụng!')),
-            );
-          }
-          setState(() => _isLoading = false);
-          return;
-        }
-      }
-
       String? avatarUrl = widget.user.avatarUrl;
       if (_newAvatarFile != null) {
         avatarUrl = await photoService.uploadPhoto(
@@ -143,12 +130,16 @@ class _EditProfileSheetState extends ConsumerState<EditProfileSheet> {
         phoneToSave = null;
       }
 
-      await authService.updateUserDocument(widget.user.uid, {
-        'displayName': name,
-        'username': username,
-        'avatarUrl': ?avatarUrl,
-        'phone': phoneToSave,
-      });
+      await authService.claimUsername(
+        uid: widget.user.uid,
+        newUsername: username,
+        previousUsername: widget.user.username,
+        additionalUserData: {
+          'displayName': name,
+          'avatarUrl': ?avatarUrl,
+          'phone': phoneToSave,
+        },
+      );
 
       HapticHelper.success();
       if (mounted) {
@@ -158,6 +149,12 @@ class _EditProfileSheetState extends ConsumerState<EditProfileSheet> {
             content: Text('Đã cập nhật hồ sơ thành công!'),
             backgroundColor: AppColors.success,
           ),
+        );
+      }
+    } on StateError catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Username này đã có người sử dụng!')),
         );
       }
     } catch (e) {

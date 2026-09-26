@@ -25,6 +25,10 @@ class AuthService {
     final cleanUsername = username.toLowerCase().trim();
     if (cleanUsername.isEmpty) return false;
 
+    final usernameDoc =
+        await _db.collection('usernames').doc(cleanUsername).get();
+    if (usernameDoc.exists) return false;
+
     final snapshot = await _db
         .collection('users')
         .where('username', isEqualTo: cleanUsername)
@@ -32,6 +36,48 @@ class AuthService {
         .get();
 
     return snapshot.docs.isEmpty;
+  }
+
+  /// Claim unique username using a Firestore transaction.
+  /// Atomic reservation: checks uniqueness, releases old username (if changed),
+  /// registers in `usernames/{username}`, and updates `users/{uid}` in one transaction.
+  Future<void> claimUsername({
+    required String uid,
+    required String newUsername,
+    String? previousUsername,
+    Map<String, dynamic>? additionalUserData,
+  }) async {
+    final cleanNew = newUsername.toLowerCase().trim();
+    final cleanPrev = previousUsername?.toLowerCase().trim();
+
+    if (cleanNew.isEmpty) {
+      throw ArgumentError('Username không được để trống.');
+    }
+
+    await _db.runTransaction((transaction) async {
+      final newUsernameRef = _db.collection('usernames').doc(cleanNew);
+      final newDoc = await transaction.get(newUsernameRef);
+      if (newDoc.exists) {
+        final existingUid = newDoc.data()?['uid'];
+        if (existingUid != null && existingUid != uid) {
+          throw StateError('Username này đã được sử dụng.');
+        }
+      }
+
+      if (cleanPrev != null && cleanPrev.isNotEmpty && cleanPrev != cleanNew) {
+        final prevUsernameRef = _db.collection('usernames').doc(cleanPrev);
+        transaction.delete(prevUsernameRef);
+      }
+
+      transaction.set(newUsernameRef, {'uid': uid});
+
+      final userRef = _db.collection('users').doc(uid);
+      final userUpdates = <String, dynamic>{
+        ...?additionalUserData,
+        'username': cleanNew,
+      };
+      transaction.set(userRef, userUpdates, SetOptions(merge: true));
+    });
   }
 
   // Sign up with Email & Password
@@ -281,11 +327,6 @@ class AuthService {
     if (user == null) return;
     final uid = user.uid;
 
-    // Step 0: Delete Auth account FIRST.
-    // If the session is stale, Firebase throws requires-recent-login and we stop
-    // immediately — no data is partially deleted, avoiding a zombie account.
-    await user.delete();
-
     // 1. Delete user's uploaded photos and storage media files
     try {
       final photosSnapshot = await _db
@@ -394,8 +435,17 @@ class AuthService {
           .catchError((_) {});
     } catch (_) {}
 
-    // 7. Delete user Firestore document
+    // 7. Delete usernames entry and user Firestore document
     try {
+      final userDoc = await _db.collection('users').doc(uid).get();
+      final username = userDoc.data()?['username'] as String?;
+      if (username != null && username.isNotEmpty) {
+        await _db
+            .collection('usernames')
+            .doc(username.toLowerCase().trim())
+            .delete()
+            .catchError((_) {});
+      }
       await _db.collection('users').doc(uid).delete();
     } catch (e) {
       debugPrint('Error deleting user doc: $e');
@@ -407,6 +457,16 @@ class AuthService {
       await prefs.clear();
       await WidgetService.updateLatestPhoto('');
     } catch (_) {}
+
+    // 9. Delete Auth account LAST
+    try {
+      await user.delete();
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'requires-recent-login') {
+        throw StateError('Vui lòng đăng nhập lại để xác nhận xóa tài khoản');
+      }
+      rethrow;
+    }
   }
 
   // Get user profile document

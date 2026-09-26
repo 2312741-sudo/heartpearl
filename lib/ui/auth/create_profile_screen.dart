@@ -103,14 +103,6 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
     }
 
     try {
-      // Check username availability
-      final isAvailable = await authService.isUsernameAvailable(username);
-      if (!isAvailable) {
-        _showError('Username này đã được sử dụng. Vui lòng chọn tên khác!');
-        setState(() => _isLoading = false);
-        return;
-      }
-
       String? avatarUrl;
       if (_avatarFile != null) {
         avatarUrl = await photoService.uploadPhoto(
@@ -124,16 +116,21 @@ class _CreateProfileScreenState extends ConsumerState<CreateProfileScreen> {
         await user.updatePhotoURL(avatarUrl);
       }
 
-      await authService.updateUserDocument(user.uid, {
-        'displayName': displayName,
-        'username': username,
-        'avatarUrl': ?avatarUrl,
-      });
+      await authService.claimUsername(
+        uid: user.uid,
+        newUsername: username,
+        additionalUserData: {
+          'displayName': displayName,
+          'avatarUrl': ?avatarUrl,
+        },
+      );
 
       HapticHelper.success();
       if (mounted) {
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
+    } on StateError catch (_) {
+      _showError('Username này đã được sử dụng. Vui lòng chọn tên khác!');
     } catch (e) {
       _showError('Không thể lưu hồ sơ: ${e.toString()}');
     } finally {

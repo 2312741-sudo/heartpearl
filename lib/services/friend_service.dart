@@ -199,16 +199,45 @@ class FriendService {
       throw StateError('Không thể gửi lời mời do cài đặt chặn.');
     }
 
-    // Check if request already exists
+    // 1. Check if already friends
+    final senderDoc = await _db.collection('users').doc(fromUid).get();
+    final friends =
+        (senderDoc.data()?['friends'] as List?)?.cast<String>() ?? [];
+    if (friends.contains(toUid)) {
+      throw StateError('Hai người đã là bạn bè.');
+    }
+
+    // 2. Check if request already exists in this direction
     final existing = await _db
         .collection('friendRequests')
         .where('from', isEqualTo: fromUid)
         .where('to', isEqualTo: toUid)
         .where('status', isEqualTo: 'pending')
+        .limit(1)
         .get();
 
     if (existing.docs.isNotEmpty) return;
 
+    // 3. Check inverse direction: if target already sent a request to fromUid, auto-accept
+    final inverse = await _db
+        .collection('friendRequests')
+        .where('from', isEqualTo: toUid)
+        .where('to', isEqualTo: fromUid)
+        .where('status', isEqualTo: 'pending')
+        .limit(1)
+        .get();
+
+    if (inverse.docs.isNotEmpty) {
+      final inverseReq = inverse.docs.first;
+      await acceptFriendRequest(
+        requestId: inverseReq.id,
+        fromUid: toUid,
+        toUid: fromUid,
+      );
+      return;
+    }
+
+    // 4. Create new pending friend request
     final reqRef = await _db.collection('friendRequests').add({
       'from': fromUid,
       'to': toUid,
@@ -218,7 +247,6 @@ class FriendService {
 
     // In-app notification
     try {
-      final senderDoc = await _db.collection('users').doc(fromUid).get();
       final senderData = senderDoc.data();
       final senderName = senderDoc.exists
           ? (senderData?['displayName'] as String? ?? 'Ai đó')
@@ -253,17 +281,8 @@ class FriendService {
       'status': 'accepted',
     });
 
-    // Add friends bidirectionally
-    final batch = _db.batch();
-    batch.set(_db.collection('users').doc(fromUid), {
-      'friends': FieldValue.arrayUnion([toUid]),
-    }, SetOptions(merge: true));
-
-    batch.set(_db.collection('users').doc(toUid), {
-      'friends': FieldValue.arrayUnion([fromUid]),
-    }, SetOptions(merge: true));
-
-    await batch.commit();
+    // Note: Mutually updating friends array is handled atomically
+    // by Cloud Function onFriendRequestAccepted via Admin SDK.
 
     // In-app notification for accept
     try {
@@ -289,11 +308,67 @@ class FriendService {
     } catch (_) {}
   }
 
+  /// Checks pending friend request status between [currentUid] and [targetUid].
+  /// Returns:
+  /// - 'sent' if [currentUid] sent a pending request to [targetUid]
+  /// - 'received' if [targetUid] sent a pending request to [currentUid]
+  /// - null if no pending request exists
+  Future<String?> getRequestStatusBetween(
+    String currentUid,
+    String targetUid,
+  ) async {
+    final cleanCurrent = currentUid.trim();
+    final cleanTarget = targetUid.trim();
+    if (cleanCurrent.isEmpty || cleanTarget.isEmpty) return null;
+
+    final results = await Future.wait([
+      _db
+          .collection('friendRequests')
+          .where('from', isEqualTo: cleanCurrent)
+          .where('to', isEqualTo: cleanTarget)
+          .where('status', isEqualTo: 'pending')
+          .limit(1)
+          .get(),
+      _db
+          .collection('friendRequests')
+          .where('from', isEqualTo: cleanTarget)
+          .where('to', isEqualTo: cleanCurrent)
+          .where('status', isEqualTo: 'pending')
+          .limit(1)
+          .get(),
+    ]);
+
+    if (results[0].docs.isNotEmpty) return 'sent';
+    if (results[1].docs.isNotEmpty) return 'received';
+    return null;
+  }
   // Reject friend request
   Future<void> rejectFriendRequest(String requestId) async {
     await _db.collection('friendRequests').doc(requestId).update({
       'status': 'rejected',
     });
+  }
+
+  /// Accept a pending friend request from [fromUid] to [toUid] without needing requestId.
+  Future<void> acceptPendingRequestFrom({
+    required String fromUid,
+    required String toUid,
+  }) async {
+    final snapshot = await _db
+        .collection('friendRequests')
+        .where('from', isEqualTo: fromUid)
+        .where('to', isEqualTo: toUid)
+        .where('status', isEqualTo: 'pending')
+        .limit(1)
+        .get();
+
+    if (snapshot.docs.isNotEmpty) {
+      await acceptFriendRequest(
+        requestId: snapshot.docs.first.id,
+        fromUid: fromUid,
+        toUid: toUid,
+      );
+    }
   }
 
   // Stream incoming friend requests

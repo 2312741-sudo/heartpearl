@@ -71,7 +71,8 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
             .where(
               (result) =>
                   result.uid != user.uid &&
-                  !user.blockedUsers.contains(result.uid),
+                  !user.blockedUsers.contains(result.uid) &&
+                  !user.friends.contains(result.uid),
             )
             .toList();
       });
@@ -92,6 +93,9 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
           .read(friendServiceProvider)
           .sendFriendRequest(fromUid: user.uid, toUid: toUid);
       if (mounted) {
+        setState(() {});
+        ref.invalidate(friendsListProvider);
+        ref.invalidate(friendRequestsProvider);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Đã gửi lời mời kết bạn!'),
@@ -99,6 +103,14 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
           ),
         );
       }
+    } on StateError catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: AppColors.error,
+        ),
+      );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -106,6 +118,40 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
           content: Text(
             AppStrings.tr('safety_interaction_blocked', lang: lang),
           ),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
+  Future<void> _acceptReceivedRequest(String targetUid) async {
+    final user = ref.read(userProfileProvider).value;
+    if (user == null) return;
+
+    HapticHelper.medium();
+    try {
+      await ref.read(friendServiceProvider).acceptPendingRequestFrom(
+            fromUid: targetUid,
+            toUid: user.uid,
+          );
+      if (mounted) {
+        setState(() {
+          _searchResults.removeWhere((u) => u.uid == targetUid);
+        });
+        ref.invalidate(friendsListProvider);
+        ref.invalidate(friendRequestsProvider);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đã chấp nhận lời mời kết bạn!'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Không thể chấp nhận lời mời kết bạn.'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -174,6 +220,7 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
   Widget build(BuildContext context) {
     final lang = ref.watch(settingsProvider).language;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final currentUser = ref.watch(userProfileProvider).value;
     final friendsAsync = ref.watch(friendsListProvider);
     final requestsAsync = ref.watch(friendRequestsProvider);
 
@@ -654,19 +701,76 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
                                       ],
                                     ),
                                   ),
-                                  GradientButton(
-                                    text: AppStrings.tr(
-                                      'friends_add_btn',
-                                      lang: lang,
+                                  if (currentUser != null)
+                                    FutureBuilder<String?>(
+                                      future: ref
+                                          .read(friendServiceProvider)
+                                          .getRequestStatusBetween(
+                                            currentUser.uid,
+                                            foundUser.uid,
+                                          ),
+                                      builder: (context, snapshot) {
+                                        final status = snapshot.data;
+                                        if (status == 'sent') {
+                                          return Container(
+                                            width: 108,
+                                            height: 38,
+                                            alignment: Alignment.center,
+                                            decoration: BoxDecoration(
+                                              color: AppColors.darkTextMuted,
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                AppDimens.radiusFull,
+                                              ),
+                                            ),
+                                            child: Text(
+                                              'Đã gửi lời mời',
+                                              style: AppTypography.captionBold(
+                                                color: AppColors.white,
+                                              ),
+                                            ),
+                                          );
+                                        } else if (status == 'received') {
+                                          return GradientButton(
+                                            text: 'Chấp nhận',
+                                            width: 104,
+                                            height: 38,
+                                            onPressed: () =>
+                                                _acceptReceivedRequest(
+                                              foundUser.uid,
+                                            ),
+                                          );
+                                        } else {
+                                          return GradientButton(
+                                            text: AppStrings.tr(
+                                              'friends_add_btn',
+                                              lang: lang,
+                                            ),
+                                            width: 104,
+                                            height: 38,
+                                            onPressed: () =>
+                                                _sendRequest(foundUser.uid),
+                                          );
+                                        }
+                                      },
+                                    )
+                                  else
+                                    GradientButton(
+                                      text: AppStrings.tr(
+                                        'friends_add_btn',
+                                        lang: lang,
+                                      ),
+                                      width: 104,
+                                      height: 38,
+                                      onPressed: () =>
+                                          _sendRequest(foundUser.uid),
                                     ),
-                                    width: 104,
-                                    height: 38,
-                                    onPressed: () =>
-                                        _sendRequest(foundUser.uid),
-                                  ),
                                 ],
                               ),
-                            );
+                            ).animate().fadeIn(
+                              duration: 300.ms,
+                              delay: (index.clamp(0, 8) * 50).ms,
+                            ).slideY(begin: 0.08, end: 0);
                           },
                         ),
                 ),

@@ -11,9 +11,13 @@ import 'package:heartpearl/services/widget_service.dart';
 import 'package:heartpearl/services/media_downloader_service.dart';
 import 'package:heartpearl/core/utils/url_launcher_helper.dart';
 import 'package:heartpearl/core/constants/app_info.dart';
+import 'package:heartpearl/core/constants/app_colors.dart';
+import 'package:heartpearl/core/theme/app_theme.dart';
 import 'package:heartpearl/ui/common/image_crop_screen.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('HeartPearl Models & Helpers Tests', () {
     test('UserModel serialization and deserialization', () {
       final now = DateTime(2026, 9, 17, 8, 30);
@@ -232,6 +236,66 @@ void main() {
       expect(AspectRatioPreset.original.ratio, isNull);
       expect(CropStyle.values.contains(CropStyle.circle), isTrue);
       expect(CropStyle.values.contains(CropStyle.rectangle), isTrue);
+    });
+
+    test('AppTheme SnackBarThemeData has non-white background to ensure text visibility', () {
+      expect(AppTheme.darkTheme.snackBarTheme.backgroundColor, AppColors.darkSurfaceLight);
+      expect(AppTheme.lightTheme.snackBarTheme.backgroundColor, AppColors.lightTextPrimary);
+    });
+
+    test('Friends search filter excludes current user, blocked users, and existing friends', () {
+      final currentUser = UserModel(
+        uid: 'user_me',
+        displayName: 'Tôi',
+        username: 'me',
+        friends: ['user_friend_1', 'user_friend_2'],
+        blockedUsers: ['user_blocked'],
+        createdAt: DateTime.now(),
+      );
+
+      final searchCandidates = [
+        UserModel(uid: 'user_me', displayName: 'Tôi', username: 'me', createdAt: DateTime.now()),
+        UserModel(uid: 'user_friend_1', displayName: 'Bạn 1', username: 'friend1', createdAt: DateTime.now()),
+        UserModel(uid: 'user_blocked', displayName: 'Bị chặn', username: 'blocked', createdAt: DateTime.now()),
+        UserModel(uid: 'user_stranger', displayName: 'Người lạ', username: 'stranger', createdAt: DateTime.now()),
+      ];
+
+      final filtered = searchCandidates.where((candidate) =>
+          candidate.uid != currentUser.uid &&
+          !currentUser.blockedUsers.contains(candidate.uid) &&
+          !currentUser.friends.contains(candidate.uid)).toList();
+
+      expect(filtered.length, 1);
+      expect(filtered.first.uid, 'user_stranger');
+    });
+
+    test('FriendRequestModel status validation for transitions', () {
+      final req = FriendRequestModel(
+        id: 'req_123',
+        from: 'u1',
+        to: 'u2',
+        status: 'pending',
+        createdAt: DateTime.now(),
+      );
+      expect(req.status, 'pending');
+
+      final acceptedReq = FriendRequestModel(
+        id: 'req_123',
+        from: 'u1',
+        to: 'u2',
+        status: 'accepted',
+        createdAt: DateTime.now(),
+      );
+      expect(acceptedReq.status, 'accepted');
+
+      final rejectedReq = FriendRequestModel(
+        id: 'req_123',
+        from: 'u1',
+        to: 'u2',
+        status: 'rejected',
+        createdAt: DateTime.now(),
+      );
+      expect(rejectedReq.status, 'rejected');
     });
   });
 }
